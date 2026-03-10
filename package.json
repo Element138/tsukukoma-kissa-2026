@@ -9,7 +9,9 @@
                     "lint":  "next lint",
                     "prisma:generate":  "prisma generate",
                     "prisma:migrate":  "prisma migrate deploy",
-                    "prisma:seed":  "tsx prisma/seed.ts"
+                    "prisma:seed":  "tsx prisma/seed.ts",
+                    "prisma:deploy:seed":  "prisma migrate deploy \u0026\u0026 prisma db seed",
+                    "vercel-build":  "npm run prisma:deploy:seed \u0026\u0026 next build"
                 },
     "dependencies":  {
                          "@prisma/client":  "^6.6.0",
@@ -30,4 +32,3 @@
                    "seed":  "tsx prisma/seed.ts"
                }
 }
-

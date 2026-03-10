@@ -1,8 +1,9 @@
 {
+  "buildCommand": "npm run vercel-build",
   "crons": [
     {
       "path": "/api/cron/payment-watchdog",
-      "schedule": "0 0 * * *"
+      "schedule": "* * * * *"
     }
   ]
 }
