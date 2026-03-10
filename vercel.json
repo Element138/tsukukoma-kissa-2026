@@ -2,8 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/payment-watchdog",
-      "schedule": "* * * * *"
+      "schedule": "0 0 * * *"
     }
   ]
 }
-
