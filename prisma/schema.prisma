@@ -1,0 +1,265 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ActorType {
+  POS
+  KITCHEN
+  WAITER
+  MENU_DISPLAY
+  ADMIN
+}
+
+enum Availability {
+  AVAILABLE
+  PAUSED
+  SOLD_OUT
+}
+
+enum FulfillmentType {
+  DINE_IN
+  TAKEOUT
+}
+
+enum PaymentMethod {
+  CASH
+  SQUARE
+  PAYMENT_SKIPPED
+}
+
+enum PaymentStatus {
+  PAID
+  FAILED
+  AWAITING
+  CANCELED
+  SKIPPED
+}
+
+enum OrderStatus {
+  PENDING
+  PREPARING
+  AWAITING_SERVING
+  COMPLETED
+  CANCELED
+}
+
+enum OrderItemStatus {
+  QUEUED
+  READY
+  SERVED
+  CANCELED
+}
+
+enum AuditResult {
+  SUCCESS
+  FAILURE
+}
+
+enum UndoOperationType {
+  ITEM_READY
+  ITEM_SERVED
+  TAKEOUT_ORDER_SERVED
+}
+
+enum PaymentSkipReasonType {
+  TEST
+  DEVICE_ERROR
+  NETWORK_ERROR
+  OTHER
+}
+
+model Line {
+  id           String               @id @db.VarChar(64)
+  name         String               @db.VarChar(120)
+  displayOrder Int                  @default(0)
+  isActive     Boolean              @default(true)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  actors       Actor[]
+  assignments  MenuLineAssignment[]
+  orderItems   OrderItem[]
+}
+
+model Actor {
+  id             String         @id @db.VarChar(64)
+  actorType      ActorType
+  lineId         String?        @db.VarChar(64)
+  label          String         @db.VarChar(120)
+  secretHash     String
+  isActive       Boolean        @default(true)
+  sessionVersion Int            @default(0)
+  lastSeenAt     DateTime?
+  online         Boolean        @default(false)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  line           Line?          @relation(fields: [lineId], references: [id])
+  sessions       Session[]
+  createdOrders  Order[]        @relation("OrderCreatedBy")
+  servedItems    OrderItem[]    @relation("OrderItemServedBy")
+  undoOperation  UndoOperation?
+  auditLogs      AuditLog[]     @relation("AuditActor")
+
+  @@index([actorType])
+  @@index([lineId])
+}
+
+model Session {
+  sessionId      String   @id @default(cuid())
+  actorId        String   @db.VarChar(64)
+  tokenHash      String   @unique
+  issuedAt       DateTime @default(now())
+  lastActivityAt DateTime @default(now())
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  actor          Actor    @relation(fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@index([actorId])
+  @@index([expiresAt])
+}
+
+model MenuCategory {
+  id           String   @id @default(uuid())
+  name         String   @db.VarChar(120)
+  displayOrder Int      @default(0)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  menus        Menu[]
+}
+
+model Menu {
+  id              String               @id @default(uuid())
+  name            String               @db.VarChar(120)
+  priceJpy        Int
+  availability    Availability         @default(AVAILABLE)
+  workloadSeconds Int
+  displayOrder    Int                  @default(0)
+  categoryId      String
+  isActive        Boolean              @default(true)
+  showLeadTime    Boolean              @default(true)
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  category        MenuCategory         @relation(fields: [categoryId], references: [id])
+  assignments     MenuLineAssignment[]
+  orderItems      OrderItem[]
+
+  @@index([categoryId])
+  @@index([availability, isActive])
+}
+
+model MenuLineAssignment {
+  menuId    String
+  lineId    String   @db.VarChar(64)
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  menu      Menu     @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  line      Line     @relation(fields: [lineId], references: [id], onDelete: Cascade)
+
+  @@id([menuId, lineId])
+  @@index([lineId, enabled])
+}
+
+model Order {
+  id                    String                @id @default(cuid())
+  orderNo               Int                   @unique @default(autoincrement())
+  createdAt             DateTime              @default(now())
+  createdByActorId      String                @db.VarChar(64)
+  idempotencyKey        String?               @unique
+  confirmedAt           DateTime?
+  canceledAt            DateTime?
+  fulfillmentType       FulfillmentType
+  tableNo               Int?
+  partySize             Int
+  ageRangesJson         Json
+  specialNote           String?
+  paymentMethod         PaymentMethod
+  paymentStatus         PaymentStatus
+  events                Json
+  paymentSkipReasonType PaymentSkipReasonType?
+  paymentSkipReasonText String?
+  orderStatus           OrderStatus
+  totalPriceJpy         Int
+  squareTransactionId   String?
+  paymentAwaitDeadlineAt DateTime?
+  autoCancelDeadlineAt  DateTime?
+  lastMutationVersion   Int                   @default(0)
+  createdBy             Actor                 @relation("OrderCreatedBy", fields: [createdByActorId], references: [id])
+  items                 OrderItem[]
+  auditLogs             AuditLog[]
+
+  @@index([createdAt])
+  @@index([orderStatus, createdAt])
+  @@index([paymentStatus, paymentAwaitDeadlineAt])
+  @@index([createdByActorId])
+}
+
+model OrderItem {
+  id                      String          @id @default(uuid())
+  orderId                 String
+  menuId                  String
+  itemNameSnapshot        String
+  unitPriceJpy            Int
+  workloadSecondsSnapshot Int
+  lineId                  String?         @db.VarChar(64)
+  lineAssignedAt          DateTime?
+  status                  OrderItemStatus
+  readyAt                 DateTime?
+  servedAt                DateTime?
+  servedByActorId         String?         @db.VarChar(64)
+  order                   Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menu                    Menu            @relation(fields: [menuId], references: [id])
+  line                    Line?           @relation(fields: [lineId], references: [id])
+  servedBy                Actor?          @relation("OrderItemServedBy", fields: [servedByActorId], references: [id])
+
+  @@index([orderId, status])
+  @@index([lineId, status])
+  @@index([readyAt])
+}
+
+model UndoOperation {
+  actorId              String            @id @db.VarChar(64)
+  operationType        UndoOperationType
+  targetEntityType     String            @db.VarChar(64)
+  targetEntityId       String            @db.VarChar(120)
+  orderId              String
+  expectedOrderVersion Int
+  payload              Json
+  createdAt            DateTime          @default(now())
+  actor                Actor             @relation(fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+}
+
+model AuditLog {
+  id            String      @id @default(cuid())
+  timestamp     DateTime    @default(now())
+  actorId       String?     @db.VarChar(64)
+  actorType     ActorType?
+  actionType    String      @db.VarChar(64)
+  entityType    String      @db.VarChar(64)
+  entityId      String      @db.VarChar(120)
+  orderId       String?
+  beforeJson    Json?
+  afterJson     Json?
+  reasonType    String?
+  reasonText    String?
+  result        AuditResult
+  correlationId String?
+  prevHash      String?
+  hash          String?
+  actor         Actor?      @relation("AuditActor", fields: [actorId], references: [id])
+  order         Order?      @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([timestamp])
+  @@index([actionType, timestamp])
+  @@index([actorType, actorId, timestamp])
+  @@index([result, timestamp])
+  @@index([orderId, timestamp])
+}
+

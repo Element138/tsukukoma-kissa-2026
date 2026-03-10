@@ -1,0 +1,146 @@
+import { z } from "zod";
+
+export const actorTypeSchema = z.enum(["POS", "KITCHEN", "WAITER", "MENU_DISPLAY", "ADMIN"]);
+
+export const loginSchema = z.object({
+  actorId: z.string().min(1).max(64),
+  secret: z.string().min(1).max(128)
+});
+
+export const orderItemInputSchema = z.object({
+  menuId: z.string().uuid(),
+  quantity: z.number().int().min(1).max(20)
+});
+
+export const orderCreateSchema = z
+  .object({
+    fulfillmentType: z.enum(["DINE_IN", "TAKEOUT"]),
+    tableNo: z.number().int().positive().nullable().optional(),
+    partySize: z.number().int().min(1).max(50),
+    ageRanges: z.array(z.string().min(1).max(32)).min(1),
+    specialNote: z.string().max(500).optional(),
+    paymentMethod: z.enum(["CASH", "SQUARE", "PAYMENT_SKIPPED"]),
+    paymentSkipReasonType: z.enum(["TEST", "DEVICE_ERROR", "NETWORK_ERROR", "OTHER"]).nullable().optional(),
+    paymentSkipReasonText: z.string().max(300).nullable().optional(),
+    items: z.array(orderItemInputSchema).min(1).max(80),
+    idempotencyKey: z.string().min(8).max(128)
+  })
+  .superRefine((v, ctx) => {
+    if (v.fulfillmentType === "DINE_IN" && (!v.tableNo || v.tableNo <= 0)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "tableNo is required for DINE_IN", path: ["tableNo"] });
+    }
+    if (v.fulfillmentType === "TAKEOUT" && v.tableNo != null) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "tableNo must be null for TAKEOUT", path: ["tableNo"] });
+    }
+    if (v.ageRanges.length !== v.partySize) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "ageRanges length must match partySize",
+        path: ["ageRanges"]
+      });
+    }
+    if (v.paymentMethod === "PAYMENT_SKIPPED" && !v.paymentSkipReasonType) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "paymentSkipReasonType is required for PAYMENT_SKIPPED",
+        path: ["paymentSkipReasonType"]
+      });
+    }
+  });
+
+export const orderConfirmSchema = z.object({
+  result: z.enum(["SUCCESS", "FAILED"]),
+  squareTransactionId: z.string().max(120).optional(),
+  reasonText: z.string().max(500).optional()
+});
+
+export const orderCancelSchema = z.object({
+  reasonText: z.string().max(500).optional()
+});
+
+export const specialNoteSchema = z.object({
+  specialNote: z.string().max(500)
+});
+
+export const itemReadySchema = z.object({
+  expectedItemStatus: z.enum(["QUEUED"])
+});
+
+export const serveItemSchema = z.object({
+  orderItemId: z.string().uuid(),
+  expectedItemStatus: z.enum(["READY"])
+});
+
+export const serveOrderSchema = z.object({
+  orderId: z.string().min(1)
+});
+
+export const undoSchema = z.object({
+  confirm: z.literal(true)
+});
+
+export const lineToggleSchema = z.object({
+  lineId: z.string().min(1).max(64),
+  isActive: z.boolean()
+});
+
+export const lineReassignSchema = z.object({
+  fromLineId: z.string().min(1).max(64),
+  toLineId: z.string().min(1).max(64)
+});
+
+export const availabilityUpdateSchema = z.object({
+  menuId: z.string().uuid(),
+  availability: z.enum(["AVAILABLE", "PAUSED", "SOLD_OUT"])
+});
+
+export const actorCreateSchema = z.object({
+  id: z.string().min(1).max(64),
+  actorType: actorTypeSchema,
+  lineId: z.string().max(64).nullable().optional(),
+  label: z.string().min(1).max(120),
+  secret: z.string().min(4).max(128)
+});
+
+export const lineCreateSchema = z.object({
+  id: z.string().min(1).max(64),
+  name: z.string().min(1).max(120),
+  displayOrder: z.number().int().min(0).max(999)
+});
+
+export const lineUpdateSchema = z.object({
+  id: z.string().min(1).max(64),
+  name: z.string().min(1).max(120).optional(),
+  displayOrder: z.number().int().min(0).max(999).optional(),
+  isActive: z.boolean().optional()
+});
+
+export const menuCreateSchema = z.object({
+  name: z.string().min(1).max(120),
+  priceJpy: z.number().int().min(0).max(100000),
+  availability: z.enum(["AVAILABLE", "PAUSED", "SOLD_OUT"]),
+  workloadSeconds: z.number().int().min(5).max(7200),
+  displayOrder: z.number().int().min(0).max(999),
+  categoryId: z.string().uuid(),
+  showLeadTime: z.boolean().optional()
+});
+
+export const menuUpdateSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(120).optional(),
+  priceJpy: z.number().int().min(0).max(100000).optional(),
+  availability: z.enum(["AVAILABLE", "PAUSED", "SOLD_OUT"]).optional(),
+  workloadSeconds: z.number().int().min(5).max(7200).optional(),
+  displayOrder: z.number().int().min(0).max(999).optional(),
+  categoryId: z.string().uuid().optional(),
+  isActive: z.boolean().optional(),
+  showLeadTime: z.boolean().optional()
+});
+
+export const assignmentUpsertSchema = z.object({
+  menuId: z.string().uuid(),
+  lineId: z.string().min(1).max(64),
+  enabled: z.boolean()
+});
+
+

@@ -1,0 +1,9 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/payment-watchdog",
+      "schedule": "* * * * *"
+    }
+  ]
+}
+

@@ -1,0 +1,27 @@
+import { NextRequest } from "next/server";
+import { prisma } from "@/lib/db";
+import { requireSession } from "@/lib/server/auth";
+import { fail, ok } from "@/lib/response";
+import { parseJson } from "@/lib/server/http";
+import { serveOrderSchema } from "@/lib/validation";
+import { serveTakeoutOrder } from "@/lib/domain/waiter";
+
+export async function POST(req: NextRequest) {
+  try {
+    const actor = await requireSession(req, { actorTypes: ["WAITER"] });
+    const body = await parseJson(req, serveOrderSchema);
+
+    const order = await prisma.$transaction((tx) =>
+      serveTakeoutOrder(tx, {
+        actorId: actor.actorId,
+        orderId: body.orderId
+      })
+    );
+
+    return ok({ order });
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+
