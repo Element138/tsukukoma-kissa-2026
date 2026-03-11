@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiFetch } from "@/lib/client";
+import { apiFetch, isAuthError } from "@/lib/client";
 
 type SessionPayload = {
   actor: {
@@ -25,23 +25,34 @@ export function useSession(requiredTypes?: Array<SessionPayload["actor"]["actorT
 
   useEffect(() => {
     let alive = true;
+
     const load = async () => {
       try {
         const data = await apiFetch<SessionPayload>("/api/auth/me");
         if (!alive) {
           return;
         }
+
         if (requiredTypes && !requiredTypes.includes(data.actor.actorType)) {
           router.replace("/");
           return;
         }
+
         setSession(data);
+        setError(null);
       } catch (e) {
         if (!alive) {
           return;
         }
-        setError(e instanceof Error ? e.message : "Session error");
-        router.replace("/login");
+
+        const msg = e instanceof Error ? e.message : "Session error";
+        setError(msg);
+
+        // Only auth failures should force logout navigation.
+        if (isAuthError(e)) {
+          setSession(null);
+          router.replace("/login");
+        }
       } finally {
         if (alive) {
           setLoading(false);
@@ -60,5 +71,3 @@ export function useSession(requiredTypes?: Array<SessionPayload["actor"]["actorT
 
   return { loading, session, error };
 }
-
-
