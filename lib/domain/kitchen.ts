@@ -1,5 +1,5 @@
-import { Prisma, PrismaClient } from "@prisma/client";
-import { assert } from "@/lib/errors";
+﻿import { Prisma, PrismaClient } from "@prisma/client";
+import { assert, AppError } from "@/lib/errors";
 import { now } from "@/lib/time";
 import { recalcAndPersistOrderStatus } from "@/lib/domain/orders";
 import { saveUndoOperation } from "@/lib/domain/undo";
@@ -88,16 +88,30 @@ export async function toggleKitchenState(
     actorId: string;
     actorType: "KITCHEN" | "ADMIN" | "POS" | "WAITER" | "MENU_DISPLAY";
     kitchenId: string;
-    isActive: boolean;
+    kitchenEnabled: boolean;
   }
 ) {
-  const before = await db.kitchen.findUnique({ where: { id: params.kitchenId } });
-  assert(before, 404, "KITCHEN_NOT_FOUND", "Kitchen not found");
+  const before = await db.actor.findUnique({
+    where: { id: params.kitchenId },
+    select: { id: true, actorType: true, kitchenEnabled: true }
+  });
 
-  const kitchen = await db.kitchen.update({
+  assert(before, 404, "KITCHEN_NOT_FOUND", "Kitchen actor not found");
+  if (before.actorType !== "KITCHEN") {
+    throw new AppError(400, "NOT_KITCHEN_ACTOR", "Target actor is not a KITCHEN actor");
+  }
+
+  const kitchenActor = await db.actor.update({
     where: { id: params.kitchenId },
     data: {
-      isActive: params.isActive
+      kitchenEnabled: params.kitchenEnabled
+    },
+    select: {
+      id: true,
+      label: true,
+      isActive: true,
+      kitchenEnabled: true,
+      kitchenDisplayOrder: true
     }
   });
 
@@ -107,18 +121,18 @@ export async function toggleKitchenState(
     actorId: params.actorId,
     actorType: params.actorType,
     actionType: "KITCHEN_TOGGLE",
-    entityType: "kitchen",
+    entityType: "actor",
     entityId: params.kitchenId,
     beforeJson: {
-      isActive: before.isActive
+      kitchenEnabled: before.kitchenEnabled
     },
     afterJson: {
-      isActive: kitchen.isActive
+      kitchenEnabled: kitchenActor.kitchenEnabled
     },
     result: "SUCCESS"
   });
 
-  return kitchen;
+  return kitchenActor;
 }
 
 export async function reassignQueuedFromDisabledKitchen(
@@ -139,7 +153,7 @@ export async function reassignQueuedFromDisabledKitchen(
     actorId: params.actorId,
     actorType: params.actorType,
     actionType: "KITCHEN_FORCE_REASSIGN",
-    entityType: "kitchen",
+    entityType: "actor",
     entityId: params.fromKitchenId,
     afterJson: {
       fromKitchenId: params.fromKitchenId,
@@ -198,6 +212,3 @@ export async function updateMenuAvailabilityByKitchen(
 
   return updated;
 }
-
-
-

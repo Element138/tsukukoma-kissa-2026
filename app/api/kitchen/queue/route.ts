@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+﻿import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { fail, ok } from "@/lib/response";
 import { requireSession } from "@/lib/server/auth";
@@ -7,7 +7,7 @@ import { elapsedMss } from "@/lib/time";
 export async function GET(req: NextRequest) {
   try {
     const actor = await requireSession(req, { actorTypes: ["KITCHEN", "ADMIN"] });
-    const kitchenId = actor.actorType === "KITCHEN" ? actor.kitchenId : req.nextUrl.searchParams.get("kitchenId");
+    const kitchenId = actor.actorType === "KITCHEN" ? actor.actorId : req.nextUrl.searchParams.get("kitchenId");
     if (!kitchenId) {
       return ok({ items: [] });
     }
@@ -32,37 +32,37 @@ export async function GET(req: NextRequest) {
             specialNote: true
           }
         },
-        kitchen: {
+        kitchenActor: {
           select: {
             id: true,
-            name: true,
-            isActive: true
+            label: true,
+            actorType: true,
+            isActive: true,
+            kitchenEnabled: true
           }
         }
       },
-      orderBy: [
-        { order: { confirmedAt: "asc" } },
-        { kitchenAssignedAt: "asc" }
-      ]
+      orderBy: [{ order: { confirmedAt: "asc" } }, { kitchenAssignedAt: "asc" }]
     });
 
-    const grouped = items.map((item) => ({
-      id: item.id,
-      name: item.itemNameSnapshot,
-      orderId: item.order.id,
-      orderNo: item.order.orderNo,
-      fulfillmentType: item.order.fulfillmentType,
-      tableNo: item.order.tableNo,
-      specialNote: item.order.specialNote,
-      elapsed: item.order.confirmedAt ? elapsedMss(item.order.confirmedAt) : "0:00",
-      kitchenName: item.kitchen?.name ?? "Unknown",
-      kitchenInactiveWarning: item.kitchen ? !item.kitchen.isActive : true
-    }));
+    const grouped = items.map((item) => {
+      const inactive = !item.kitchenActor || item.kitchenActor.actorType !== "KITCHEN" || !item.kitchenActor.isActive || !item.kitchenActor.kitchenEnabled;
+      return {
+        id: item.id,
+        name: item.itemNameSnapshot,
+        orderId: item.order.id,
+        orderNo: item.order.orderNo,
+        fulfillmentType: item.order.fulfillmentType,
+        tableNo: item.order.tableNo,
+        specialNote: item.order.specialNote,
+        elapsed: item.order.confirmedAt ? elapsedMss(item.order.confirmedAt) : "0:00",
+        kitchenName: item.kitchenActor?.label ?? item.kitchenActor?.id ?? "Unknown",
+        kitchenInactiveWarning: inactive
+      };
+    });
 
     return ok({ items: grouped });
   } catch (error) {
     return fail(error);
   }
 }
-
-

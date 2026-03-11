@@ -1,4 +1,4 @@
-import { PrismaClient, Prisma } from "@prisma/client";
+﻿import { PrismaClient, Prisma } from "@prisma/client";
 import { now } from "@/lib/time";
 
 export async function findOfflineActors(db: PrismaClient | Prisma.TransactionClient) {
@@ -34,9 +34,25 @@ export async function listQueuedItemsOnInactiveKitchens(db: PrismaClient | Prism
       kitchenId: {
         not: null
       },
-      kitchen: {
-        isActive: false
-      },
+      OR: [
+        {
+          kitchenActor: {
+            actorType: {
+              not: "KITCHEN"
+            }
+          }
+        },
+        {
+          kitchenActor: {
+            isActive: false
+          }
+        },
+        {
+          kitchenActor: {
+            kitchenEnabled: false
+          }
+        }
+      ],
       order: {
         orderStatus: {
           notIn: ["COMPLETED", "CANCELED"]
@@ -47,9 +63,10 @@ export async function listQueuedItemsOnInactiveKitchens(db: PrismaClient | Prism
       id: true,
       orderId: true,
       kitchenId: true,
-      kitchen: {
+      kitchenActor: {
         select: {
-          name: true
+          id: true,
+          label: true
         }
       }
     }
@@ -59,7 +76,7 @@ export async function listQueuedItemsOnInactiveKitchens(db: PrismaClient | Prism
     orderId: r.orderId,
     orderItemId: r.id,
     kitchenId: r.kitchenId,
-    kitchenName: r.kitchen?.name ?? r.kitchenId ?? "unknown"
+    kitchenName: r.kitchenActor?.label ?? r.kitchenActor?.id ?? r.kitchenId ?? "unknown"
   }));
 }
 
@@ -72,5 +89,3 @@ export async function touchActorHeartbeat(db: PrismaClient | Prisma.TransactionC
     }
   });
 }
-
-

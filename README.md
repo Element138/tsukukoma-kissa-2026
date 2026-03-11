@@ -18,6 +18,13 @@ The system-of-record is the backend. `Order` and `OrderItem` are strictly separa
 - Audit logs are written for critical operations.
 - Payment watchdog cron handles timeout/auto-cancel transitions.
 
+## Kitchen ID model (single source)
+
+- Kitchen unit ID is the same as `Actor.id` where `actorType=KITCHEN`.
+- There is no separate Kitchen master table and no separate `kitchenId` field on Actor.
+- Kitchen registration flow is only `POST /api/admin/actors` with `actorType="KITCHEN"`.
+- `/api/admin/kitchens` is removed.
+
 ## Environment variables
 
 Set these in Vercel Project Settings -> Environment Variables:
@@ -54,8 +61,8 @@ So every deploy can prepare DB schema and seed base actors safely.
 
 - `admin` / `admin1234`
 - `pos-main` / `1234`
-- `kitchen-drink-1` / `1234`
-- `kitchen-food-1` / `1234`
+- `kitchen-drink` / `1234`
+- `kitchen-food` / `1234`
 - `waiter-1` / `1234`
 - `menu-display-main` / `1234`
 

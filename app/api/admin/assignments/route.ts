@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+﻿import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession } from "@/lib/server/auth";
 import { fail, ok } from "@/lib/response";
@@ -6,6 +6,7 @@ import { parseJson } from "@/lib/server/http";
 import { assignmentUpsertSchema } from "@/lib/validation";
 import { writeAuditLog } from "@/lib/domain/audit";
 import { updateMenusAvailabilityByKitchenCoverage } from "@/lib/domain/kitchen-assignment";
+import { AppError } from "@/lib/errors";
 
 export async function GET(req: NextRequest) {
   try {
@@ -19,11 +20,14 @@ export async function GET(req: NextRequest) {
             name: true
           }
         },
-        kitchen: {
+        kitchenActor: {
           select: {
             id: true,
-            name: true,
-            isActive: true
+            label: true,
+            actorType: true,
+            isActive: true,
+            kitchenEnabled: true,
+            kitchenDisplayOrder: true
           }
         }
       }
@@ -41,6 +45,14 @@ export async function POST(req: NextRequest) {
     const body = await parseJson(req, assignmentUpsertSchema);
 
     const assignment = await prisma.$transaction(async (tx) => {
+      const kitchenActor = await tx.actor.findUnique({
+        where: { id: body.kitchenId },
+        select: { id: true, actorType: true }
+      });
+      if (!kitchenActor || kitchenActor.actorType !== "KITCHEN") {
+        throw new AppError(400, "INVALID_KITCHEN_ACTOR", "kitchenId must reference a KITCHEN actor");
+      }
+
       const saved = await tx.menuKitchenAssignment.upsert({
         where: {
           menuId_kitchenId: {
@@ -77,5 +89,3 @@ export async function POST(req: NextRequest) {
     return fail(error);
   }
 }
-
-

@@ -20,7 +20,14 @@ type QueueItem = {
   kitchenInactiveWarning: boolean;
 };
 
-type Kitchen = { id: string; name: string; isActive: boolean };
+type KitchenActor = {
+  id: string;
+  actorType: "POS" | "KITCHEN" | "WAITER" | "MENU_DISPLAY" | "ADMIN";
+  label: string;
+  isActive: boolean;
+  kitchenEnabled: boolean;
+  kitchenDisplayOrder: number;
+};
 
 type Assignment = {
   menuId: string;
@@ -34,7 +41,7 @@ type Menu = { id: string; name: string; availability: "AVAILABLE" | "PAUSED" | "
 export default function KitchenPage() {
   const { loading, session } = useSession(["KITCHEN"]);
   const [items, setItems] = useState<QueueItem[]>([]);
-  const [kitchens, setKitchens] = useState<Kitchen[]>([]);
+  const [kitchens, setKitchens] = useState<KitchenActor[]>([]);
   const [menus, setMenus] = useState<Menu[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
 
@@ -42,19 +49,23 @@ export default function KitchenPage() {
   const [error, setError] = useState<string | null>(null);
   const [targetKitchenId, setTargetKitchenId] = useState<string>("");
 
-  const myKitchenId = session?.actor.kitchenId ?? null;
+  const myKitchenId = session?.actor.actorId ?? null;
 
   const reload = async () => {
     try {
-      const [queue, kitchenPayload, menuPayload, assignmentPayload] = await Promise.all([
+      const [queue, actorPayload, menuPayload, assignmentPayload] = await Promise.all([
         apiFetch<{ items: QueueItem[] }>("/api/kitchen/queue"),
-        apiFetch<{ kitchens: Kitchen[] }>("/api/admin/kitchens"),
+        apiFetch<{ actors: KitchenActor[] }>("/api/admin/actors"),
         apiFetch<{ menus: Menu[] }>("/api/admin/menus"),
         apiFetch<{ assignments: Assignment[] }>("/api/admin/assignments")
       ]);
 
       setItems(queue.items);
-      setKitchens(kitchenPayload.kitchens);
+      setKitchens(
+        actorPayload.actors
+          .filter((a) => a.actorType === "KITCHEN")
+          .sort((a, b) => a.kitchenDisplayOrder - b.kitchenDisplayOrder || a.id.localeCompare(b.id))
+      );
       setMenus(menuPayload.menus);
       setAssignments(assignmentPayload.assignments);
       setError(null);
@@ -107,15 +118,13 @@ export default function KitchenPage() {
   };
 
   const toggleKitchen = async () => {
-    if (!myKitchenId || !myKitchen) {
-      return;
-    }
+    if (!myKitchenId || !myKitchen) return;
     try {
       await apiFetch("/api/kitchen/toggle", {
         method: "POST",
-        body: JSON.stringify({ kitchenId: myKitchenId, isActive: !myKitchen.isActive })
+        body: JSON.stringify({ kitchenId: myKitchenId, kitchenEnabled: !myKitchen.kitchenEnabled })
       });
-      setMessage(`Kitchen ${!myKitchen.isActive ? "enabled" : "disabled"}`);
+      setMessage(`Kitchen ${!myKitchen.kitchenEnabled ? "enabled" : "disabled"}`);
       await reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to toggle kitchen");
@@ -123,9 +132,7 @@ export default function KitchenPage() {
   };
 
   const forceReassign = async () => {
-    if (!myKitchenId || !targetKitchenId) {
-      return;
-    }
+    if (!myKitchenId || !targetKitchenId) return;
     try {
       await apiFetch("/api/kitchen/reassign", {
         method: "POST",
@@ -170,11 +177,9 @@ export default function KitchenPage() {
           <div className="row wrap" style={{ marginBottom: 10 }}>
             <button onClick={undo} className="ghost-btn">Undo Last Action</button>
             <button onClick={toggleKitchen} className="ghost-btn">
-              Kitchen: {myKitchen?.isActive ? "Disable" : "Enable"}
+              Kitchen: {myKitchen?.kitchenEnabled ? "Disable" : "Enable"}
             </button>
-            <Link href="/order-book">
-              <button className="ghost-btn">Order Book</button>
-            </Link>
+            <Link href="/order-book"><button className="ghost-btn">Order Book</button></Link>
           </div>
 
           <div className="list">
@@ -212,7 +217,7 @@ export default function KitchenPage() {
                 .filter((kitchen) => kitchen.id !== myKitchenId)
                 .map((kitchen) => (
                   <option key={kitchen.id} value={kitchen.id}>
-                    {kitchen.name} ({kitchen.isActive ? "active" : "inactive"})
+                    {kitchen.label} ({kitchen.isActive && kitchen.kitchenEnabled ? "active" : "inactive"})
                   </option>
                 ))}
             </select>

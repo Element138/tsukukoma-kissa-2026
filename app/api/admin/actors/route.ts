@@ -6,14 +6,27 @@ import { parseJson } from "@/lib/server/http";
 import { actorCreateSchema } from "@/lib/validation";
 import { hashSecret } from "@/lib/crypto";
 import { writeAuditLog } from "@/lib/domain/audit";
+import { updateMenusAvailabilityByKitchenCoverage } from "@/lib/domain/kitchen-assignment";
 import { AppError } from "@/lib/errors";
+
+const actorPublicSelect = {
+  id: true,
+  actorType: true,
+  label: true,
+  isActive: true,
+  online: true,
+  kitchenEnabled: true,
+  kitchenDisplayOrder: true
+} as const;
 
 export async function GET(req: NextRequest) {
   try {
-    await requireSession(req, { actorTypes: ["ADMIN"] });
+    const actor = await requireSession(req, { actorTypes: ["ADMIN", "KITCHEN"] });
 
     const actors = await prisma.actor.findMany({
-      orderBy: [{ actorType: "asc" }, { id: "asc" }]
+      where: actor.actorType === "KITCHEN" ? { actorType: "KITCHEN" } : undefined,
+      select: actorPublicSelect,
+      orderBy: [{ actorType: "asc" }, { kitchenDisplayOrder: "asc" }, { id: "asc" }]
     });
 
     return ok({ actors });
@@ -30,19 +43,28 @@ export async function POST(req: NextRequest) {
     if (body.actorType === "ADMIN" && body.id !== "admin") {
       throw new AppError(400, "INVALID_ADMIN_ID", "Admin ID must be 'admin'");
     }
-    if (body.actorType === "KITCHEN" && !body.kitchenId) {
-      throw new AppError(400, "KITCHEN_REQUIRED", "Kitchen actor requires kitchenId");
-    }
 
-    const actor = await prisma.actor.create({
-      data: {
-        id: body.id,
-        actorType: body.actorType,
-        kitchenId: body.kitchenId ?? null,
-        label: body.label,
-        secretHash: hashSecret(body.secret),
-        isActive: true
-      }
+    const actor = await prisma.$transaction(async (tx) => {
+      const nextKitchenOrder =
+        body.actorType === "KITCHEN" && typeof body.kitchenDisplayOrder !== "number"
+          ? ((await tx.actor.aggregate({
+              where: { actorType: "KITCHEN" },
+              _max: { kitchenDisplayOrder: true }
+            }))._max.kitchenDisplayOrder ?? -1) + 1
+          : body.kitchenDisplayOrder ?? 0;
+
+      return tx.actor.create({
+        data: {
+          id: body.id,
+          actorType: body.actorType,
+          label: body.label,
+          secretHash: hashSecret(body.secret),
+          isActive: true,
+          kitchenEnabled: body.actorType === "KITCHEN" ? (body.kitchenEnabled ?? true) : true,
+          kitchenDisplayOrder: body.actorType === "KITCHEN" ? nextKitchenOrder : 0
+        },
+        select: actorPublicSelect
+      });
     });
 
     await writeAuditLog(prisma, {
@@ -53,8 +75,9 @@ export async function POST(req: NextRequest) {
       entityId: actor.id,
       afterJson: {
         actorType: actor.actorType,
-        kitchenId: actor.kitchenId,
-        label: actor.label
+        label: actor.label,
+        kitchenEnabled: actor.kitchenEnabled,
+        kitchenDisplayOrder: actor.kitchenDisplayOrder
       },
       result: "SUCCESS"
     });
@@ -77,22 +100,39 @@ export async function DELETE(req: NextRequest) {
       throw new AppError(400, "INVALID_OPERATION", "admin actor cannot be deleted");
     }
 
-    await prisma.actor.update({
-      where: { id: actorId },
-      data: {
-        isActive: false,
-        online: false
-      }
-    });
+    const target = await prisma.$transaction(async (tx) => {
+      const existing = await tx.actor.findUnique({
+        where: { id: actorId },
+        select: { id: true, actorType: true, isActive: true }
+      });
 
-    await prisma.session.updateMany({
-      where: {
-        actorId,
-        revokedAt: null
-      },
-      data: {
-        revokedAt: new Date()
+      if (!existing) {
+        throw new AppError(404, "ACTOR_NOT_FOUND", "Actor not found");
       }
+
+      await tx.actor.update({
+        where: { id: actorId },
+        data: {
+          isActive: false,
+          online: false
+        }
+      });
+
+      await tx.session.updateMany({
+        where: {
+          actorId,
+          revokedAt: null
+        },
+        data: {
+          revokedAt: new Date()
+        }
+      });
+
+      if (existing.actorType === "KITCHEN") {
+        await updateMenusAvailabilityByKitchenCoverage(tx);
+      }
+
+      return existing;
     });
 
     await writeAuditLog(prisma, {
@@ -101,6 +141,8 @@ export async function DELETE(req: NextRequest) {
       actionType: "ACTOR_DEACTIVATED",
       entityType: "actor",
       entityId: actorId,
+      beforeJson: { actorType: target.actorType, isActive: target.isActive },
+      afterJson: { actorType: target.actorType, isActive: false },
       result: "SUCCESS"
     });
 
@@ -109,5 +151,3 @@ export async function DELETE(req: NextRequest) {
     return fail(error);
   }
 }
-
-

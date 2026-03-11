@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { fail, ok } from "@/lib/response";
 import { loginSchema } from "@/lib/validation";
@@ -59,7 +59,6 @@ export async function POST(req: NextRequest) {
     const response = ok({
       actorId: actor.id,
       actorType: actor.actorType,
-      kitchenId: actor.kitchenId,
       label: actor.label
     });
     setSessionCookie(response, session.token);
@@ -68,5 +67,3 @@ export async function POST(req: NextRequest) {
     return fail(error);
   }
 }
-
-

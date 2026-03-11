@@ -1,4 +1,4 @@
-import { ActorType, Prisma, Session } from "@prisma/client";
+﻿import { ActorType, Prisma, Session } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { AppError, assert } from "@/lib/errors";
@@ -11,7 +11,6 @@ const SESSION_TTL_MINUTES = 10;
 export type AuthenticatedActor = {
   actorId: string;
   actorType: ActorType;
-  kitchenId: string | null;
   label: string;
   sessionId: string;
 };
@@ -37,7 +36,7 @@ export function clearSessionCookie(response: NextResponse) {
   });
 }
 
-async function loadSession(req: NextRequest): Promise<(Session & { actor: { id: string; actorType: ActorType; kitchenId: string | null; label: string; isActive: boolean } }) | null> {
+async function loadSession(req: NextRequest): Promise<(Session & { actor: { id: string; actorType: ActorType; label: string; isActive: boolean } }) | null> {
   const token = req.cookies.get(SESSION_COOKIE)?.value;
   if (!token) {
     return null;
@@ -51,7 +50,6 @@ async function loadSession(req: NextRequest): Promise<(Session & { actor: { id: 
         select: {
           id: true,
           actorType: true,
-          kitchenId: true,
           label: true,
           isActive: true
         }
@@ -104,7 +102,6 @@ export async function requireSession(
   return {
     actorId: session.actor.id,
     actorType: session.actor.actorType,
-    kitchenId: session.actor.kitchenId,
     label: session.actor.label,
     sessionId: session.sessionId
   };
@@ -154,5 +151,3 @@ export async function revokeCurrentSession(req: NextRequest) {
     data: { revokedAt: now() }
   });
 }
-
-

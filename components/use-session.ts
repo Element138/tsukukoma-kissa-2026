@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -8,7 +8,6 @@ type SessionPayload = {
   actor: {
     actorId: string;
     actorType: "POS" | "KITCHEN" | "WAITER" | "MENU_DISPLAY" | "ADMIN";
-    kitchenId: string | null;
     label: string;
   };
   offlineActors: Array<{ actorId: string; actorType: string }>;
@@ -48,7 +47,6 @@ export function useSession(requiredTypes?: Array<SessionPayload["actor"]["actorT
         const msg = e instanceof Error ? e.message : "Session error";
         setError(msg);
 
-        // Only auth failures should force logout navigation.
         if (isAuthError(e)) {
           setSession(null);
           router.replace("/login");

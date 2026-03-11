@@ -18,6 +18,14 @@ function chooseKitchenIdByWorkload(workloads: Map<string, number>, candidates: s
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
 
+function activeKitchenActorWhere() {
+  return {
+    actorType: "KITCHEN" as const,
+    isActive: true,
+    kitchenEnabled: true
+  };
+}
+
 export async function assignUnassignedItemsForOrder(db: DbClient, orderId: string) {
   const pendingItems = await db.orderItem.findMany({
     where: {
@@ -41,9 +49,7 @@ export async function assignUnassignedItemsForOrder(db: DbClient, orderId: strin
     where: {
       menuId: { in: menuIds },
       enabled: true,
-      kitchen: {
-        isActive: true
-      }
+      kitchenActor: activeKitchenActorWhere()
     },
     select: {
       menuId: true,
@@ -82,7 +88,7 @@ export async function assignUnassignedItemsForOrder(db: DbClient, orderId: strin
       throw new AppError(
         409,
         "NO_ACTIVE_KITCHEN",
-        `No active kitchen can process menu ${item.menuId}. Set menu to PAUSED or reactivate a kitchen.`
+        `No active kitchen can process menu ${item.menuId}. Set menu to PAUSED or enable a kitchen actor.`
       );
     }
 
@@ -100,12 +106,25 @@ export async function assignUnassignedItemsForOrder(db: DbClient, orderId: strin
 }
 
 export async function reassignQueuedItemsFromKitchen(db: DbClient, params: { fromKitchenId: string; toKitchenId: string }) {
-  const targetKitchen = await db.kitchen.findUnique({
-    where: { id: params.toKitchenId },
-    select: { isActive: true }
+  const sourceKitchenActor = await db.actor.findUnique({
+    where: { id: params.fromKitchenId },
+    select: { id: true, actorType: true }
   });
-  if (!targetKitchen?.isActive) {
-    throw new AppError(400, "KITCHEN_INACTIVE", "Target kitchen must be active");
+
+  if (!sourceKitchenActor || sourceKitchenActor.actorType !== "KITCHEN") {
+    throw new AppError(400, "INVALID_SOURCE_KITCHEN", "fromKitchenId must reference a KITCHEN actor");
+  }
+
+  const targetKitchenActor = await db.actor.findFirst({
+    where: {
+      id: params.toKitchenId,
+      ...activeKitchenActorWhere()
+    },
+    select: { id: true }
+  });
+
+  if (!targetKitchenActor) {
+    throw new AppError(400, "KITCHEN_INACTIVE", "Target kitchen actor must be active and enabled");
   }
 
   const items = await db.orderItem.findMany({
@@ -149,11 +168,11 @@ export async function reassignQueuedItemsFromKitchen(db: DbClient, params: { fro
 }
 
 export async function updateMenusAvailabilityByKitchenCoverage(db: DbClient) {
-  const activeKitchens = await db.kitchen.findMany({
-    where: { isActive: true },
+  const activeKitchenActors = await db.actor.findMany({
+    where: activeKitchenActorWhere(),
     select: { id: true }
   });
-  const activeKitchenSet = new Set(activeKitchens.map((x) => x.id));
+  const activeKitchenSet = new Set(activeKitchenActors.map((x) => x.id));
 
   const allAssignments = await db.menuKitchenAssignment.findMany({
     where: { enabled: true },
@@ -175,18 +194,10 @@ export async function updateMenusAvailabilityByKitchenCoverage(db: DbClient) {
   for (const menu of menus) {
     const hasCoverage = coveredMenus.has(menu.id);
     if (!hasCoverage && menu.availability === "AVAILABLE") {
-      await db.menu.update({
-        where: { id: menu.id },
-        data: { availability: "PAUSED" }
-      });
+      await db.menu.update({ where: { id: menu.id }, data: { availability: "PAUSED" } });
     }
     if (hasCoverage && menu.availability === "PAUSED") {
-      await db.menu.update({
-        where: { id: menu.id },
-        data: { availability: "AVAILABLE" }
-      });
+      await db.menu.update({ where: { id: menu.id }, data: { availability: "AVAILABLE" } });
     }
   }
 }
-
-

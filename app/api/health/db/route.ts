@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+﻿import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { fail, ok } from "@/lib/response";
 
@@ -6,12 +6,12 @@ export async function GET() {
   try {
     await prisma.$queryRaw`SELECT 1`;
     const actorCount = await prisma.actor.count();
-    const lineCount = await prisma.kitchen.count();
+    const kitchenActorCount = await prisma.actor.count({ where: { actorType: "KITCHEN" } });
 
     return ok({
       db: "ok",
       actorCount,
-      lineCount,
+      kitchenActorCount,
       seedLikelyMissing: actorCount === 0
     });
   } catch (error) {

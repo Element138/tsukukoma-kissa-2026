@@ -1,18 +1,14 @@
-import { NextRequest } from "next/server";
+﻿import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { fail, ok } from "@/lib/response";
 import { requireSession } from "@/lib/server/auth";
 import { itemReadySchema } from "@/lib/validation";
 import { parseJson } from "@/lib/server/http";
 import { markKitchenItemReady } from "@/lib/domain/kitchen";
-import { AppError } from "@/lib/errors";
 
 export async function POST(req: NextRequest, context: { params: Promise<{ itemId: string }> }) {
   try {
     const actor = await requireSession(req, { actorTypes: ["KITCHEN"] });
-    if (!actor.kitchenId) {
-      throw new AppError(400, "KITCHEN_REQUIRED", "Kitchen actor has no kitchen assignment");
-    }
     await parseJson(req, itemReadySchema);
 
     const { itemId } = await context.params;
@@ -20,7 +16,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ itemId
     const result = await prisma.$transaction((tx) =>
       markKitchenItemReady(tx, {
         actorId: actor.actorId,
-        kitchenId: actor.kitchenId!,
+        kitchenId: actor.actorId,
         itemId
       })
     );
@@ -30,5 +26,3 @@ export async function POST(req: NextRequest, context: { params: Promise<{ itemId
     return fail(error);
   }
 }
-
-

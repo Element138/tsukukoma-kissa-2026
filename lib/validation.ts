@@ -81,7 +81,7 @@ export const undoSchema = z.object({
 
 export const kitchenToggleSchema = z.object({
   kitchenId: z.string().min(1).max(64),
-  isActive: z.boolean()
+  kitchenEnabled: z.boolean()
 });
 
 export const kitchenReassignSchema = z.object({
@@ -94,26 +94,26 @@ export const availabilityUpdateSchema = z.object({
   availability: z.enum(["AVAILABLE", "PAUSED", "SOLD_OUT"])
 });
 
-export const actorCreateSchema = z.object({
-  id: z.string().min(1).max(64),
-  actorType: actorTypeSchema,
-  kitchenId: z.string().max(64).nullable().optional(),
-  label: z.string().min(1).max(120),
-  secret: z.string().min(4).max(128)
-});
-
-export const kitchenCreateSchema = z.object({
-  id: z.string().min(1).max(64),
-  name: z.string().min(1).max(120),
-  displayOrder: z.number().int().min(0).max(999)
-});
-
-export const kitchenUpdateSchema = z.object({
-  id: z.string().min(1).max(64),
-  name: z.string().min(1).max(120).optional(),
-  displayOrder: z.number().int().min(0).max(999).optional(),
-  isActive: z.boolean().optional()
-});
+export const actorCreateSchema = z
+  .object({
+    id: z.string().min(1).max(64),
+    actorType: actorTypeSchema,
+    label: z.string().min(1).max(120),
+    secret: z.string().min(4).max(128),
+    kitchenEnabled: z.boolean().optional(),
+    kitchenDisplayOrder: z.number().int().min(0).max(999).optional()
+  })
+  .strict()
+  .superRefine((v, ctx) => {
+    const hasKitchenFields = typeof v.kitchenEnabled === "boolean" || typeof v.kitchenDisplayOrder === "number";
+    if (v.actorType !== "KITCHEN" && hasKitchenFields) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "kitchenEnabled / kitchenDisplayOrder are allowed only for KITCHEN actor",
+        path: ["actorType"]
+      });
+    }
+  });
 
 export const menuCreateSchema = z.object({
   name: z.string().min(1).max(120),
@@ -142,5 +142,3 @@ export const assignmentUpsertSchema = z.object({
   kitchenId: z.string().min(1).max(64),
   enabled: z.boolean()
 });
-
-

@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+﻿import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { fail, ok } from "@/lib/response";
 import { requireSession } from "@/lib/server/auth";
@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     const actor = await requireSession(req, { actorTypes: ["KITCHEN", "ADMIN"] });
     const body = await parseJson(req, kitchenReassignSchema);
 
-    if (actor.actorType === "KITCHEN" && actor.kitchenId !== body.fromKitchenId) {
+    if (actor.actorType === "KITCHEN" && actor.actorId !== body.fromKitchenId) {
       throw new AppError(403, "FORBIDDEN", "Kitchen can only reassign from own kitchen");
     }
 
@@ -30,5 +30,3 @@ export async function POST(req: NextRequest) {
     return fail(error);
   }
 }
-
-

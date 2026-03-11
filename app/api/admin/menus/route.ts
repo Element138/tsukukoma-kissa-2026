@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+﻿import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession } from "@/lib/server/auth";
 import { fail, ok } from "@/lib/response";
@@ -12,8 +12,10 @@ async function hasActiveCoverage(menuId: string) {
     where: {
       menuId,
       enabled: true,
-      kitchen: {
-        isActive: true
+      kitchenActor: {
+        actorType: "KITCHEN",
+        isActive: true,
+        kitchenEnabled: true
       }
     }
   });
@@ -29,7 +31,15 @@ export async function GET(req: NextRequest) {
         include: {
           assignments: {
             include: {
-              kitchen: true
+              kitchenActor: {
+                select: {
+                  id: true,
+                  label: true,
+                  isActive: true,
+                  kitchenEnabled: true,
+                  kitchenDisplayOrder: true
+                }
+              }
             }
           }
         },
@@ -127,5 +137,3 @@ export async function PATCH(req: NextRequest) {
     return fail(error);
   }
 }
-
-

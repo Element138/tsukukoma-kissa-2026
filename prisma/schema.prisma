@@ -74,39 +74,30 @@ enum PaymentSkipReasonType {
   OTHER
 }
 
-model Kitchen {
-  id           String                  @id @db.VarChar(64)
-  name         String                  @db.VarChar(120)
-  displayOrder Int                     @default(0)
-  isActive     Boolean                 @default(true)
-  createdAt    DateTime                @default(now())
-  updatedAt    DateTime                @updatedAt
-  actors       Actor[]
-  assignments  MenuKitchenAssignment[]
-  orderItems   OrderItem[]
-}
-
 model Actor {
-  id             String         @id @db.VarChar(64)
-  actorType      ActorType
-  kitchenId      String?        @db.VarChar(64)
-  label          String         @db.VarChar(120)
-  secretHash     String
-  isActive       Boolean        @default(true)
-  sessionVersion Int            @default(0)
-  lastSeenAt     DateTime?
-  online         Boolean        @default(false)
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  kitchen        Kitchen?       @relation(fields: [kitchenId], references: [id])
-  sessions       Session[]
-  createdOrders  Order[]        @relation("OrderCreatedBy")
-  servedItems    OrderItem[]    @relation("OrderItemServedBy")
-  undoOperation  UndoOperation?
-  auditLogs      AuditLog[]     @relation("AuditActor")
+  id                  String                  @id @db.VarChar(64)
+  actorType           ActorType
+  label               String                  @db.VarChar(120)
+  secretHash          String
+  isActive            Boolean                 @default(true)
+  kitchenEnabled      Boolean                 @default(true)
+  kitchenDisplayOrder Int                     @default(0)
+  sessionVersion      Int                     @default(0)
+  lastSeenAt          DateTime?
+  online              Boolean                 @default(false)
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+  sessions            Session[]
+  createdOrders       Order[]                 @relation("OrderCreatedBy")
+  servedItems         OrderItem[]             @relation("OrderItemServedBy")
+  kitchenAssignments  MenuKitchenAssignment[] @relation("KitchenActorAssignments")
+  kitchenOrderItems   OrderItem[]             @relation("KitchenActorOrderItems")
+  undoOperation       UndoOperation?
+  auditLogs           AuditLog[]              @relation("AuditActor")
 
   @@index([actorType])
-  @@index([kitchenId])
+  @@index([actorType, isActive, kitchenEnabled])
+  @@index([kitchenDisplayOrder])
 }
 
 model Session {
@@ -154,13 +145,13 @@ model Menu {
 }
 
 model MenuKitchenAssignment {
-  menuId    String
-  kitchenId String   @db.VarChar(64)
-  enabled   Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  menu      Menu     @relation(fields: [menuId], references: [id], onDelete: Cascade)
-  kitchen   Kitchen  @relation(fields: [kitchenId], references: [id], onDelete: Cascade)
+  menuId      String
+  kitchenId   String   @db.VarChar(64)
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  menu        Menu     @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  kitchenActor Actor   @relation("KitchenActorAssignments", fields: [kitchenId], references: [id], onDelete: Cascade)
 
   @@id([menuId, kitchenId])
   @@index([kitchenId, enabled])
@@ -215,7 +206,7 @@ model OrderItem {
   servedByActorId         String?         @db.VarChar(64)
   order                   Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
   menu                    Menu            @relation(fields: [menuId], references: [id])
-  kitchen                 Kitchen?        @relation(fields: [kitchenId], references: [id])
+  kitchenActor            Actor?          @relation("KitchenActorOrderItems", fields: [kitchenId], references: [id], onDelete: SetNull)
   servedBy                Actor?          @relation("OrderItemServedBy", fields: [servedByActorId], references: [id])
 
   @@index([orderId, status])

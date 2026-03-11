@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+﻿import { PrismaClient } from "@prisma/client";
 import crypto from "node:crypto";
 
 const prisma = new PrismaClient();
@@ -8,18 +8,6 @@ function hashSecret(secret: string): string {
 }
 
 async function main() {
-  const drink = await prisma.kitchen.upsert({
-    where: { id: "kitchen-drink" },
-    create: { id: "kitchen-drink", name: "Drink Kitchen", displayOrder: 1, isActive: true },
-    update: { name: "Drink Kitchen", displayOrder: 1 }
-  });
-
-  const food = await prisma.kitchen.upsert({
-    where: { id: "kitchen-food" },
-    create: { id: "kitchen-food", name: "Food Kitchen", displayOrder: 2, isActive: true },
-    update: { name: "Food Kitchen", displayOrder: 2 }
-  });
-
   const beverageCategory = await prisma.menuCategory.upsert({
     where: { id: "7cb786af-3743-406f-ab43-0b59595c78b4" },
     create: {
@@ -107,16 +95,91 @@ async function main() {
     });
   }
 
+  const actors = [
+    {
+      id: "admin",
+      actorType: "ADMIN",
+      label: "Admin",
+      secret: "admin1234",
+      kitchenEnabled: true,
+      kitchenDisplayOrder: 0
+    },
+    {
+      id: "pos-main",
+      actorType: "POS",
+      label: "POS Main",
+      secret: "1234",
+      kitchenEnabled: true,
+      kitchenDisplayOrder: 0
+    },
+    {
+      id: "kitchen-drink",
+      actorType: "KITCHEN",
+      label: "Drink Kitchen",
+      secret: "1234",
+      kitchenEnabled: true,
+      kitchenDisplayOrder: 1
+    },
+    {
+      id: "kitchen-food",
+      actorType: "KITCHEN",
+      label: "Food Kitchen",
+      secret: "1234",
+      kitchenEnabled: true,
+      kitchenDisplayOrder: 2
+    },
+    {
+      id: "waiter-1",
+      actorType: "WAITER",
+      label: "Waiter #1",
+      secret: "1234",
+      kitchenEnabled: true,
+      kitchenDisplayOrder: 0
+    },
+    {
+      id: "menu-display-main",
+      actorType: "MENU_DISPLAY",
+      label: "Menu Display",
+      secret: "1234",
+      kitchenEnabled: true,
+      kitchenDisplayOrder: 0
+    }
+  ] as const;
+
+  for (const actor of actors) {
+    await prisma.actor.upsert({
+      where: { id: actor.id },
+      create: {
+        id: actor.id,
+        actorType: actor.actorType,
+        label: actor.label,
+        secretHash: hashSecret(actor.secret),
+        kitchenEnabled: actor.kitchenEnabled,
+        kitchenDisplayOrder: actor.kitchenDisplayOrder,
+        isActive: true,
+        online: false
+      },
+      update: {
+        actorType: actor.actorType,
+        label: actor.label,
+        secretHash: hashSecret(actor.secret),
+        kitchenEnabled: actor.kitchenEnabled,
+        kitchenDisplayOrder: actor.kitchenDisplayOrder,
+        isActive: true
+      }
+    });
+  }
+
   await prisma.menuKitchenAssignment.upsert({
     where: {
       menuId_kitchenId: {
         menuId: "b7ab2a6b-eb5a-40ed-8eca-cc1dc65db6df",
-        kitchenId: drink.id
+        kitchenId: "kitchen-drink"
       }
     },
     create: {
       menuId: "b7ab2a6b-eb5a-40ed-8eca-cc1dc65db6df",
-      kitchenId: drink.id,
+      kitchenId: "kitchen-drink",
       enabled: true
     },
     update: { enabled: true }
@@ -126,12 +189,12 @@ async function main() {
     where: {
       menuId_kitchenId: {
         menuId: "bcf1ee6e-7751-4c08-bad8-0a2187f78ea2",
-        kitchenId: drink.id
+        kitchenId: "kitchen-drink"
       }
     },
     create: {
       menuId: "bcf1ee6e-7751-4c08-bad8-0a2187f78ea2",
-      kitchenId: drink.id,
+      kitchenId: "kitchen-drink",
       enabled: true
     },
     update: { enabled: true }
@@ -140,45 +203,14 @@ async function main() {
   for (const menuId of ["16126f9f-87f9-4f4e-8b41-75560801e984", "391487fa-8539-40fd-a1cd-e64b212db722"]) {
     await prisma.menuKitchenAssignment.upsert({
       where: {
-        menuId_kitchenId: { menuId, kitchenId: food.id }
+        menuId_kitchenId: { menuId, kitchenId: "kitchen-food" }
       },
       create: {
         menuId,
-        kitchenId: food.id,
+        kitchenId: "kitchen-food",
         enabled: true
       },
       update: { enabled: true }
-    });
-  }
-
-  const actors = [
-    { id: "admin", actorType: "ADMIN", label: "Admin", kitchenId: null, secret: "admin1234" },
-    { id: "pos-main", actorType: "POS", label: "POS Main", kitchenId: null, secret: "1234" },
-    { id: "kitchen-drink-1", actorType: "KITCHEN", label: "Kitchen Drink", kitchenId: drink.id, secret: "1234" },
-    { id: "kitchen-food-1", actorType: "KITCHEN", label: "Kitchen Food", kitchenId: food.id, secret: "1234" },
-    { id: "waiter-1", actorType: "WAITER", label: "Waiter #1", kitchenId: null, secret: "1234" },
-    { id: "menu-display-main", actorType: "MENU_DISPLAY", label: "Menu Display", kitchenId: null, secret: "1234" }
-  ] as const;
-
-  for (const actor of actors) {
-    await prisma.actor.upsert({
-      where: { id: actor.id },
-      create: {
-        id: actor.id,
-        actorType: actor.actorType,
-        kitchenId: actor.kitchenId,
-        label: actor.label,
-        secretHash: hashSecret(actor.secret),
-        isActive: true,
-        online: false
-      },
-      update: {
-        actorType: actor.actorType,
-        kitchenId: actor.kitchenId,
-        label: actor.label,
-        secretHash: hashSecret(actor.secret),
-        isActive: true
-      }
     });
   }
 

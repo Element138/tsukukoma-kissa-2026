@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+﻿import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { fail, ok } from "@/lib/response";
 import { requireSession } from "@/lib/server/auth";
@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     const actor = await requireSession(req, { actorTypes: ["KITCHEN", "ADMIN"] });
     const body = await parseJson(req, kitchenToggleSchema);
 
-    if (actor.actorType === "KITCHEN" && actor.kitchenId !== body.kitchenId) {
+    if (actor.actorType === "KITCHEN" && actor.actorId !== body.kitchenId) {
       throw new AppError(403, "FORBIDDEN", "Kitchen can only toggle own kitchen");
     }
 
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
         actorId: actor.actorId,
         actorType: actor.actorType,
         kitchenId: body.kitchenId,
-        isActive: body.isActive
+        kitchenEnabled: body.kitchenEnabled
       })
     );
 
@@ -30,5 +30,3 @@ export async function POST(req: NextRequest) {
     return fail(error);
   }
 }
-
-

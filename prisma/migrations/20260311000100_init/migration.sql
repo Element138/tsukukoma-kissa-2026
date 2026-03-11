@@ -32,25 +32,14 @@ CREATE TYPE "UndoOperationType" AS ENUM ('ITEM_READY', 'ITEM_SERVED', 'TAKEOUT_O
 CREATE TYPE "PaymentSkipReasonType" AS ENUM ('TEST', 'DEVICE_ERROR', 'NETWORK_ERROR', 'OTHER');
 
 -- CreateTable
-CREATE TABLE "Kitchen" (
-    "id" VARCHAR(64) NOT NULL,
-    "name" VARCHAR(120) NOT NULL,
-    "displayOrder" INTEGER NOT NULL DEFAULT 0,
-    "isActive" BOOLEAN NOT NULL DEFAULT true,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "Kitchen_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
 CREATE TABLE "Actor" (
     "id" VARCHAR(64) NOT NULL,
     "actorType" "ActorType" NOT NULL,
-    "kitchenId" VARCHAR(64),
     "label" VARCHAR(120) NOT NULL,
     "secretHash" TEXT NOT NULL,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "kitchenEnabled" BOOLEAN NOT NULL DEFAULT true,
+    "kitchenDisplayOrder" INTEGER NOT NULL DEFAULT 0,
     "sessionVersion" INTEGER NOT NULL DEFAULT 0,
     "lastSeenAt" TIMESTAMP(3),
     "online" BOOLEAN NOT NULL DEFAULT false,
@@ -200,7 +189,10 @@ CREATE TABLE "AuditLog" (
 CREATE INDEX "Actor_actorType_idx" ON "Actor"("actorType");
 
 -- CreateIndex
-CREATE INDEX "Actor_kitchenId_idx" ON "Actor"("kitchenId");
+CREATE INDEX "Actor_actorType_isActive_kitchenEnabled_idx" ON "Actor"("actorType", "isActive", "kitchenEnabled");
+
+-- CreateIndex
+CREATE INDEX "Actor_kitchenDisplayOrder_idx" ON "Actor"("kitchenDisplayOrder");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Session_tokenHash_key" ON "Session"("tokenHash");
@@ -266,9 +258,6 @@ CREATE INDEX "AuditLog_result_timestamp_idx" ON "AuditLog"("result", "timestamp"
 CREATE INDEX "AuditLog_orderId_timestamp_idx" ON "AuditLog"("orderId", "timestamp");
 
 -- AddForeignKey
-ALTER TABLE "Actor" ADD CONSTRAINT "Actor_kitchenId_fkey" FOREIGN KEY ("kitchenId") REFERENCES "Kitchen"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE "Session" ADD CONSTRAINT "Session_actorId_fkey" FOREIGN KEY ("actorId") REFERENCES "Actor"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -278,7 +267,7 @@ ALTER TABLE "Menu" ADD CONSTRAINT "Menu_categoryId_fkey" FOREIGN KEY ("categoryI
 ALTER TABLE "MenuKitchenAssignment" ADD CONSTRAINT "MenuKitchenAssignment_menuId_fkey" FOREIGN KEY ("menuId") REFERENCES "Menu"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "MenuKitchenAssignment" ADD CONSTRAINT "MenuKitchenAssignment_kitchenId_fkey" FOREIGN KEY ("kitchenId") REFERENCES "Kitchen"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "MenuKitchenAssignment" ADD CONSTRAINT "MenuKitchenAssignment_kitchenId_fkey" FOREIGN KEY ("kitchenId") REFERENCES "Actor"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Order" ADD CONSTRAINT "Order_createdByActorId_fkey" FOREIGN KEY ("createdByActorId") REFERENCES "Actor"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -290,7 +279,7 @@ ALTER TABLE "OrderItem" ADD CONSTRAINT "OrderItem_orderId_fkey" FOREIGN KEY ("or
 ALTER TABLE "OrderItem" ADD CONSTRAINT "OrderItem_menuId_fkey" FOREIGN KEY ("menuId") REFERENCES "Menu"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "OrderItem" ADD CONSTRAINT "OrderItem_kitchenId_fkey" FOREIGN KEY ("kitchenId") REFERENCES "Kitchen"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "OrderItem" ADD CONSTRAINT "OrderItem_kitchenId_fkey" FOREIGN KEY ("kitchenId") REFERENCES "Actor"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "OrderItem" ADD CONSTRAINT "OrderItem_servedByActorId_fkey" FOREIGN KEY ("servedByActorId") REFERENCES "Actor"("id") ON DELETE SET NULL ON UPDATE CASCADE;
@@ -304,3 +293,63 @@ ALTER TABLE "AuditLog" ADD CONSTRAINT "AuditLog_actorId_fkey" FOREIGN KEY ("acto
 -- AddForeignKey
 ALTER TABLE "AuditLog" ADD CONSTRAINT "AuditLog_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "Order"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
+
+-- Enforce that kitchenId references only KITCHEN actors.
+CREATE OR REPLACE FUNCTION "public"."assert_kitchen_actor_ref"()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW."kitchenId" IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  PERFORM 1
+  FROM "public"."Actor" a
+  WHERE a."id" = NEW."kitchenId"
+    AND a."actorType" = 'KITCHEN'::"ActorType";
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'kitchenId % must reference Actor(actorType=KITCHEN)', NEW."kitchenId";
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER "MenuKitchenAssignment_kitchenId_kitchen_actor_check"
+BEFORE INSERT OR UPDATE OF "kitchenId" ON "public"."MenuKitchenAssignment"
+FOR EACH ROW
+EXECUTE FUNCTION "public"."assert_kitchen_actor_ref"();
+
+CREATE TRIGGER "OrderItem_kitchenId_kitchen_actor_check"
+BEFORE INSERT OR UPDATE OF "kitchenId" ON "public"."OrderItem"
+FOR EACH ROW
+EXECUTE FUNCTION "public"."assert_kitchen_actor_ref"();
+-- Prevent changing referenced KITCHEN actors to a non-KITCHEN actorType.
+CREATE OR REPLACE FUNCTION "public"."assert_actor_remains_kitchen_if_referenced"()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW."actorType" = 'KITCHEN'::"ActorType" THEN
+    RETURN NEW;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM "public"."MenuKitchenAssignment" m
+    WHERE m."kitchenId" = NEW."id"
+  ) OR EXISTS (
+    SELECT 1
+    FROM "public"."OrderItem" oi
+    WHERE oi."kitchenId" = NEW."id"
+  ) THEN
+    RAISE EXCEPTION 'Actor % is referenced as kitchenId and must remain actorType=KITCHEN', NEW."id";
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER "Actor_actorType_kitchen_ref_guard"
+BEFORE UPDATE OF "actorType" ON "public"."Actor"
+FOR EACH ROW
+WHEN (OLD."actorType" = 'KITCHEN'::"ActorType")
+EXECUTE FUNCTION "public"."assert_actor_remains_kitchen_if_referenced"();

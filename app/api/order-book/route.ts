@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+﻿import { NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireSession } from "@/lib/server/auth";
@@ -45,11 +45,13 @@ export async function GET(req: NextRequest) {
       include: {
         items: {
           include: {
-            kitchen: {
+            kitchenActor: {
               select: {
                 id: true,
-                name: true,
-                isActive: true
+                label: true,
+                actorType: true,
+                isActive: true,
+                kitchenEnabled: true
               }
             }
           }
@@ -94,7 +96,11 @@ export async function GET(req: NextRequest) {
     });
 
     const rows = filtered.map((order) => {
-      const hasInactiveKitchenQueuedItem = order.items.some((item) => item.status === "QUEUED" && item.kitchen && !item.kitchen.isActive);
+      const hasInactiveKitchenQueuedItem = order.items.some(
+        (item) =>
+          item.status === "QUEUED" &&
+          (!item.kitchenActor || item.kitchenActor.actorType !== "KITCHEN" || !item.kitchenActor.isActive || !item.kitchenActor.kitchenEnabled)
+      );
       return {
         id: order.id,
         orderNo: order.orderNo,
@@ -114,8 +120,12 @@ export async function GET(req: NextRequest) {
           name: item.itemNameSnapshot,
           status: item.status,
           kitchenId: item.kitchenId,
-          kitchenName: item.kitchen?.name,
-          kitchenInactive: item.kitchen ? !item.kitchen.isActive : false
+          kitchenName: item.kitchenActor?.label ?? item.kitchenActor?.id,
+          kitchenInactive:
+            !item.kitchenActor ||
+            item.kitchenActor.actorType !== "KITCHEN" ||
+            !item.kitchenActor.isActive ||
+            !item.kitchenActor.kitchenEnabled
         }))
       };
     });
@@ -125,5 +135,3 @@ export async function GET(req: NextRequest) {
     return fail(error);
   }
 }
-
-
