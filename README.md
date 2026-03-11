@@ -39,14 +39,14 @@ Set these in Vercel Project Settings -> Environment Variables:
 
 ## Vercel deployment bootstrap
 
-Current build mode is destructive for DB (by request): each deploy resets DB, reapplies migrations, then seeds.
+Current build mode is destructive for DB (by request): each deploy applies `prisma db push --accept-data-loss`, reapplies postdeploy SQL guards, then seeds.
 
 
 
 This repo now includes:
 
 - Prisma migration files in `prisma/migrations`
-- `vercel-build` script: runs migration + seed + build
+- `vercel-build` script: runs db push + postdeploy SQL + seed + build
 - `vercel.json` build command: `npm run vercel-build`
 
 So every deploy can prepare DB schema and seed base actors safely.

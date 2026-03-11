@@ -24,7 +24,7 @@ if (!directUrl && !databaseUrl) {
   process.exit(1);
 }
 
-// For build-time DB operations, force one URL to avoid migrate/seed targeting different DBs.
+// Build-time DB operations must target one URL to avoid mismatch between schema sync and seed.
 const buildDbUrl = directUrl ?? databaseUrl;
 const env = {
   ...process.env,
@@ -32,8 +32,9 @@ const env = {
   DIRECT_URL: buildDbUrl
 };
 
-console.log("[vercel-build] Using destructive DB reset mode (data will be dropped).");
+console.log("[vercel-build] Schema sync mode: prisma db push --accept-data-loss (destructive changes allowed).");
 run(NPX, ["prisma", "generate"], env);
-run(NPX, ["prisma", "migrate", "reset", "--force", "--skip-generate", "--skip-seed"], env);
+run(NPX, ["prisma", "db", "push", "--accept-data-loss", "--skip-generate"], env);
+run(NPX, ["prisma", "db", "execute", "--file", "prisma/postdeploy.sql", "--schema", "prisma/schema.prisma"], env);
 run(NPX, ["prisma", "db", "seed"], env);
 run(NPX, ["next", "build"], process.env);
