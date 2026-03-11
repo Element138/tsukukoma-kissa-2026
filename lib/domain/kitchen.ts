@@ -1,4 +1,4 @@
-﻿import { Prisma, PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 import { assert, AppError } from "@/lib/errors";
 import { now } from "@/lib/time";
 import { recalcAndPersistOrderStatus } from "@/lib/domain/orders";
@@ -115,7 +115,15 @@ export async function toggleKitchenState(
     }
   });
 
-  await updateMenusAvailabilityByKitchenCoverage(db);
+  const impacted = await db.menuKitchenAssignment.findMany({
+    where: { kitchenId: params.kitchenId, enabled: true },
+    select: { menuId: true }
+  });
+
+  await updateMenusAvailabilityByKitchenCoverage(
+    db,
+    [...new Set(impacted.map((x) => x.menuId))]
+  );
 
   await writeAuditLog(db, {
     actorId: params.actorId,

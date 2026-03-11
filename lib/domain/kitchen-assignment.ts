@@ -167,7 +167,9 @@ export async function reassignQueuedItemsFromKitchen(db: DbClient, params: { fro
   return { moved: moveIds.length, skipped: items.length - moveIds.length };
 }
 
-export async function updateMenusAvailabilityByKitchenCoverage(db: DbClient) {
+export async function updateMenusAvailabilityByKitchenCoverage(db: DbClient, menuIds?: string[]) {
+  const targetMenuIds = menuIds && menuIds.length > 0 ? [...new Set(menuIds)] : null;
+
   const activeKitchenActors = await db.actor.findMany({
     where: activeKitchenActorWhere(),
     select: { id: true }
@@ -175,7 +177,10 @@ export async function updateMenusAvailabilityByKitchenCoverage(db: DbClient) {
   const activeKitchenSet = new Set(activeKitchenActors.map((x) => x.id));
 
   const allAssignments = await db.menuKitchenAssignment.findMany({
-    where: { enabled: true },
+    where: {
+      enabled: true,
+      ...(targetMenuIds ? { menuId: { in: targetMenuIds } } : {})
+    },
     select: { menuId: true, kitchenId: true }
   });
 
@@ -187,17 +192,37 @@ export async function updateMenusAvailabilityByKitchenCoverage(db: DbClient) {
   }
 
   const menus = await db.menu.findMany({
-    where: { isActive: true },
+    where: {
+      isActive: true,
+      ...(targetMenuIds ? { id: { in: targetMenuIds } } : {})
+    },
     select: { id: true, availability: true }
   });
+
+  const pauseIds: string[] = [];
+  const availableIds: string[] = [];
 
   for (const menu of menus) {
     const hasCoverage = coveredMenus.has(menu.id);
     if (!hasCoverage && menu.availability === "AVAILABLE") {
-      await db.menu.update({ where: { id: menu.id }, data: { availability: "PAUSED" } });
+      pauseIds.push(menu.id);
     }
     if (hasCoverage && menu.availability === "PAUSED") {
-      await db.menu.update({ where: { id: menu.id }, data: { availability: "AVAILABLE" } });
+      availableIds.push(menu.id);
     }
+  }
+
+  if (pauseIds.length > 0) {
+    await db.menu.updateMany({
+      where: { id: { in: pauseIds } },
+      data: { availability: "PAUSED" }
+    });
+  }
+
+  if (availableIds.length > 0) {
+    await db.menu.updateMany({
+      where: { id: { in: availableIds } },
+      data: { availability: "AVAILABLE" }
+    });
   }
 }

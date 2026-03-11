@@ -129,7 +129,11 @@ export async function DELETE(req: NextRequest) {
       });
 
       if (existing.actorType === "KITCHEN") {
-        await updateMenusAvailabilityByKitchenCoverage(tx);
+        const impacted = await tx.menuKitchenAssignment.findMany({
+          where: { kitchenId: actorId, enabled: true },
+          select: { menuId: true }
+        });
+        await updateMenusAvailabilityByKitchenCoverage(tx, [...new Set(impacted.map((x) => x.menuId))]);
       }
 
       return existing;

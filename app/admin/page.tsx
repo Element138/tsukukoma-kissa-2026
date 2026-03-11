@@ -76,10 +76,10 @@ export default function AdminPage() {
 
     try {
       const [actorRes, menuRes, categoryRes, assignmentRes] = await Promise.all([
-        apiFetch<{ actors: Actor[] }>("/api/admin/actors", { timeoutMs: 30000 }),
-        apiFetch<{ menus: Menu[]; categories: Category[] }>("/api/admin/menus", { timeoutMs: 30000 }),
-        apiFetch<{ categories: Category[] }>("/api/admin/categories", { timeoutMs: 30000 }),
-        apiFetch<{ assignments: Assignment[] }>("/api/admin/assignments", { timeoutMs: 30000 })
+        apiFetch<{ actors: Actor[] }>("/api/admin/actors", { timeoutMs: 5000, retry: 1 }),
+        apiFetch<{ menus: Menu[]; categories: Category[] }>("/api/admin/menus", { timeoutMs: 5000, retry: 1 }),
+        apiFetch<{ categories: Category[] }>("/api/admin/categories", { timeoutMs: 5000, retry: 1 }),
+        apiFetch<{ assignments: Assignment[] }>("/api/admin/assignments", { timeoutMs: 5000, retry: 1 })
       ]);
 
       setActors(actorRes.actors);
@@ -159,16 +159,21 @@ export default function AdminPage() {
   };
 
   const toggleKitchenEnabled = async (kitchenActor: Actor) => {
+    const nextEnabled = !kitchenActor.kitchenEnabled;
     try {
       await apiFetch("/api/kitchen/toggle", {
         method: "POST",
         body: JSON.stringify({
           kitchenId: kitchenActor.id,
-          kitchenEnabled: !kitchenActor.kitchenEnabled
+          kitchenEnabled: nextEnabled
         })
       });
-      setMessage(`Kitchen ${kitchenActor.id} ${kitchenActor.kitchenEnabled ? "disabled" : "enabled"}`);
-      await reload();
+      setActors((prev) =>
+        prev.map((a) => (a.id === kitchenActor.id ? { ...a, kitchenEnabled: nextEnabled } : a))
+      );
+      setMessage(`Kitchen ${kitchenActor.id} ${nextEnabled ? "enabled" : "disabled"}`);
+      setError(null);
+      void reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to toggle kitchen");
     }
@@ -216,8 +221,10 @@ export default function AdminPage() {
         method: "PATCH",
         body: JSON.stringify({ id: menu.id, ...patch })
       });
+      setMenus((prev) => prev.map((m) => (m.id === menu.id ? { ...m, ...patch } : m)));
       setMessage(`Menu updated: ${menu.name}`);
-      await reload();
+      setError(null);
+      void reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to update menu");
     }
@@ -229,9 +236,20 @@ export default function AdminPage() {
         method: "POST",
         body: JSON.stringify({ menuId, kitchenId, enabled })
       });
+
+      setAssignments((prev) => {
+        const idx = prev.findIndex((a) => a.menuId === menuId && a.kitchenId === kitchenId);
+        if (idx === -1) {
+          return [...prev, { menuId, kitchenId, enabled }];
+        }
+        const next = [...prev];
+        next[idx] = { ...next[idx], enabled };
+        return next;
+      });
+
       setMessage(`Assignment ${enabled ? "enabled" : "disabled"}`);
       setError(null);
-      await reload();
+      void reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to update assignment");
     }

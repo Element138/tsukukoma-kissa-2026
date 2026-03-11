@@ -1,4 +1,4 @@
-﻿import { NextRequest } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession } from "@/lib/server/auth";
 import { fail, ok } from "@/lib/response";
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
         }
       });
 
-      await updateMenusAvailabilityByKitchenCoverage(tx);
+      await updateMenusAvailabilityByKitchenCoverage(tx, [body.menuId]);
       return saved;
     });
 

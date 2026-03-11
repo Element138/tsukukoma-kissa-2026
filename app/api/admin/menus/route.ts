@@ -1,4 +1,4 @@
-﻿import { NextRequest } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession } from "@/lib/server/auth";
 import { fail, ok } from "@/lib/response";
@@ -28,21 +28,6 @@ export async function GET(req: NextRequest) {
 
     const [menus, categories] = await Promise.all([
       prisma.menu.findMany({
-        include: {
-          assignments: {
-            include: {
-              kitchenActor: {
-                select: {
-                  id: true,
-                  label: true,
-                  isActive: true,
-                  kitchenEnabled: true,
-                  kitchenDisplayOrder: true
-                }
-              }
-            }
-          }
-        },
         orderBy: [{ displayOrder: "asc" }, { name: "asc" }]
       }),
       prisma.menuCategory.findMany({
