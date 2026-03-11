@@ -30,15 +30,15 @@ export async function POST(req: NextRequest) {
     if (body.actorType === "ADMIN" && body.id !== "admin") {
       throw new AppError(400, "INVALID_ADMIN_ID", "Admin ID must be 'admin'");
     }
-    if (body.actorType === "KITCHEN" && !body.lineId) {
-      throw new AppError(400, "LINE_REQUIRED", "Kitchen actor requires lineId");
+    if (body.actorType === "KITCHEN" && !body.kitchenId) {
+      throw new AppError(400, "KITCHEN_REQUIRED", "Kitchen actor requires kitchenId");
     }
 
     const actor = await prisma.actor.create({
       data: {
         id: body.id,
         actorType: body.actorType,
-        lineId: body.lineId ?? null,
+        kitchenId: body.kitchenId ?? null,
         label: body.label,
         secretHash: hashSecret(body.secret),
         isActive: true
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
       entityId: actor.id,
       afterJson: {
         actorType: actor.actorType,
-        lineId: actor.lineId,
+        kitchenId: actor.kitchenId,
         label: actor.label
       },
       result: "SUCCESS"

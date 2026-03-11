@@ -11,7 +11,7 @@ const SESSION_TTL_MINUTES = 10;
 export type AuthenticatedActor = {
   actorId: string;
   actorType: ActorType;
-  lineId: string | null;
+  kitchenId: string | null;
   label: string;
   sessionId: string;
 };
@@ -37,7 +37,7 @@ export function clearSessionCookie(response: NextResponse) {
   });
 }
 
-async function loadSession(req: NextRequest): Promise<(Session & { actor: { id: string; actorType: ActorType; lineId: string | null; label: string; isActive: boolean } }) | null> {
+async function loadSession(req: NextRequest): Promise<(Session & { actor: { id: string; actorType: ActorType; kitchenId: string | null; label: string; isActive: boolean } }) | null> {
   const token = req.cookies.get(SESSION_COOKIE)?.value;
   if (!token) {
     return null;
@@ -51,7 +51,7 @@ async function loadSession(req: NextRequest): Promise<(Session & { actor: { id: 
         select: {
           id: true,
           actorType: true,
-          lineId: true,
+          kitchenId: true,
           label: true,
           isActive: true
         }
@@ -104,7 +104,7 @@ export async function requireSession(
   return {
     actorId: session.actor.id,
     actorType: session.actor.actorType,
-    lineId: session.actor.lineId,
+    kitchenId: session.actor.kitchenId,
     label: session.actor.label,
     sessionId: session.sessionId
   };

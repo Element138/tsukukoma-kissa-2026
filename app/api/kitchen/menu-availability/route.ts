@@ -10,8 +10,8 @@ import { AppError } from "@/lib/errors";
 export async function POST(req: NextRequest) {
   try {
     const actor = await requireSession(req, { actorTypes: ["KITCHEN"] });
-    if (!actor.lineId) {
-      throw new AppError(400, "LINE_REQUIRED", "Kitchen line is missing");
+    if (!actor.kitchenId) {
+      throw new AppError(400, "KITCHEN_REQUIRED", "Kitchen kitchen is missing");
     }
 
     const body = await parseJson(req, availabilityUpdateSchema);
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     const menu = await prisma.$transaction((tx) =>
       updateMenuAvailabilityByKitchen(tx, {
         actorId: actor.actorId,
-        lineId: actor.lineId!,
+        kitchenId: actor.kitchenId!,
         menuId: body.menuId,
         availability: body.availability
       })

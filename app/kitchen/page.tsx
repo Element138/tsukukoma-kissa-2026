@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -16,15 +16,15 @@ type QueueItem = {
   tableNo: number | null;
   specialNote: string | null;
   elapsed: string;
-  lineName: string;
-  lineInactiveWarning: boolean;
+  kitchenName: string;
+  kitchenInactiveWarning: boolean;
 };
 
-type Line = { id: string; name: string; isActive: boolean };
+type Kitchen = { id: string; name: string; isActive: boolean };
 
 type Assignment = {
   menuId: string;
-  lineId: string;
+  kitchenId: string;
   enabled: boolean;
   menu: { id: string; name: string };
 };
@@ -34,30 +34,32 @@ type Menu = { id: string; name: string; availability: "AVAILABLE" | "PAUSED" | "
 export default function KitchenPage() {
   const { loading, session } = useSession(["KITCHEN"]);
   const [items, setItems] = useState<QueueItem[]>([]);
-  const [lines, setLines] = useState<Line[]>([]);
+  const [kitchens, setKitchens] = useState<Kitchen[]>([]);
   const [menus, setMenus] = useState<Menu[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
+
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [targetLineId, setTargetLineId] = useState<string>("");
+  const [targetKitchenId, setTargetKitchenId] = useState<string>("");
 
-  const myLineId = session?.actor.lineId ?? null;
+  const myKitchenId = session?.actor.kitchenId ?? null;
 
   const reload = async () => {
     try {
-      const [queue, linePayload, menuPayload, assignmentPayload] = await Promise.all([
+      const [queue, kitchenPayload, menuPayload, assignmentPayload] = await Promise.all([
         apiFetch<{ items: QueueItem[] }>("/api/kitchen/queue"),
-        apiFetch<{ lines: Line[] }>("/api/admin/lines"),
+        apiFetch<{ kitchens: Kitchen[] }>("/api/admin/kitchens"),
         apiFetch<{ menus: Menu[] }>("/api/admin/menus"),
         apiFetch<{ assignments: Assignment[] }>("/api/admin/assignments")
       ]);
 
       setItems(queue.items);
-      setLines(linePayload.lines);
+      setKitchens(kitchenPayload.kitchens);
       setMenus(menuPayload.menus);
       setAssignments(assignmentPayload.assignments);
+      setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "読み込み失敗");
+      setError(e instanceof Error ? e.message : "Failed to load kitchen data");
     }
   };
 
@@ -68,14 +70,15 @@ export default function KitchenPage() {
     reload();
     const timer = setInterval(reload, 3000);
     return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
 
-  const myLine = lines.find((l) => l.id === myLineId);
+  const myKitchen = kitchens.find((k) => k.id === myKitchenId);
 
   const myMenus = useMemo(() => {
-    const menuIds = new Set(assignments.filter((a) => a.lineId === myLineId && a.enabled).map((a) => a.menuId));
+    const menuIds = new Set(assignments.filter((a) => a.kitchenId === myKitchenId && a.enabled).map((a) => a.menuId));
     return menus.filter((m) => menuIds.has(m.id));
-  }, [assignments, menus, myLineId]);
+  }, [assignments, menus, myKitchenId]);
 
   const markReady = async (itemId: string) => {
     try {
@@ -83,10 +86,10 @@ export default function KitchenPage() {
         method: "POST",
         body: JSON.stringify({ expectedItemStatus: "QUEUED" })
       });
-      setMessage("Readyを反映しました");
+      setMessage("Item marked READY");
       await reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "ready失敗");
+      setError(e instanceof Error ? e.message : "Failed to mark READY");
     }
   };
 
@@ -96,42 +99,42 @@ export default function KitchenPage() {
         method: "POST",
         body: JSON.stringify({ confirm: true })
       });
-      setMessage("Undoを実行しました");
+      setMessage("Undo completed");
       await reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "undo失敗");
+      setError(e instanceof Error ? e.message : "Failed to undo");
     }
   };
 
-  const toggleLine = async () => {
-    if (!myLineId || !myLine) {
+  const toggleKitchen = async () => {
+    if (!myKitchenId || !myKitchen) {
       return;
     }
     try {
-      await apiFetch("/api/kitchen/line/toggle", {
+      await apiFetch("/api/kitchen/toggle", {
         method: "POST",
-        body: JSON.stringify({ lineId: myLineId, isActive: !myLine.isActive })
+        body: JSON.stringify({ kitchenId: myKitchenId, isActive: !myKitchen.isActive })
       });
-      setMessage(`ラインを${!myLine.isActive ? "有効" : "無効"}化しました`);
+      setMessage(`Kitchen ${!myKitchen.isActive ? "enabled" : "disabled"}`);
       await reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "line切替失敗");
+      setError(e instanceof Error ? e.message : "Failed to toggle kitchen");
     }
   };
 
   const forceReassign = async () => {
-    if (!myLineId || !targetLineId) {
+    if (!myKitchenId || !targetKitchenId) {
       return;
     }
     try {
       await apiFetch("/api/kitchen/reassign", {
         method: "POST",
-        body: JSON.stringify({ fromLineId: myLineId, toLineId: targetLineId })
+        body: JSON.stringify({ fromKitchenId: myKitchenId, toKitchenId: targetKitchenId })
       });
-      setMessage("queued item を再割当しました");
+      setMessage("Queued items reassigned");
       await reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "再割当失敗");
+      setError(e instanceof Error ? e.message : "Failed to reassign items");
     }
   };
 
@@ -141,10 +144,10 @@ export default function KitchenPage() {
         method: "POST",
         body: JSON.stringify({ menuId, availability })
       });
-      setMessage(`メニュー状態を ${availability} に更新しました`);
+      setMessage(`Menu availability set to ${availability}`);
       await reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "メニュー状態更新失敗");
+      setError(e instanceof Error ? e.message : "Failed to update menu availability");
     }
   };
 
@@ -159,17 +162,15 @@ export default function KitchenPage() {
         actorType={session.actor.actorType}
         actorLabel={session.actor.label}
         offlineActors={session.offlineActors}
-        inactiveLineWarnings={session.inactiveLineQueuedItems.map((x) => ({ lineName: x.lineName }))}
+        inactiveKitchenWarnings={session.inactiveKitchenQueuedItems.map((x) => ({ kitchenName: x.kitchenName }))}
       />
       <main className="grid two">
         <Card>
           <SectionTitle>Kitchen Queue</SectionTitle>
           <div className="row wrap" style={{ marginBottom: 10 }}>
-            <button onClick={undo} className="ghost-btn">
-              Undo Last Action
-            </button>
-            <button onClick={toggleLine} className="ghost-btn">
-              Line: {myLine?.isActive ? "Disable" : "Enable"}
+            <button onClick={undo} className="ghost-btn">Undo Last Action</button>
+            <button onClick={toggleKitchen} className="ghost-btn">
+              Kitchen: {myKitchen?.isActive ? "Disable" : "Enable"}
             </button>
             <Link href="/order-book">
               <button className="ghost-btn">Order Book</button>
@@ -177,7 +178,7 @@ export default function KitchenPage() {
           </div>
 
           <div className="list">
-            {items.length === 0 && <div className="muted">未完了itemはありません</div>}
+            {items.length === 0 && <div className="muted">No queued items.</div>}
             {items.map((item) => (
               <div key={item.id} className="list-item">
                 <div className="row between wrap">
@@ -195,31 +196,29 @@ export default function KitchenPage() {
                   </div>
                 </div>
                 {item.specialNote && <div className="notice" style={{ marginTop: 8 }}>{item.specialNote}</div>}
-                {item.lineInactiveWarning && <div className="notice error">割当ラインが無効です: {item.lineName}</div>}
+                {item.kitchenInactiveWarning && <div className="notice error">Assigned kitchen is inactive: {item.kitchenName}</div>}
               </div>
             ))}
           </div>
         </Card>
 
         <Card>
-          <SectionTitle>Line / Menu Control</SectionTitle>
+          <SectionTitle>Kitchen / Menu Control</SectionTitle>
           <label>
-            Reassign queued items to line
-            <select value={targetLineId} onChange={(e) => setTargetLineId(e.target.value)}>
-              <option value="">選択</option>
-              {lines
-                .filter((line) => line.id !== myLineId)
-                .map((line) => (
-                  <option key={line.id} value={line.id}>
-                    {line.name} ({line.isActive ? "active" : "inactive"})
+            Reassign queued items to kitchen
+            <select value={targetKitchenId} onChange={(e) => setTargetKitchenId(e.target.value)}>
+              <option value="">Select</option>
+              {kitchens
+                .filter((kitchen) => kitchen.id !== myKitchenId)
+                .map((kitchen) => (
+                  <option key={kitchen.id} value={kitchen.id}>
+                    {kitchen.name} ({kitchen.isActive ? "active" : "inactive"})
                   </option>
                 ))}
             </select>
           </label>
           <div style={{ marginTop: 10 }}>
-            <button onClick={forceReassign} className="ghost-btn" disabled={!targetLineId}>
-              Force Reassign
-            </button>
+            <button onClick={forceReassign} className="ghost-btn" disabled={!targetKitchenId}>Force Reassign</button>
           </div>
 
           <hr style={{ margin: "18px 0", border: "none", borderTop: "1px solid #ddd" }} />
@@ -247,5 +246,3 @@ export default function KitchenPage() {
     </>
   );
 }
-
-

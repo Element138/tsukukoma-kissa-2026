@@ -2,7 +2,7 @@ import { Prisma, PrismaClient } from "@prisma/client";
 import { now } from "@/lib/time";
 import { AppError } from "@/lib/errors";
 
-function chooseLineIdByWorkload(workloads: Map<string, number>, candidates: string[]): string {
+function chooseKitchenIdByWorkload(workloads: Map<string, number>, candidates: string[]): string {
   let best = Number.POSITIVE_INFINITY;
   for (const c of candidates) {
     const score = workloads.get(c) ?? 0;
@@ -22,7 +22,7 @@ export async function assignUnassignedItemsForOrder(db: DbClient, orderId: strin
   const pendingItems = await db.orderItem.findMany({
     where: {
       orderId,
-      lineId: null,
+      kitchenId: null,
       status: "QUEUED"
     },
     select: {
@@ -37,31 +37,31 @@ export async function assignUnassignedItemsForOrder(db: DbClient, orderId: strin
   }
 
   const menuIds = [...new Set(pendingItems.map((i) => i.menuId))];
-  const assignments = await db.menuLineAssignment.findMany({
+  const assignments = await db.menuKitchenAssignment.findMany({
     where: {
       menuId: { in: menuIds },
       enabled: true,
-      line: {
+      kitchen: {
         isActive: true
       }
     },
     select: {
       menuId: true,
-      lineId: true
+      kitchenId: true
     }
   });
 
   const assignmentMap = new Map<string, string[]>();
   for (const row of assignments) {
     const arr = assignmentMap.get(row.menuId) ?? [];
-    arr.push(row.lineId);
+    arr.push(row.kitchenId);
     assignmentMap.set(row.menuId, arr);
   }
 
   const queuedLoadsRaw = await db.orderItem.groupBy({
-    by: ["lineId"],
+    by: ["kitchenId"],
     where: {
-      lineId: { not: null },
+      kitchenId: { not: null },
       status: "QUEUED"
     },
     _sum: {
@@ -71,8 +71,8 @@ export async function assignUnassignedItemsForOrder(db: DbClient, orderId: strin
 
   const workloads = new Map<string, number>();
   for (const row of queuedLoadsRaw) {
-    if (row.lineId) {
-      workloads.set(row.lineId, row._sum.workloadSecondsSnapshot ?? 0);
+    if (row.kitchenId) {
+      workloads.set(row.kitchenId, row._sum.workloadSecondsSnapshot ?? 0);
     }
   }
 
@@ -81,36 +81,36 @@ export async function assignUnassignedItemsForOrder(db: DbClient, orderId: strin
     if (candidates.length === 0) {
       throw new AppError(
         409,
-        "NO_ACTIVE_LINE",
-        `No active line can process menu ${item.menuId}. Set menu to PAUSED or reactivate a line.`
+        "NO_ACTIVE_KITCHEN",
+        `No active kitchen can process menu ${item.menuId}. Set menu to PAUSED or reactivate a kitchen.`
       );
     }
 
-    const chosen = chooseLineIdByWorkload(workloads, candidates);
+    const chosen = chooseKitchenIdByWorkload(workloads, candidates);
     workloads.set(chosen, (workloads.get(chosen) ?? 0) + item.workloadSecondsSnapshot);
 
     await db.orderItem.update({
       where: { id: item.id },
       data: {
-        lineId: chosen,
-        lineAssignedAt: now()
+        kitchenId: chosen,
+        kitchenAssignedAt: now()
       }
     });
   }
 }
 
-export async function reassignQueuedItemsFromLine(db: DbClient, params: { fromLineId: string; toLineId: string }) {
-  const targetLine = await db.line.findUnique({
-    where: { id: params.toLineId },
+export async function reassignQueuedItemsFromKitchen(db: DbClient, params: { fromKitchenId: string; toKitchenId: string }) {
+  const targetKitchen = await db.kitchen.findUnique({
+    where: { id: params.toKitchenId },
     select: { isActive: true }
   });
-  if (!targetLine?.isActive) {
-    throw new AppError(400, "LINE_INACTIVE", "Target line must be active");
+  if (!targetKitchen?.isActive) {
+    throw new AppError(400, "KITCHEN_INACTIVE", "Target kitchen must be active");
   }
 
   const items = await db.orderItem.findMany({
     where: {
-      lineId: params.fromLineId,
+      kitchenId: params.fromKitchenId,
       status: "QUEUED"
     },
     select: {
@@ -123,9 +123,9 @@ export async function reassignQueuedItemsFromLine(db: DbClient, params: { fromLi
     return { moved: 0 };
   }
 
-  const allowed = await db.menuLineAssignment.findMany({
+  const allowed = await db.menuKitchenAssignment.findMany({
     where: {
-      lineId: params.toLineId,
+      kitchenId: params.toKitchenId,
       enabled: true,
       menuId: { in: [...new Set(items.map((i) => i.menuId))] }
     },
@@ -139,8 +139,8 @@ export async function reassignQueuedItemsFromLine(db: DbClient, params: { fromLi
     await db.orderItem.updateMany({
       where: { id: { in: moveIds } },
       data: {
-        lineId: params.toLineId,
-        lineAssignedAt: now()
+        kitchenId: params.toKitchenId,
+        kitchenAssignedAt: now()
       }
     });
   }
@@ -148,21 +148,21 @@ export async function reassignQueuedItemsFromLine(db: DbClient, params: { fromLi
   return { moved: moveIds.length, skipped: items.length - moveIds.length };
 }
 
-export async function updateMenusAvailabilityByLineCoverage(db: DbClient) {
-  const activeLines = await db.line.findMany({
+export async function updateMenusAvailabilityByKitchenCoverage(db: DbClient) {
+  const activeKitchens = await db.kitchen.findMany({
     where: { isActive: true },
     select: { id: true }
   });
-  const activeLineSet = new Set(activeLines.map((x) => x.id));
+  const activeKitchenSet = new Set(activeKitchens.map((x) => x.id));
 
-  const allAssignments = await db.menuLineAssignment.findMany({
+  const allAssignments = await db.menuKitchenAssignment.findMany({
     where: { enabled: true },
-    select: { menuId: true, lineId: true }
+    select: { menuId: true, kitchenId: true }
   });
 
   const coveredMenus = new Set<string>();
   for (const row of allAssignments) {
-    if (activeLineSet.has(row.lineId)) {
+    if (activeKitchenSet.has(row.kitchenId)) {
       coveredMenus.add(row.menuId);
     }
   }

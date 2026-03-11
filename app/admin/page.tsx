@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
@@ -10,13 +10,13 @@ import { TerminalBanner } from "@/components/terminal-banner";
 type Actor = {
   id: string;
   actorType: "POS" | "KITCHEN" | "WAITER" | "MENU_DISPLAY" | "ADMIN";
-  lineId: string | null;
+  kitchenId: string | null;
   label: string;
   isActive: boolean;
   online: boolean;
 };
 
-type Line = {
+type Kitchen = {
   id: string;
   name: string;
   displayOrder: number;
@@ -43,28 +43,29 @@ type Menu = {
 
 type Assignment = {
   menuId: string;
-  lineId: string;
+  kitchenId: string;
   enabled: boolean;
 };
 
 export default function AdminPage() {
   const { loading, session } = useSession(["ADMIN"]);
   const [actors, setActors] = useState<Actor[]>([]);
-  const [lines, setLines] = useState<Line[]>([]);
+  const [kitchens, setKitchens] = useState<Kitchen[]>([]);
   const [menus, setMenus] = useState<Menu[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
+
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const [newActorId, setNewActorId] = useState("");
   const [newActorType, setNewActorType] = useState<Actor["actorType"]>("POS");
-  const [newActorLineId, setNewActorLineId] = useState("");
+  const [newActorKitchenId, setNewActorKitchenId] = useState("");
   const [newActorLabel, setNewActorLabel] = useState("");
   const [newActorSecret, setNewActorSecret] = useState("");
 
-  const [newLineId, setNewLineId] = useState("");
-  const [newLineName, setNewLineName] = useState("");
+  const [newKitchenId, setNewKitchenId] = useState("");
+  const [newKitchenName, setNewKitchenName] = useState("");
 
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newMenuName, setNewMenuName] = useState("");
@@ -73,32 +74,37 @@ export default function AdminPage() {
 
   const reload = async () => {
     try {
-      const [a, l, m, c, s] = await Promise.all([
+      const [actorRes, kitchenRes, menuRes, categoryRes, assignmentRes] = await Promise.all([
         apiFetch<{ actors: Actor[] }>("/api/admin/actors"),
-        apiFetch<{ lines: Line[] }>("/api/admin/lines"),
+        apiFetch<{ kitchens: Kitchen[] }>("/api/admin/kitchens"),
         apiFetch<{ menus: Menu[]; categories: Category[] }>("/api/admin/menus"),
         apiFetch<{ categories: Category[] }>("/api/admin/categories"),
         apiFetch<{ assignments: Assignment[] }>("/api/admin/assignments")
       ]);
 
-      setActors(a.actors);
-      setLines(l.lines);
-      setMenus(m.menus);
-      setCategories(c.categories);
-      setAssignments(s.assignments);
-      if (!newMenuCategoryId && c.categories.length > 0) {
-        setNewMenuCategoryId(c.categories[0]!.id);
+      setActors(actorRes.actors);
+      setKitchens(kitchenRes.kitchens);
+      setMenus(menuRes.menus);
+      setCategories(categoryRes.categories);
+      setAssignments(assignmentRes.assignments);
+
+      if (!newMenuCategoryId && categoryRes.categories.length > 0) {
+        setNewMenuCategoryId(categoryRes.categories[0]!.id);
       }
+      setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "load failed");
+      setError(e instanceof Error ? e.message : "Failed to load admin data");
     }
   };
 
   useEffect(() => {
-    if (!session) return;
+    if (!session) {
+      return;
+    }
     reload();
     const timer = setInterval(reload, 6000);
     return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
 
   const createActor = async (e: FormEvent) => {
@@ -109,28 +115,29 @@ export default function AdminPage() {
         body: JSON.stringify({
           id: newActorId,
           actorType: newActorType,
-          lineId: newActorType === "KITCHEN" ? newActorLineId : null,
+          kitchenId: newActorType === "KITCHEN" ? newActorKitchenId : null,
           label: newActorLabel,
           secret: newActorSecret
         })
       });
-      setMessage("端末IDを作成しました");
+      setMessage("Actor created");
       setNewActorId("");
+      setNewActorKitchenId("");
       setNewActorLabel("");
       setNewActorSecret("");
       await reload();
     } catch (e2) {
-      setError(e2 instanceof Error ? e2.message : "actor create failed");
+      setError(e2 instanceof Error ? e2.message : "Failed to create actor");
     }
   };
 
   const deactivateActor = async (id: string) => {
     try {
       await apiFetch(`/api/admin/actors?id=${encodeURIComponent(id)}`, { method: "DELETE" });
-      setMessage(`${id} を無効化しました`);
+      setMessage(`Actor ${id} deactivated`);
       await reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "actor delete failed");
+      setError(e instanceof Error ? e.message : "Failed to deactivate actor");
     }
   };
 
@@ -140,39 +147,43 @@ export default function AdminPage() {
         method: "POST",
         body: JSON.stringify({ actorId: id })
       });
-      setMessage(`${id} を強制ログアウトしました`);
+      setMessage(`Forced logout: ${id}`);
       await reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "force logout failed");
+      setError(e instanceof Error ? e.message : "Failed to force logout");
     }
   };
 
-  const createLine = async (e: FormEvent) => {
+  const createKitchen = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      await apiFetch("/api/admin/lines", {
+      await apiFetch("/api/admin/kitchens", {
         method: "POST",
-        body: JSON.stringify({ id: newLineId, name: newLineName, displayOrder: lines.length + 1 })
+        body: JSON.stringify({
+          id: newKitchenId,
+          name: newKitchenName,
+          displayOrder: kitchens.length + 1
+        })
       });
-      setMessage("ラインを作成しました");
-      setNewLineId("");
-      setNewLineName("");
+      setMessage("Kitchen created");
+      setNewKitchenId("");
+      setNewKitchenName("");
       await reload();
     } catch (e2) {
-      setError(e2 instanceof Error ? e2.message : "line create failed");
+      setError(e2 instanceof Error ? e2.message : "Failed to create kitchen");
     }
   };
 
-  const toggleLine = async (line: Line) => {
+  const toggleKitchen = async (kitchen: Kitchen) => {
     try {
-      await apiFetch("/api/admin/lines", {
+      await apiFetch("/api/admin/kitchens", {
         method: "PATCH",
-        body: JSON.stringify({ id: line.id, isActive: !line.isActive })
+        body: JSON.stringify({ id: kitchen.id, isActive: !kitchen.isActive })
       });
-      setMessage(`${line.name} を${line.isActive ? "無効" : "有効"}化しました`);
+      setMessage(`Kitchen ${kitchen.name} ${kitchen.isActive ? "disabled" : "enabled"}`);
       await reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "line toggle failed");
+      setError(e instanceof Error ? e.message : "Failed to toggle kitchen");
     }
   };
 
@@ -183,10 +194,10 @@ export default function AdminPage() {
         body: JSON.stringify({ name: newCategoryName, displayOrder: categories.length + 1 })
       });
       setNewCategoryName("");
-      setMessage("カテゴリを作成しました");
+      setMessage("Category created");
       await reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "category create failed");
+      setError(e instanceof Error ? e.message : "Failed to create category");
     }
   };
 
@@ -204,11 +215,11 @@ export default function AdminPage() {
           showLeadTime: true
         })
       });
-      setMessage("メニューを作成しました（初期はPAUSED）");
+      setMessage("Menu created");
       setNewMenuName("");
       await reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "menu create failed");
+      setError(e instanceof Error ? e.message : "Failed to create menu");
     }
   };
 
@@ -218,42 +229,44 @@ export default function AdminPage() {
         method: "PATCH",
         body: JSON.stringify({ id: menu.id, ...patch })
       });
-      setMessage(`${menu.name} を更新しました`);
+      setMessage(`Menu updated: ${menu.name}`);
       await reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "menu update failed");
+      setError(e instanceof Error ? e.message : "Failed to update menu");
     }
   };
 
-  const toggleAssignment = async (menuId: string, lineId: string, enabled: boolean) => {
+  const toggleAssignment = async (menuId: string, kitchenId: string, enabled: boolean) => {
     try {
       await apiFetch("/api/admin/assignments", {
         method: "POST",
-        body: JSON.stringify({ menuId, lineId, enabled })
+        body: JSON.stringify({ menuId, kitchenId, enabled })
       });
       await reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "assignment failed");
+      setError(e instanceof Error ? e.message : "Failed to update assignment");
     }
   };
 
   const purge = async (target: "ORDERS" | "AUDIT_LOGS") => {
-    const ok = window.confirm(`${target} を一括削除します。続行しますか？`);
-    if (!ok) return;
+    const confirmed = window.confirm(`Permanently delete ${target}?`);
+    if (!confirmed) {
+      return;
+    }
 
     try {
       await apiFetch("/api/admin/purge", {
         method: "POST",
         body: JSON.stringify({ target, confirmationText: "DELETE" })
       });
-      setMessage(`${target} を削除しました`);
+      setMessage(`${target} purged`);
       await reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "purge failed");
+      setError(e instanceof Error ? e.message : "Failed to purge records");
     }
   };
 
-  const assignmentMap = new Map(assignments.map((a) => [`${a.menuId}:${a.lineId}`, a.enabled]));
+  const assignmentMap = new Map(assignments.map((a) => [`${a.menuId}:${a.kitchenId}`, a.enabled]));
 
   if (loading || !session) {
     return <main>Loading...</main>;
@@ -266,7 +279,7 @@ export default function AdminPage() {
         actorType={session.actor.actorType}
         actorLabel={session.actor.label}
         offlineActors={session.offlineActors}
-        inactiveLineWarnings={session.inactiveLineQueuedItems.map((x) => ({ lineName: x.lineName }))}
+        inactiveKitchenWarnings={session.inactiveKitchenQueuedItems.map((x) => ({ kitchenName: x.kitchenName }))}
       />
       <main className="grid">
         <div className="row between wrap">
@@ -296,11 +309,11 @@ export default function AdminPage() {
                 <option value="MENU_DISPLAY">MENU_DISPLAY</option>
               </select>
               {newActorType === "KITCHEN" && (
-                <select value={newActorLineId} onChange={(e) => setNewActorLineId(e.target.value)}>
-                  <option value="">line を選択</option>
-                  {lines.map((line) => (
-                    <option key={line.id} value={line.id}>
-                      {line.name}
+                <select value={newActorKitchenId} onChange={(e) => setNewActorKitchenId(e.target.value)}>
+                  <option value="">select kitchen</option>
+                  {kitchens.map((kitchen) => (
+                    <option key={kitchen.id} value={kitchen.id}>
+                      {kitchen.name}
                     </option>
                   ))}
                 </select>
@@ -317,7 +330,7 @@ export default function AdminPage() {
                     <strong>{actor.id}</strong>
                     <div className="muted">
                       {actor.actorType} / {actor.label}
-                      {actor.lineId ? ` / line=${actor.lineId}` : ""}
+                      {actor.kitchenId ? ` / kitchen=${actor.kitchenId}` : ""}
                     </div>
                     <div className="muted">{actor.online ? "online" : "offline"}</div>
                   </div>
@@ -337,22 +350,22 @@ export default function AdminPage() {
           </Card>
 
           <Card>
-            <SectionTitle>Line Management</SectionTitle>
-            <form onSubmit={createLine} className="grid">
-              <input placeholder="line id" value={newLineId} onChange={(e) => setNewLineId(e.target.value)} required />
-              <input placeholder="line name" value={newLineName} onChange={(e) => setNewLineName(e.target.value)} required />
-              <button>Create Line</button>
+            <SectionTitle>Kitchen Management</SectionTitle>
+            <form onSubmit={createKitchen} className="grid">
+              <input placeholder="kitchen id" value={newKitchenId} onChange={(e) => setNewKitchenId(e.target.value)} required />
+              <input placeholder="kitchen name" value={newKitchenName} onChange={(e) => setNewKitchenName(e.target.value)} required />
+              <button>Create Kitchen</button>
             </form>
 
             <div className="list" style={{ marginTop: 12 }}>
-              {lines.map((line) => (
-                <div key={line.id} className="list-item row between wrap">
+              {kitchens.map((kitchen) => (
+                <div key={kitchen.id} className="list-item row between wrap">
                   <div>
-                    <strong>{line.name}</strong>
-                    <div className="muted">{line.id}</div>
+                    <strong>{kitchen.name}</strong>
+                    <div className="muted">{kitchen.id}</div>
                   </div>
-                  <button className="ghost-btn" onClick={() => toggleLine(line)}>
-                    {line.isActive ? "Disable" : "Enable"}
+                  <button className="ghost-btn" onClick={() => toggleKitchen(kitchen)}>
+                    {kitchen.isActive ? "Disable" : "Enable"}
                   </button>
                 </div>
               ))}
@@ -375,16 +388,29 @@ export default function AdminPage() {
                   Add Category
                 </button>
               </div>
+
               <div className="row wrap" style={{ marginTop: 8 }}>
-                <input placeholder="new menu name" value={newMenuName} onChange={(e) => setNewMenuName(e.target.value)} style={{ maxWidth: 220 }} />
-                <input placeholder="price" value={newMenuPrice} onChange={(e) => setNewMenuPrice(e.target.value)} style={{ maxWidth: 120 }} />
+                <input
+                  placeholder="new menu name"
+                  value={newMenuName}
+                  onChange={(e) => setNewMenuName(e.target.value)}
+                  style={{ maxWidth: 220 }}
+                />
+                <input
+                  placeholder="price"
+                  value={newMenuPrice}
+                  onChange={(e) => setNewMenuPrice(e.target.value)}
+                  style={{ maxWidth: 120 }}
+                />
                 <select value={newMenuCategoryId} onChange={(e) => setNewMenuCategoryId(e.target.value)} style={{ maxWidth: 220 }}>
                   <option value="">category</option>
-                  {categories.filter((c) => c.isActive).map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </option>
-                  ))}
+                  {categories
+                    .filter((c) => c.isActive)
+                    .map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </option>
+                    ))}
                 </select>
                 <button className="ghost-btn" onClick={createMenu} disabled={!newMenuName || !newMenuCategoryId}>
                   Add Menu
@@ -420,17 +446,17 @@ export default function AdminPage() {
                 </div>
 
                 <div className="row wrap" style={{ marginTop: 8 }}>
-                  {lines.map((line) => {
-                    const key = `${menu.id}:${line.id}`;
+                  {kitchens.map((kitchen) => {
+                    const key = `${menu.id}:${kitchen.id}`;
                     const enabled = assignmentMap.get(key) ?? false;
                     return (
                       <button
                         key={key}
                         className="ghost-btn"
-                        onClick={() => toggleAssignment(menu.id, line.id, !enabled)}
+                        onClick={() => toggleAssignment(menu.id, kitchen.id, !enabled)}
                         style={{ borderColor: enabled ? "#111" : "#c0c0c0" }}
                       >
-                        {line.name}: {enabled ? "ON" : "OFF"}
+                        {kitchen.name}: {enabled ? "ON" : "OFF"}
                       </button>
                     );
                   })}
@@ -443,17 +469,11 @@ export default function AdminPage() {
         <Card>
           <SectionTitle>Danger Zone</SectionTitle>
           <div className="row wrap">
-            <button className="ghost-btn" onClick={() => purge("ORDERS")}>
-              Purge Orders
-            </button>
-            <button className="ghost-btn" onClick={() => purge("AUDIT_LOGS")}>
-              Purge Audit Logs
-            </button>
+            <button className="ghost-btn" onClick={() => purge("ORDERS")}>Purge Orders</button>
+            <button className="ghost-btn" onClick={() => purge("AUDIT_LOGS")}>Purge Audit Logs</button>
           </div>
         </Card>
       </main>
     </>
   );
 }
-
-

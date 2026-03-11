@@ -8,16 +8,16 @@ function hashSecret(secret: string): string {
 }
 
 async function main() {
-  const drink = await prisma.line.upsert({
+  const drink = await prisma.kitchen.upsert({
     where: { id: "kitchen-drink" },
-    create: { id: "kitchen-drink", name: "Drink", displayOrder: 1, isActive: true },
-    update: { name: "Drink", displayOrder: 1 }
+    create: { id: "kitchen-drink", name: "Drink Kitchen", displayOrder: 1, isActive: true },
+    update: { name: "Drink Kitchen", displayOrder: 1 }
   });
 
-  const food = await prisma.line.upsert({
+  const food = await prisma.kitchen.upsert({
     where: { id: "kitchen-food" },
-    create: { id: "kitchen-food", name: "Food", displayOrder: 2, isActive: true },
-    update: { name: "Food", displayOrder: 2 }
+    create: { id: "kitchen-food", name: "Food Kitchen", displayOrder: 2, isActive: true },
+    update: { name: "Food Kitchen", displayOrder: 2 }
   });
 
   const beverageCategory = await prisma.menuCategory.upsert({
@@ -107,44 +107,44 @@ async function main() {
     });
   }
 
-  await prisma.menuLineAssignment.upsert({
+  await prisma.menuKitchenAssignment.upsert({
     where: {
-      menuId_lineId: {
+      menuId_kitchenId: {
         menuId: "b7ab2a6b-eb5a-40ed-8eca-cc1dc65db6df",
-        lineId: drink.id
+        kitchenId: drink.id
       }
     },
     create: {
       menuId: "b7ab2a6b-eb5a-40ed-8eca-cc1dc65db6df",
-      lineId: drink.id,
+      kitchenId: drink.id,
       enabled: true
     },
     update: { enabled: true }
   });
 
-  await prisma.menuLineAssignment.upsert({
+  await prisma.menuKitchenAssignment.upsert({
     where: {
-      menuId_lineId: {
+      menuId_kitchenId: {
         menuId: "bcf1ee6e-7751-4c08-bad8-0a2187f78ea2",
-        lineId: drink.id
+        kitchenId: drink.id
       }
     },
     create: {
       menuId: "bcf1ee6e-7751-4c08-bad8-0a2187f78ea2",
-      lineId: drink.id,
+      kitchenId: drink.id,
       enabled: true
     },
     update: { enabled: true }
   });
 
   for (const menuId of ["16126f9f-87f9-4f4e-8b41-75560801e984", "391487fa-8539-40fd-a1cd-e64b212db722"]) {
-    await prisma.menuLineAssignment.upsert({
+    await prisma.menuKitchenAssignment.upsert({
       where: {
-        menuId_lineId: { menuId, lineId: food.id }
+        menuId_kitchenId: { menuId, kitchenId: food.id }
       },
       create: {
         menuId,
-        lineId: food.id,
+        kitchenId: food.id,
         enabled: true
       },
       update: { enabled: true }
@@ -152,12 +152,12 @@ async function main() {
   }
 
   const actors = [
-    { id: "admin", actorType: "ADMIN", label: "Admin", lineId: null, secret: "admin1234" },
-    { id: "pos-main", actorType: "POS", label: "POS Main", lineId: null, secret: "1234" },
-    { id: "kitchen-drink-1", actorType: "KITCHEN", label: "Kitchen Drink", lineId: drink.id, secret: "1234" },
-    { id: "kitchen-food-1", actorType: "KITCHEN", label: "Kitchen Food", lineId: food.id, secret: "1234" },
-    { id: "waiter-1", actorType: "WAITER", label: "Waiter #1", lineId: null, secret: "1234" },
-    { id: "menu-display-main", actorType: "MENU_DISPLAY", label: "Menu Display", lineId: null, secret: "1234" }
+    { id: "admin", actorType: "ADMIN", label: "Admin", kitchenId: null, secret: "admin1234" },
+    { id: "pos-main", actorType: "POS", label: "POS Main", kitchenId: null, secret: "1234" },
+    { id: "kitchen-drink-1", actorType: "KITCHEN", label: "Kitchen Drink", kitchenId: drink.id, secret: "1234" },
+    { id: "kitchen-food-1", actorType: "KITCHEN", label: "Kitchen Food", kitchenId: food.id, secret: "1234" },
+    { id: "waiter-1", actorType: "WAITER", label: "Waiter #1", kitchenId: null, secret: "1234" },
+    { id: "menu-display-main", actorType: "MENU_DISPLAY", label: "Menu Display", kitchenId: null, secret: "1234" }
   ] as const;
 
   for (const actor of actors) {
@@ -166,7 +166,7 @@ async function main() {
       create: {
         id: actor.id,
         actorType: actor.actorType,
-        lineId: actor.lineId,
+        kitchenId: actor.kitchenId,
         label: actor.label,
         secretHash: hashSecret(actor.secret),
         isActive: true,
@@ -174,7 +174,7 @@ async function main() {
       },
       update: {
         actorType: actor.actorType,
-        lineId: actor.lineId,
+        kitchenId: actor.kitchenId,
         label: actor.label,
         secretHash: hashSecret(actor.secret),
         isActive: true
@@ -193,4 +193,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-

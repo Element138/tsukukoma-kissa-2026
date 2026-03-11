@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
       include: {
         items: {
           include: {
-            line: {
+            kitchen: {
               select: {
                 id: true,
                 name: true,
@@ -94,7 +94,7 @@ export async function GET(req: NextRequest) {
     });
 
     const rows = filtered.map((order) => {
-      const hasInactiveLineQueuedItem = order.items.some((item) => item.status === "QUEUED" && item.line && !item.line.isActive);
+      const hasInactiveKitchenQueuedItem = order.items.some((item) => item.status === "QUEUED" && item.kitchen && !item.kitchen.isActive);
       return {
         id: order.id,
         orderNo: order.orderNo,
@@ -108,14 +108,14 @@ export async function GET(req: NextRequest) {
         orderStatus: order.orderStatus,
         totalPriceJpy: order.totalPriceJpy,
         specialNote: order.specialNote,
-        hasInactiveLineQueuedItem,
+        hasInactiveKitchenQueuedItem,
         items: order.items.map((item) => ({
           id: item.id,
           name: item.itemNameSnapshot,
           status: item.status,
-          lineId: item.lineId,
-          lineName: item.line?.name,
-          lineInactive: item.line ? !item.line.isActive : false
+          kitchenId: item.kitchenId,
+          kitchenName: item.kitchen?.name,
+          kitchenInactive: item.kitchen ? !item.kitchen.isActive : false
         }))
       };
     });

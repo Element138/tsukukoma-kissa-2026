@@ -10,8 +10,8 @@ import { AppError } from "@/lib/errors";
 export async function POST(req: NextRequest, context: { params: Promise<{ itemId: string }> }) {
   try {
     const actor = await requireSession(req, { actorTypes: ["KITCHEN"] });
-    if (!actor.lineId) {
-      throw new AppError(400, "LINE_REQUIRED", "Kitchen actor has no line assignment");
+    if (!actor.kitchenId) {
+      throw new AppError(400, "KITCHEN_REQUIRED", "Kitchen actor has no kitchen assignment");
     }
     await parseJson(req, itemReadySchema);
 
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ itemId
     const result = await prisma.$transaction((tx) =>
       markKitchenItemReady(tx, {
         actorId: actor.actorId,
-        lineId: actor.lineId!,
+        kitchenId: actor.kitchenId!,
         itemId
       })
     );

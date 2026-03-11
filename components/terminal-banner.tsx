@@ -8,7 +8,7 @@ type BannerProps = {
   actorType: string;
   actorId: string;
   offlineActors: Array<{ actorId: string; actorType: string }>;
-  inactiveLineWarnings: Array<{ lineName: string }>;
+  inactiveKitchenWarnings: Array<{ kitchenName: string }>;
 };
 
 export function TerminalBanner(props: BannerProps) {
@@ -35,9 +35,9 @@ export function TerminalBanner(props: BannerProps) {
           <span className="status ok">All terminals online</span>
         )}
 
-        {props.inactiveLineWarnings.length > 0 && (
+        {props.inactiveKitchenWarnings.length > 0 && (
           <span className="status error">
-            Inactive line queued: {[...new Set(props.inactiveLineWarnings.map((w) => w.lineName))].join(", ")}
+            Inactive kitchen queued: {[...new Set(props.inactiveKitchenWarnings.map((w) => w.kitchenName))].join(", ")}
           </span>
         )}
       </div>

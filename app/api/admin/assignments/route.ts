@@ -5,13 +5,13 @@ import { fail, ok } from "@/lib/response";
 import { parseJson } from "@/lib/server/http";
 import { assignmentUpsertSchema } from "@/lib/validation";
 import { writeAuditLog } from "@/lib/domain/audit";
-import { updateMenusAvailabilityByLineCoverage } from "@/lib/domain/line-assignment";
+import { updateMenusAvailabilityByKitchenCoverage } from "@/lib/domain/kitchen-assignment";
 
 export async function GET(req: NextRequest) {
   try {
     await requireSession(req, { actorTypes: ["ADMIN", "KITCHEN"] });
 
-    const assignments = await prisma.menuLineAssignment.findMany({
+    const assignments = await prisma.menuKitchenAssignment.findMany({
       include: {
         menu: {
           select: {
@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
             name: true
           }
         },
-        line: {
+        kitchen: {
           select: {
             id: true,
             name: true,
@@ -41,16 +41,16 @@ export async function POST(req: NextRequest) {
     const body = await parseJson(req, assignmentUpsertSchema);
 
     const assignment = await prisma.$transaction(async (tx) => {
-      const saved = await tx.menuLineAssignment.upsert({
+      const saved = await tx.menuKitchenAssignment.upsert({
         where: {
-          menuId_lineId: {
+          menuId_kitchenId: {
             menuId: body.menuId,
-            lineId: body.lineId
+            kitchenId: body.kitchenId
           }
         },
         create: {
           menuId: body.menuId,
-          lineId: body.lineId,
+          kitchenId: body.kitchenId,
           enabled: body.enabled
         },
         update: {
@@ -58,16 +58,16 @@ export async function POST(req: NextRequest) {
         }
       });
 
-      await updateMenusAvailabilityByLineCoverage(tx);
+      await updateMenusAvailabilityByKitchenCoverage(tx);
       return saved;
     });
 
     await writeAuditLog(prisma, {
       actorId: actor.actorId,
       actorType: actor.actorType,
-      actionType: "MENU_LINE_ASSIGNMENT_UPSERT",
-      entityType: "menu_line_assignment",
-      entityId: `${body.menuId}:${body.lineId}`,
+      actionType: "MENU_KITCHEN_ASSIGNMENT_UPSERT",
+      entityType: "menu_kitchen_assignment",
+      entityId: `${body.menuId}:${body.kitchenId}`,
       afterJson: assignment,
       result: "SUCCESS"
     });

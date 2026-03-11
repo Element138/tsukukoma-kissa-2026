@@ -74,22 +74,22 @@ enum PaymentSkipReasonType {
   OTHER
 }
 
-model Line {
-  id           String               @id @db.VarChar(64)
-  name         String               @db.VarChar(120)
-  displayOrder Int                  @default(0)
-  isActive     Boolean              @default(true)
-  createdAt    DateTime             @default(now())
-  updatedAt    DateTime             @updatedAt
+model Kitchen {
+  id           String                  @id @db.VarChar(64)
+  name         String                  @db.VarChar(120)
+  displayOrder Int                     @default(0)
+  isActive     Boolean                 @default(true)
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
   actors       Actor[]
-  assignments  MenuLineAssignment[]
+  assignments  MenuKitchenAssignment[]
   orderItems   OrderItem[]
 }
 
 model Actor {
   id             String         @id @db.VarChar(64)
   actorType      ActorType
-  lineId         String?        @db.VarChar(64)
+  kitchenId      String?        @db.VarChar(64)
   label          String         @db.VarChar(120)
   secretHash     String
   isActive       Boolean        @default(true)
@@ -98,7 +98,7 @@ model Actor {
   online         Boolean        @default(false)
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
-  line           Line?          @relation(fields: [lineId], references: [id])
+  kitchen        Kitchen?       @relation(fields: [kitchenId], references: [id])
   sessions       Session[]
   createdOrders  Order[]        @relation("OrderCreatedBy")
   servedItems    OrderItem[]    @relation("OrderItemServedBy")
@@ -106,7 +106,7 @@ model Actor {
   auditLogs      AuditLog[]     @relation("AuditActor")
 
   @@index([actorType])
-  @@index([lineId])
+  @@index([kitchenId])
 }
 
 model Session {
@@ -134,65 +134,65 @@ model MenuCategory {
 }
 
 model Menu {
-  id              String               @id @default(uuid())
-  name            String               @db.VarChar(120)
+  id              String                  @id @default(uuid())
+  name            String                  @db.VarChar(120)
   priceJpy        Int
-  availability    Availability         @default(AVAILABLE)
+  availability    Availability            @default(AVAILABLE)
   workloadSeconds Int
-  displayOrder    Int                  @default(0)
+  displayOrder    Int                     @default(0)
   categoryId      String
-  isActive        Boolean              @default(true)
-  showLeadTime    Boolean              @default(true)
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
-  category        MenuCategory         @relation(fields: [categoryId], references: [id])
-  assignments     MenuLineAssignment[]
+  isActive        Boolean                 @default(true)
+  showLeadTime    Boolean                 @default(true)
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  category        MenuCategory            @relation(fields: [categoryId], references: [id])
+  assignments     MenuKitchenAssignment[]
   orderItems      OrderItem[]
 
   @@index([categoryId])
   @@index([availability, isActive])
 }
 
-model MenuLineAssignment {
+model MenuKitchenAssignment {
   menuId    String
-  lineId    String   @db.VarChar(64)
+  kitchenId String   @db.VarChar(64)
   enabled   Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   menu      Menu     @relation(fields: [menuId], references: [id], onDelete: Cascade)
-  line      Line     @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  kitchen   Kitchen  @relation(fields: [kitchenId], references: [id], onDelete: Cascade)
 
-  @@id([menuId, lineId])
-  @@index([lineId, enabled])
+  @@id([menuId, kitchenId])
+  @@index([kitchenId, enabled])
 }
 
 model Order {
-  id                    String                @id @default(cuid())
-  orderNo               Int                   @unique @default(autoincrement())
-  createdAt             DateTime              @default(now())
-  createdByActorId      String                @db.VarChar(64)
-  idempotencyKey        String?               @unique
-  confirmedAt           DateTime?
-  canceledAt            DateTime?
-  fulfillmentType       FulfillmentType
-  tableNo               Int?
-  partySize             Int
-  ageRangesJson         Json
-  specialNote           String?
-  paymentMethod         PaymentMethod
-  paymentStatus         PaymentStatus
-  events                Json
-  paymentSkipReasonType PaymentSkipReasonType?
-  paymentSkipReasonText String?
-  orderStatus           OrderStatus
-  totalPriceJpy         Int
-  squareTransactionId   String?
+  id                     String                @id @default(cuid())
+  orderNo                Int                   @unique @default(autoincrement())
+  createdAt              DateTime              @default(now())
+  createdByActorId       String                @db.VarChar(64)
+  idempotencyKey         String?               @unique
+  confirmedAt            DateTime?
+  canceledAt             DateTime?
+  fulfillmentType        FulfillmentType
+  tableNo                Int?
+  partySize              Int
+  ageRangesJson          Json
+  specialNote            String?
+  paymentMethod          PaymentMethod
+  paymentStatus          PaymentStatus
+  events                 Json
+  paymentSkipReasonType  PaymentSkipReasonType?
+  paymentSkipReasonText  String?
+  orderStatus            OrderStatus
+  totalPriceJpy          Int
+  squareTransactionId    String?
   paymentAwaitDeadlineAt DateTime?
-  autoCancelDeadlineAt  DateTime?
-  lastMutationVersion   Int                   @default(0)
-  createdBy             Actor                 @relation("OrderCreatedBy", fields: [createdByActorId], references: [id])
-  items                 OrderItem[]
-  auditLogs             AuditLog[]
+  autoCancelDeadlineAt   DateTime?
+  lastMutationVersion    Int                   @default(0)
+  createdBy              Actor                 @relation("OrderCreatedBy", fields: [createdByActorId], references: [id])
+  items                  OrderItem[]
+  auditLogs              AuditLog[]
 
   @@index([createdAt])
   @@index([orderStatus, createdAt])
@@ -207,19 +207,19 @@ model OrderItem {
   itemNameSnapshot        String
   unitPriceJpy            Int
   workloadSecondsSnapshot Int
-  lineId                  String?         @db.VarChar(64)
-  lineAssignedAt          DateTime?
+  kitchenId               String?         @db.VarChar(64)
+  kitchenAssignedAt       DateTime?
   status                  OrderItemStatus
   readyAt                 DateTime?
   servedAt                DateTime?
   servedByActorId         String?         @db.VarChar(64)
   order                   Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
   menu                    Menu            @relation(fields: [menuId], references: [id])
-  line                    Line?           @relation(fields: [lineId], references: [id])
+  kitchen                 Kitchen?        @relation(fields: [kitchenId], references: [id])
   servedBy                Actor?          @relation("OrderItemServedBy", fields: [servedByActorId], references: [id])
 
   @@index([orderId, status])
-  @@index([lineId, status])
+  @@index([kitchenId, status])
   @@index([readyAt])
 }
 
@@ -263,4 +263,3 @@ model AuditLog {
   @@index([result, timestamp])
   @@index([orderId, timestamp])
 }
-

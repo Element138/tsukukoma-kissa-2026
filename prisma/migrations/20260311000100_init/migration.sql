@@ -32,7 +32,7 @@ CREATE TYPE "UndoOperationType" AS ENUM ('ITEM_READY', 'ITEM_SERVED', 'TAKEOUT_O
 CREATE TYPE "PaymentSkipReasonType" AS ENUM ('TEST', 'DEVICE_ERROR', 'NETWORK_ERROR', 'OTHER');
 
 -- CreateTable
-CREATE TABLE "Line" (
+CREATE TABLE "Kitchen" (
     "id" VARCHAR(64) NOT NULL,
     "name" VARCHAR(120) NOT NULL,
     "displayOrder" INTEGER NOT NULL DEFAULT 0,
@@ -40,14 +40,14 @@ CREATE TABLE "Line" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "Line_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "Kitchen_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "Actor" (
     "id" VARCHAR(64) NOT NULL,
     "actorType" "ActorType" NOT NULL,
-    "lineId" VARCHAR(64),
+    "kitchenId" VARCHAR(64),
     "label" VARCHAR(120) NOT NULL,
     "secretHash" TEXT NOT NULL,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
@@ -103,14 +103,14 @@ CREATE TABLE "Menu" (
 );
 
 -- CreateTable
-CREATE TABLE "MenuLineAssignment" (
+CREATE TABLE "MenuKitchenAssignment" (
     "menuId" TEXT NOT NULL,
-    "lineId" VARCHAR(64) NOT NULL,
+    "kitchenId" VARCHAR(64) NOT NULL,
     "enabled" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "MenuLineAssignment_pkey" PRIMARY KEY ("menuId","lineId")
+    CONSTRAINT "MenuKitchenAssignment_pkey" PRIMARY KEY ("menuId","kitchenId")
 );
 
 -- CreateTable
@@ -150,8 +150,8 @@ CREATE TABLE "OrderItem" (
     "itemNameSnapshot" TEXT NOT NULL,
     "unitPriceJpy" INTEGER NOT NULL,
     "workloadSecondsSnapshot" INTEGER NOT NULL,
-    "lineId" VARCHAR(64),
-    "lineAssignedAt" TIMESTAMP(3),
+    "kitchenId" VARCHAR(64),
+    "kitchenAssignedAt" TIMESTAMP(3),
     "status" "OrderItemStatus" NOT NULL,
     "readyAt" TIMESTAMP(3),
     "servedAt" TIMESTAMP(3),
@@ -200,7 +200,7 @@ CREATE TABLE "AuditLog" (
 CREATE INDEX "Actor_actorType_idx" ON "Actor"("actorType");
 
 -- CreateIndex
-CREATE INDEX "Actor_lineId_idx" ON "Actor"("lineId");
+CREATE INDEX "Actor_kitchenId_idx" ON "Actor"("kitchenId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Session_tokenHash_key" ON "Session"("tokenHash");
@@ -218,7 +218,7 @@ CREATE INDEX "Menu_categoryId_idx" ON "Menu"("categoryId");
 CREATE INDEX "Menu_availability_isActive_idx" ON "Menu"("availability", "isActive");
 
 -- CreateIndex
-CREATE INDEX "MenuLineAssignment_lineId_enabled_idx" ON "MenuLineAssignment"("lineId", "enabled");
+CREATE INDEX "MenuKitchenAssignment_kitchenId_enabled_idx" ON "MenuKitchenAssignment"("kitchenId", "enabled");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Order_orderNo_key" ON "Order"("orderNo");
@@ -242,7 +242,7 @@ CREATE INDEX "Order_createdByActorId_idx" ON "Order"("createdByActorId");
 CREATE INDEX "OrderItem_orderId_status_idx" ON "OrderItem"("orderId", "status");
 
 -- CreateIndex
-CREATE INDEX "OrderItem_lineId_status_idx" ON "OrderItem"("lineId", "status");
+CREATE INDEX "OrderItem_kitchenId_status_idx" ON "OrderItem"("kitchenId", "status");
 
 -- CreateIndex
 CREATE INDEX "OrderItem_readyAt_idx" ON "OrderItem"("readyAt");
@@ -266,7 +266,7 @@ CREATE INDEX "AuditLog_result_timestamp_idx" ON "AuditLog"("result", "timestamp"
 CREATE INDEX "AuditLog_orderId_timestamp_idx" ON "AuditLog"("orderId", "timestamp");
 
 -- AddForeignKey
-ALTER TABLE "Actor" ADD CONSTRAINT "Actor_lineId_fkey" FOREIGN KEY ("lineId") REFERENCES "Line"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "Actor" ADD CONSTRAINT "Actor_kitchenId_fkey" FOREIGN KEY ("kitchenId") REFERENCES "Kitchen"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Session" ADD CONSTRAINT "Session_actorId_fkey" FOREIGN KEY ("actorId") REFERENCES "Actor"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -275,10 +275,10 @@ ALTER TABLE "Session" ADD CONSTRAINT "Session_actorId_fkey" FOREIGN KEY ("actorI
 ALTER TABLE "Menu" ADD CONSTRAINT "Menu_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "MenuCategory"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "MenuLineAssignment" ADD CONSTRAINT "MenuLineAssignment_menuId_fkey" FOREIGN KEY ("menuId") REFERENCES "Menu"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "MenuKitchenAssignment" ADD CONSTRAINT "MenuKitchenAssignment_menuId_fkey" FOREIGN KEY ("menuId") REFERENCES "Menu"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "MenuLineAssignment" ADD CONSTRAINT "MenuLineAssignment_lineId_fkey" FOREIGN KEY ("lineId") REFERENCES "Line"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "MenuKitchenAssignment" ADD CONSTRAINT "MenuKitchenAssignment_kitchenId_fkey" FOREIGN KEY ("kitchenId") REFERENCES "Kitchen"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Order" ADD CONSTRAINT "Order_createdByActorId_fkey" FOREIGN KEY ("createdByActorId") REFERENCES "Actor"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -290,7 +290,7 @@ ALTER TABLE "OrderItem" ADD CONSTRAINT "OrderItem_orderId_fkey" FOREIGN KEY ("or
 ALTER TABLE "OrderItem" ADD CONSTRAINT "OrderItem_menuId_fkey" FOREIGN KEY ("menuId") REFERENCES "Menu"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "OrderItem" ADD CONSTRAINT "OrderItem_lineId_fkey" FOREIGN KEY ("lineId") REFERENCES "Line"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "OrderItem" ADD CONSTRAINT "OrderItem_kitchenId_fkey" FOREIGN KEY ("kitchenId") REFERENCES "Kitchen"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "OrderItem" ADD CONSTRAINT "OrderItem_servedByActorId_fkey" FOREIGN KEY ("servedByActorId") REFERENCES "Actor"("id") ON DELETE SET NULL ON UPDATE CASCADE;

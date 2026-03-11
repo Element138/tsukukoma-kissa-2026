@@ -6,7 +6,7 @@ export async function GET() {
   try {
     await prisma.$queryRaw`SELECT 1`;
     const actorCount = await prisma.actor.count();
-    const lineCount = await prisma.line.count();
+    const lineCount = await prisma.kitchen.count();
 
     return ok({
       db: "ok",

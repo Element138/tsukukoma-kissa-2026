@@ -7,14 +7,14 @@ import { elapsedMss } from "@/lib/time";
 export async function GET(req: NextRequest) {
   try {
     const actor = await requireSession(req, { actorTypes: ["KITCHEN", "ADMIN"] });
-    const lineId = actor.actorType === "KITCHEN" ? actor.lineId : req.nextUrl.searchParams.get("lineId");
-    if (!lineId) {
+    const kitchenId = actor.actorType === "KITCHEN" ? actor.kitchenId : req.nextUrl.searchParams.get("kitchenId");
+    if (!kitchenId) {
       return ok({ items: [] });
     }
 
     const items = await prisma.orderItem.findMany({
       where: {
-        lineId,
+        kitchenId,
         status: "QUEUED",
         order: {
           confirmedAt: { not: null },
@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
             specialNote: true
           }
         },
-        line: {
+        kitchen: {
           select: {
             id: true,
             name: true,
@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
       },
       orderBy: [
         { order: { confirmedAt: "asc" } },
-        { lineAssignedAt: "asc" }
+        { kitchenAssignedAt: "asc" }
       ]
     });
 
@@ -55,8 +55,8 @@ export async function GET(req: NextRequest) {
       tableNo: item.order.tableNo,
       specialNote: item.order.specialNote,
       elapsed: item.order.confirmedAt ? elapsedMss(item.order.confirmedAt) : "0:00",
-      lineName: item.line?.name ?? "Unknown",
-      lineInactiveWarning: item.line ? !item.line.isActive : true
+      kitchenName: item.kitchen?.name ?? "Unknown",
+      kitchenInactiveWarning: item.kitchen ? !item.kitchen.isActive : true
     }));
 
     return ok({ items: grouped });

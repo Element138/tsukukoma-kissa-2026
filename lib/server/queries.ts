@@ -27,14 +27,14 @@ export async function findOfflineActors(db: PrismaClient | Prisma.TransactionCli
     }));
 }
 
-export async function listQueuedItemsOnInactiveLines(db: PrismaClient | Prisma.TransactionClient) {
+export async function listQueuedItemsOnInactiveKitchens(db: PrismaClient | Prisma.TransactionClient) {
   const rows = await db.orderItem.findMany({
     where: {
       status: "QUEUED",
-      lineId: {
+      kitchenId: {
         not: null
       },
-      line: {
+      kitchen: {
         isActive: false
       },
       order: {
@@ -46,8 +46,8 @@ export async function listQueuedItemsOnInactiveLines(db: PrismaClient | Prisma.T
     select: {
       id: true,
       orderId: true,
-      lineId: true,
-      line: {
+      kitchenId: true,
+      kitchen: {
         select: {
           name: true
         }
@@ -58,8 +58,8 @@ export async function listQueuedItemsOnInactiveLines(db: PrismaClient | Prisma.T
   return rows.map((r) => ({
     orderId: r.orderId,
     orderItemId: r.id,
-    lineId: r.lineId,
-    lineName: r.line?.name ?? r.lineId ?? "unknown"
+    kitchenId: r.kitchenId,
+    kitchenName: r.kitchen?.name ?? r.kitchenId ?? "unknown"
   }));
 }
 

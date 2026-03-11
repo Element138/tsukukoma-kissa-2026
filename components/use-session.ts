@@ -8,11 +8,11 @@ type SessionPayload = {
   actor: {
     actorId: string;
     actorType: "POS" | "KITCHEN" | "WAITER" | "MENU_DISPLAY" | "ADMIN";
-    lineId: string | null;
+    kitchenId: string | null;
     label: string;
   };
   offlineActors: Array<{ actorId: string; actorType: string }>;
-  inactiveLineQueuedItems: Array<{ orderId: string; orderItemId: string; lineName: string }>;
+  inactiveKitchenQueuedItems: Array<{ orderId: string; orderItemId: string; kitchenName: string }>;
 };
 
 export function useSession(requiredTypes?: Array<SessionPayload["actor"]["actorType"]>) {

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -17,14 +17,14 @@ type OrderRow = {
   orderStatus: string;
   totalPriceJpy: number;
   specialNote: string | null;
-  hasInactiveLineQueuedItem: boolean;
+  hasInactiveKitchenQueuedItem: boolean;
   items: Array<{
     id: string;
     name: string;
     status: string;
-    lineId: string | null;
-    lineName?: string;
-    lineInactive: boolean;
+    kitchenId: string | null;
+    kitchenName?: string;
+    kitchenInactive: boolean;
   }>;
 };
 
@@ -46,8 +46,9 @@ export default function OrderBookPage() {
 
       const data = await apiFetch<{ orders: OrderRow[] }>(`/api/order-book?${params.toString()}`);
       setOrders(data.orders);
+      setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "読み込み失敗");
+      setError(e instanceof Error ? e.message : "Failed to load orders");
     }
   };
 
@@ -56,6 +57,7 @@ export default function OrderBookPage() {
     reload();
     const timer = setInterval(reload, 5000);
     return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, status, paymentMethod, qOrderNo]);
 
   const editNote = async (orderId: string, next: string) => {
@@ -64,10 +66,10 @@ export default function OrderBookPage() {
         method: "PATCH",
         body: JSON.stringify({ specialNote: next })
       });
-      setMessage("特記事項を更新しました");
+      setMessage("Special note updated");
       await reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "note更新失敗");
+      setError(e instanceof Error ? e.message : "Failed to update note");
     }
   };
 
@@ -76,9 +78,9 @@ export default function OrderBookPage() {
       const data = await apiFetch<{ printed: boolean; receiptPreview: string }>(`/api/orders/${orderId}/receipt`, {
         method: "POST"
       });
-      setMessage(data.printed ? "レシート印字を実行しました" : `印字stub: \n${data.receiptPreview}`);
+      setMessage(data.printed ? "Reprint request sent" : `Receipt preview:\n${data.receiptPreview}`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "再印字失敗");
+      setError(e instanceof Error ? e.message : "Failed to reprint receipt");
     }
   };
 
@@ -95,7 +97,7 @@ export default function OrderBookPage() {
         actorType={session.actor.actorType}
         actorLabel={session.actor.label}
         offlineActors={session.offlineActors}
-        inactiveLineWarnings={session.inactiveLineQueuedItems.map((x) => ({ lineName: x.lineName }))}
+        inactiveKitchenWarnings={session.inactiveKitchenQueuedItems.map((x) => ({ kitchenName: x.kitchenName }))}
       />
       <main>
         <div className="row between wrap" style={{ marginBottom: 12 }}>
@@ -135,7 +137,7 @@ export default function OrderBookPage() {
 
         <div className="list">
           {orders.map((order) => (
-            <article key={order.id} className={`card ${order.hasInactiveLineQueuedItem ? "" : ""}`}>
+            <article key={order.id} className="card">
               <div className="row between wrap">
                 <div>
                   <strong>Order #{order.orderNo}</strong>
@@ -151,8 +153,8 @@ export default function OrderBookPage() {
                 </div>
               </div>
 
-              {order.hasInactiveLineQueuedItem && (
-                <div className="notice error">無効ラインにqueued itemがあります。内訳を確認してください。</div>
+              {order.hasInactiveKitchenQueuedItem && (
+                <div className="notice error">This order contains queued items assigned to an inactive kitchen.</div>
               )}
 
               <div className="list" style={{ marginTop: 10 }}>
@@ -163,32 +165,30 @@ export default function OrderBookPage() {
                       <span className={`badge ${item.status === "READY" ? "ready" : item.status === "SERVED" ? "served" : "queued"}`} style={{ marginLeft: 8 }}>
                         {item.status}
                       </span>
-                      {item.lineName && (
+                      {item.kitchenName && (
                         <span className="muted" style={{ marginLeft: 8 }}>
-                          {item.lineName}
+                          {item.kitchenName}
                         </span>
                       )}
                     </div>
-                    {item.lineInactive && <span className="notice error">line inactive</span>}
+                    {item.kitchenInactive && <span className="notice error">kitchen inactive</span>}
                   </div>
                 ))}
               </div>
 
               <div className="row wrap" style={{ marginTop: 10 }}>
-                <button className="ghost-btn" onClick={() => reprint(order.id)}>
-                  レシート再印字
-                </button>
+                <button className="ghost-btn" onClick={() => reprint(order.id)}>Reprint Receipt</button>
                 {canEditNote && order.orderStatus !== "COMPLETED" && order.orderStatus !== "CANCELED" && (
                   <button
                     className="ghost-btn"
                     onClick={() => {
-                      const next = prompt("新しい特記事項", order.specialNote ?? "");
+                      const next = prompt("Special note", order.specialNote ?? "");
                       if (next !== null) {
                         editNote(order.id, next);
                       }
                     }}
                   >
-                    特記事項編集
+                    Edit Note
                   </button>
                 )}
               </div>
@@ -199,5 +199,3 @@ export default function OrderBookPage() {
     </>
   );
 }
-
-

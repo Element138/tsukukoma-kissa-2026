@@ -132,7 +132,7 @@ export default function PosPage() {
         actorType={session.actor.actorType}
         actorLabel={session.actor.label}
         offlineActors={session.offlineActors}
-        inactiveLineWarnings={session.inactiveLineQueuedItems.map((x) => ({ lineName: x.lineName }))}
+        inactiveKitchenWarnings={session.inactiveKitchenQueuedItems.map((x) => ({ kitchenName: x.kitchenName }))}
       />
       <main className="grid two">
         <Card>

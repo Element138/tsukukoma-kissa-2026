@@ -8,11 +8,11 @@ import { writeAuditLog } from "@/lib/domain/audit";
 import { AppError } from "@/lib/errors";
 
 async function hasActiveCoverage(menuId: string) {
-  const count = await prisma.menuLineAssignment.count({
+  const count = await prisma.menuKitchenAssignment.count({
     where: {
       menuId,
       enabled: true,
-      line: {
+      kitchen: {
         isActive: true
       }
     }
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
         include: {
           assignments: {
             include: {
-              line: true
+              kitchen: true
             }
           }
         },
@@ -93,7 +93,7 @@ export async function PATCH(req: NextRequest) {
     if (body.availability === "AVAILABLE") {
       const covered = await hasActiveCoverage(body.id);
       if (!covered) {
-        throw new AppError(409, "NO_ACTIVE_LINE", "Cannot set AVAILABLE without active line assignment");
+        throw new AppError(409, "NO_ACTIVE_KITCHEN", "Cannot set AVAILABLE without active kitchen assignment");
       }
     }
 

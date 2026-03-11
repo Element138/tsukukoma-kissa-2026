@@ -59,7 +59,7 @@ export default function AuditPage() {
         actorType={session.actor.actorType}
         actorLabel={session.actor.label}
         offlineActors={session.offlineActors}
-        inactiveLineWarnings={session.inactiveLineQueuedItems.map((x) => ({ lineName: x.lineName }))}
+        inactiveKitchenWarnings={session.inactiveKitchenQueuedItems.map((x) => ({ kitchenName: x.kitchenName }))}
       />
       <main>
         <div className="row between wrap" style={{ marginBottom: 12 }}>

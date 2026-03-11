@@ -79,14 +79,14 @@ export const undoSchema = z.object({
   confirm: z.literal(true)
 });
 
-export const lineToggleSchema = z.object({
-  lineId: z.string().min(1).max(64),
+export const kitchenToggleSchema = z.object({
+  kitchenId: z.string().min(1).max(64),
   isActive: z.boolean()
 });
 
-export const lineReassignSchema = z.object({
-  fromLineId: z.string().min(1).max(64),
-  toLineId: z.string().min(1).max(64)
+export const kitchenReassignSchema = z.object({
+  fromKitchenId: z.string().min(1).max(64),
+  toKitchenId: z.string().min(1).max(64)
 });
 
 export const availabilityUpdateSchema = z.object({
@@ -97,18 +97,18 @@ export const availabilityUpdateSchema = z.object({
 export const actorCreateSchema = z.object({
   id: z.string().min(1).max(64),
   actorType: actorTypeSchema,
-  lineId: z.string().max(64).nullable().optional(),
+  kitchenId: z.string().max(64).nullable().optional(),
   label: z.string().min(1).max(120),
   secret: z.string().min(4).max(128)
 });
 
-export const lineCreateSchema = z.object({
+export const kitchenCreateSchema = z.object({
   id: z.string().min(1).max(64),
   name: z.string().min(1).max(120),
   displayOrder: z.number().int().min(0).max(999)
 });
 
-export const lineUpdateSchema = z.object({
+export const kitchenUpdateSchema = z.object({
   id: z.string().min(1).max(64),
   name: z.string().min(1).max(120).optional(),
   displayOrder: z.number().int().min(0).max(999).optional(),
@@ -139,7 +139,7 @@ export const menuUpdateSchema = z.object({
 
 export const assignmentUpsertSchema = z.object({
   menuId: z.string().uuid(),
-  lineId: z.string().min(1).max(64),
+  kitchenId: z.string().min(1).max(64),
   enabled: z.boolean()
 });
 

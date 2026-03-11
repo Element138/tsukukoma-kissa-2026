@@ -8,7 +8,7 @@ import {
 } from "@prisma/client";
 import { AppError, assert } from "@/lib/errors";
 import { aggregateOrderPrice, deriveOrderStatus } from "@/lib/domain/order-status";
-import { assignUnassignedItemsForOrder } from "@/lib/domain/line-assignment";
+import { assignUnassignedItemsForOrder } from "@/lib/domain/kitchen-assignment";
 import { writeAuditLog } from "@/lib/domain/audit";
 import { now, secondsFromNow } from "@/lib/time";
 
@@ -216,8 +216,8 @@ export async function createOrderAtPaymentStart(
             unitPriceJpy: item.unitPriceJpy,
             workloadSecondsSnapshot: item.workloadSecondsSnapshot,
             status: item.status,
-            lineId: null,
-            lineAssignedAt: null
+            kitchenId: null,
+            kitchenAssignedAt: null
           }))
         }
       }
@@ -343,7 +343,7 @@ export async function confirmOrderPayment(
       items: {
         select: {
           status: true,
-          lineId: true,
+          kitchenId: true,
           id: true
         }
       }

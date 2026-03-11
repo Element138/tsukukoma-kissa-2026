@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
             menuId: true,
             itemNameSnapshot: true,
             unitPriceJpy: true,
-            lineId: true,
+            kitchenId: true,
             status: true,
             readyAt: true,
             servedAt: true

@@ -4,7 +4,7 @@ import { now } from "@/lib/time";
 import { recalcAndPersistOrderStatus } from "@/lib/domain/orders";
 import { saveUndoOperation } from "@/lib/domain/undo";
 import { writeAuditLog } from "@/lib/domain/audit";
-import { reassignQueuedItemsFromLine, updateMenusAvailabilityByLineCoverage } from "@/lib/domain/line-assignment";
+import { reassignQueuedItemsFromKitchen, updateMenusAvailabilityByKitchenCoverage } from "@/lib/domain/kitchen-assignment";
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
 
@@ -12,7 +12,7 @@ export async function markKitchenItemReady(
   db: DbClient,
   params: {
     actorId: string;
-    lineId: string;
+    kitchenId: string;
     itemId: string;
   }
 ) {
@@ -32,7 +32,7 @@ export async function markKitchenItemReady(
 
   assert(item, 404, "ITEM_NOT_FOUND", "Item not found");
   assert(item.status === "QUEUED", 409, "ITEM_NOT_QUEUED", "Only queued item can be marked ready");
-  assert(item.lineId === params.lineId, 403, "LINE_MISMATCH", "Kitchen can operate only own line items");
+  assert(item.kitchenId === params.kitchenId, 403, "KITCHEN_MISMATCH", "Kitchen can operate only own kitchen items");
   assert(item.order.orderStatus !== "CANCELED", 409, "ORDER_CANCELED", "Order canceled");
 
   await db.orderItem.update({
@@ -82,68 +82,68 @@ export async function markKitchenItemReady(
   };
 }
 
-export async function toggleLineState(
+export async function toggleKitchenState(
   db: DbClient,
   params: {
     actorId: string;
     actorType: "KITCHEN" | "ADMIN" | "POS" | "WAITER" | "MENU_DISPLAY";
-    lineId: string;
+    kitchenId: string;
     isActive: boolean;
   }
 ) {
-  const before = await db.line.findUnique({ where: { id: params.lineId } });
-  assert(before, 404, "LINE_NOT_FOUND", "Line not found");
+  const before = await db.kitchen.findUnique({ where: { id: params.kitchenId } });
+  assert(before, 404, "KITCHEN_NOT_FOUND", "Kitchen not found");
 
-  const line = await db.line.update({
-    where: { id: params.lineId },
+  const kitchen = await db.kitchen.update({
+    where: { id: params.kitchenId },
     data: {
       isActive: params.isActive
     }
   });
 
-  await updateMenusAvailabilityByLineCoverage(db);
+  await updateMenusAvailabilityByKitchenCoverage(db);
 
   await writeAuditLog(db, {
     actorId: params.actorId,
     actorType: params.actorType,
-    actionType: "LINE_TOGGLE",
-    entityType: "line",
-    entityId: params.lineId,
+    actionType: "KITCHEN_TOGGLE",
+    entityType: "kitchen",
+    entityId: params.kitchenId,
     beforeJson: {
       isActive: before.isActive
     },
     afterJson: {
-      isActive: line.isActive
+      isActive: kitchen.isActive
     },
     result: "SUCCESS"
   });
 
-  return line;
+  return kitchen;
 }
 
-export async function reassignQueuedFromDisabledLine(
+export async function reassignQueuedFromDisabledKitchen(
   db: DbClient,
   params: {
     actorId: string;
     actorType: "KITCHEN" | "ADMIN" | "POS" | "WAITER" | "MENU_DISPLAY";
-    fromLineId: string;
-    toLineId: string;
+    fromKitchenId: string;
+    toKitchenId: string;
   }
 ) {
-  const result = await reassignQueuedItemsFromLine(db, {
-    fromLineId: params.fromLineId,
-    toLineId: params.toLineId
+  const result = await reassignQueuedItemsFromKitchen(db, {
+    fromKitchenId: params.fromKitchenId,
+    toKitchenId: params.toKitchenId
   });
 
   await writeAuditLog(db, {
     actorId: params.actorId,
     actorType: params.actorType,
-    actionType: "LINE_FORCE_REASSIGN",
-    entityType: "line",
-    entityId: params.fromLineId,
+    actionType: "KITCHEN_FORCE_REASSIGN",
+    entityType: "kitchen",
+    entityId: params.fromKitchenId,
     afterJson: {
-      fromLineId: params.fromLineId,
-      toLineId: params.toLineId,
+      fromKitchenId: params.fromKitchenId,
+      toKitchenId: params.toKitchenId,
       moved: result.moved,
       skipped: result.skipped ?? 0
     },
@@ -157,19 +157,19 @@ export async function updateMenuAvailabilityByKitchen(
   db: DbClient,
   params: {
     actorId: string;
-    lineId: string;
+    kitchenId: string;
     menuId: string;
     availability: "AVAILABLE" | "PAUSED" | "SOLD_OUT";
   }
 ) {
-  const assignment = await db.menuLineAssignment.findFirst({
+  const assignment = await db.menuKitchenAssignment.findFirst({
     where: {
       menuId: params.menuId,
-      lineId: params.lineId,
+      kitchenId: params.kitchenId,
       enabled: true
     }
   });
-  assert(assignment, 403, "FORBIDDEN", "Kitchen can update only own-line menus");
+  assert(assignment, 403, "FORBIDDEN", "Kitchen can update only own-kitchen menus");
 
   const before = await db.menu.findUnique({ where: { id: params.menuId } });
   assert(before, 404, "MENU_NOT_FOUND", "Menu not found");

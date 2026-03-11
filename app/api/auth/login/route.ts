@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
     const response = ok({
       actorId: actor.id,
       actorType: actor.actorType,
-      lineId: actor.lineId,
+      kitchenId: actor.kitchenId,
       label: actor.label
     });
     setSessionCookie(response, session.token);
