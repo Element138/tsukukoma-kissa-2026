@@ -10,7 +10,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
     "prisma:seed": "tsx prisma/seed.ts",
-    "prisma:deploy:seed": "prisma generate && prisma migrate deploy && prisma db seed",
+    "prisma:deploy:seed": "prisma generate && prisma migrate deploy && tsx prisma/seed.ts",
     "prisma:reset": "prisma migrate reset --force --skip-generate --skip-seed",
     "vercel-build": "node scripts/vercel-build.mjs"
   },
@@ -28,8 +28,5 @@
     "prisma": "^6.6.0",
     "tsx": "^4.19.3",
     "typescript": "^5.8.2"
-  },
-  "prisma": {
-    "seed": "tsx prisma/seed.ts"
   }
 }
