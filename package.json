@@ -10,7 +10,7 @@
                     "prisma:generate":  "prisma generate",
                     "prisma:migrate":  "prisma migrate deploy",
                     "prisma:seed":  "tsx prisma/seed.ts",
-                    "prisma:deploy:seed":  "prisma migrate deploy \u0026\u0026 prisma db seed",
+                    "prisma:deploy:seed":  "prisma generate && prisma migrate deploy && prisma db seed",
                     "vercel-build":  "npm run prisma:deploy:seed \u0026\u0026 next build"
                 },
     "dependencies":  {
