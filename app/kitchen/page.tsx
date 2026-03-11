@@ -1,11 +1,12 @@
-﻿"use client";
+"use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { apiFetch } from "@/lib/client";
 import { useSession } from "@/components/use-session";
 import { Card, SectionTitle } from "@/components/ui";
 import { TerminalBanner } from "@/components/terminal-banner";
+import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
 
 type QueueItem = {
   id: string;
@@ -50,8 +51,14 @@ export default function KitchenPage() {
   const [targetKitchenId, setTargetKitchenId] = useState<string>("");
 
   const myKitchenId = session?.actor.actorId ?? null;
+  const reloadInFlightRef = useRef(false);
 
   const reload = async () => {
+    if (reloadInFlightRef.current) {
+      return;
+    }
+    reloadInFlightRef.current = true;
+
     try {
       const [queue, actorPayload, menuPayload, assignmentPayload] = await Promise.all([
         apiFetch<{ items: QueueItem[] }>("/api/kitchen/queue"),
@@ -71,6 +78,8 @@ export default function KitchenPage() {
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load kitchen data");
+    } finally {
+      reloadInFlightRef.current = false;
     }
   };
 
@@ -78,11 +87,22 @@ export default function KitchenPage() {
     if (!session) {
       return;
     }
-    reload();
-    const timer = setInterval(reload, 3000);
-    return () => clearInterval(timer);
+    void reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
+
+  useRealtimeSubscription({
+    enabled: Boolean(session),
+    channels: session
+      ? ["orders", "menus", "actors", "assignments", `kitchen:${session.actor.actorId}`]
+      : ["orders", "menus", "actors", "assignments"],
+    onEvent: () => {
+      void reload();
+    },
+    onResync: () => {
+      void reload();
+    }
+  });
 
   const myKitchen = kitchens.find((k) => k.id === myKitchenId);
 
@@ -251,3 +271,5 @@ export default function KitchenPage() {
     </>
   );
 }
+
+

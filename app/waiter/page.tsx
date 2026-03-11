@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { apiFetch } from "@/lib/client";
 import { useSession } from "@/components/use-session";
 import { Card, SectionTitle } from "@/components/ui";
 import { TerminalBanner } from "@/components/terminal-banner";
+import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
 
 type DineInItem = {
   id: string;
@@ -31,14 +32,23 @@ export default function WaiterPage() {
   const [takeoutOrders, setTakeoutOrders] = useState<TakeoutOrder[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const reloadInFlightRef = useRef(false);
 
   const reload = async () => {
+    if (reloadInFlightRef.current) {
+      return;
+    }
+    reloadInFlightRef.current = true;
+
     try {
       const data = await apiFetch<{ dineInItems: DineInItem[]; takeoutOrders: TakeoutOrder[] }>("/api/waiter/targets");
       setDineInItems(data.dineInItems);
       setTakeoutOrders(data.takeoutOrders);
+      setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "read failed");
+    } finally {
+      reloadInFlightRef.current = false;
     }
   };
 
@@ -46,10 +56,20 @@ export default function WaiterPage() {
     if (!session) {
       return;
     }
-    reload();
-    const timer = setInterval(reload, 3000);
-    return () => clearInterval(timer);
+    void reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
+
+  useRealtimeSubscription({
+    enabled: Boolean(session),
+    channels: ["orders", "waiter"],
+    onEvent: () => {
+      void reload();
+    },
+    onResync: () => {
+      void reload();
+    }
+  });
 
   const serveItem = async (orderItemId: string) => {
     try {
@@ -161,5 +181,7 @@ export default function WaiterPage() {
     </>
   );
 }
+
+
 
 

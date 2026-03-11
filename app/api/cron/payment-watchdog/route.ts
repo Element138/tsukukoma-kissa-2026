@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { fail, ok } from "@/lib/response";
 import { runPaymentWatchdog } from "@/lib/domain/payment-watchdog";
+import { pruneRealtimeEvents } from "@/lib/server/realtime";
 
 export async function GET(req: NextRequest) {
   try {
@@ -14,10 +15,13 @@ export async function GET(req: NextRequest) {
     }
 
     const result = await prisma.$transaction((tx) => runPaymentWatchdog(tx));
-    return ok(result);
+    const prunedRealtimeEvents = await pruneRealtimeEvents(prisma);
+
+    return ok({
+      ...result,
+      prunedRealtimeEvents
+    });
   } catch (error) {
     return fail(error);
   }
 }
-
-

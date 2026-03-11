@@ -9,6 +9,7 @@ import { writeAuditLog } from "@/lib/domain/audit";
 import { updateMenusAvailabilityByKitchenCoverage } from "@/lib/domain/kitchen-assignment";
 import { withRouteTrace, traceError } from "@/lib/server/trace";
 import { AppError } from "@/lib/errors";
+import { broadcastInvalidation, CHANNEL_GROUPS, kitchenChannel } from "@/lib/server/realtime-broadcast";
 
 const actorPublicSelect = {
   id: true,
@@ -68,7 +69,7 @@ export async function POST(req: NextRequest) {
               }))._max.kitchenDisplayOrder ?? -1) + 1
             : body.kitchenDisplayOrder ?? 0;
 
-        return tx.actor.create({
+        const created = await tx.actor.create({
           data: {
             id: body.id,
             actorType: body.actorType,
@@ -80,25 +81,36 @@ export async function POST(req: NextRequest) {
           },
           select: actorPublicSelect
         });
+
+        await writeAuditLog(tx, {
+          actorId: admin.actorId,
+          actorType: admin.actorType,
+          actionType: "ACTOR_CREATED",
+          entityType: "actor",
+          entityId: created.id,
+          afterJson: {
+            actorType: created.actorType,
+            label: created.label,
+            kitchenEnabled: created.kitchenEnabled,
+            kitchenDisplayOrder: created.kitchenDisplayOrder
+          },
+          result: "SUCCESS"
+        });
+
+        await broadcastInvalidation(
+          tx,
+          [
+            ...CHANNEL_GROUPS.ACTORS,
+            "assignments",
+            ...(created.actorType === "KITCHEN" ? [kitchenChannel(created.id)] : [])
+          ],
+          "actors",
+          "actor_created"
+        );
+
+        return created;
       });
       trace("tx.create.ok", { createdActorId: actor.id });
-
-      trace("audit.start");
-      await writeAuditLog(prisma, {
-        actorId: admin.actorId,
-        actorType: admin.actorType,
-        actionType: "ACTOR_CREATED",
-        entityType: "actor",
-        entityId: actor.id,
-        afterJson: {
-          actorType: actor.actorType,
-          label: actor.label,
-          kitchenEnabled: actor.kitchenEnabled,
-          kitchenDisplayOrder: actor.kitchenDisplayOrder
-        },
-        result: "SUCCESS"
-      });
-      trace("audit.ok");
 
       return ok({ actor });
     } catch (error) {
@@ -161,22 +173,31 @@ export async function DELETE(req: NextRequest) {
           await updateMenusAvailabilityByKitchenCoverage(tx, [...new Set(impacted.map((x) => x.menuId))]);
         }
 
+        await writeAuditLog(tx, {
+          actorId: admin.actorId,
+          actorType: admin.actorType,
+          actionType: "ACTOR_DEACTIVATED",
+          entityType: "actor",
+          entityId: actorId,
+          beforeJson: { actorType: existing.actorType, isActive: existing.isActive },
+          afterJson: { actorType: existing.actorType, isActive: false },
+          result: "SUCCESS"
+        });
+
+        await broadcastInvalidation(
+          tx,
+          [
+            ...CHANNEL_GROUPS.ACTORS,
+            "assignments",
+            ...(existing.actorType === "KITCHEN" ? [kitchenChannel(actorId)] : [])
+          ],
+          "actors",
+          "actor_deactivated"
+        );
+
         return existing;
       });
       trace("tx.deactivate.ok", { actorType: target.actorType });
-
-      trace("audit.start");
-      await writeAuditLog(prisma, {
-        actorId: admin.actorId,
-        actorType: admin.actorType,
-        actionType: "ACTOR_DEACTIVATED",
-        entityType: "actor",
-        entityId: actorId,
-        beforeJson: { actorType: target.actorType, isActive: target.isActive },
-        afterJson: { actorType: target.actorType, isActive: false },
-        result: "SUCCESS"
-      });
-      trace("audit.ok");
 
       return ok({ actorId, deactivated: true });
     } catch (error) {

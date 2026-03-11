@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { fail, ok } from "@/lib/response";
 import { loginSchema } from "@/lib/validation";
@@ -6,6 +6,7 @@ import { parseJson } from "@/lib/server/http";
 import { verifySecret } from "@/lib/crypto";
 import { createSession, setSessionCookie } from "@/lib/server/auth";
 import { writeAuditLog } from "@/lib/domain/audit";
+import { broadcastInvalidation, CHANNEL_GROUPS } from "@/lib/server/realtime-broadcast";
 
 export async function POST(req: NextRequest) {
   try {
@@ -38,22 +39,29 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const session = await createSession({ id: actor.id, actorType: actor.actorType });
-    await prisma.actor.update({
-      where: { id: actor.id },
-      data: {
-        online: true,
-        lastSeenAt: new Date()
-      }
-    });
+    const session = await prisma.$transaction(async (tx) => {
+      const createdSession = await createSession({ id: actor.id, actorType: actor.actorType }, tx);
 
-    await writeAuditLog(prisma, {
-      actorId: actor.id,
-      actorType: actor.actorType,
-      actionType: "LOGIN",
-      entityType: "actor",
-      entityId: actor.id,
-      result: "SUCCESS"
+      await tx.actor.update({
+        where: { id: actor.id },
+        data: {
+          online: true,
+          lastSeenAt: new Date()
+        }
+      });
+
+      await writeAuditLog(tx, {
+        actorId: actor.id,
+        actorType: actor.actorType,
+        actionType: "LOGIN",
+        entityType: "actor",
+        entityId: actor.id,
+        result: "SUCCESS"
+      });
+
+      await broadcastInvalidation(tx, CHANNEL_GROUPS.ACTORS, "actors", "login");
+
+      return createdSession;
     });
 
     const response = ok({

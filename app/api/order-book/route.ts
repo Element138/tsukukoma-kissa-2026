@@ -1,4 +1,4 @@
-﻿import { NextRequest } from "next/server";
+import { NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireSession } from "@/lib/server/auth";
@@ -24,6 +24,7 @@ export async function GET(req: NextRequest) {
   try {
     await requireSession(req, { actorTypes: ["POS", "KITCHEN", "WAITER", "ADMIN"] });
     await runPaymentWatchdog(prisma);
+
 
     const query = querySchema.parse(Object.fromEntries(req.nextUrl.searchParams.entries()));
 
@@ -135,3 +136,5 @@ export async function GET(req: NextRequest) {
     return fail(error);
   }
 }
+
+

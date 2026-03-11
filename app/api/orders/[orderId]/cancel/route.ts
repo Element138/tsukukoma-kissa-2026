@@ -5,6 +5,7 @@ import { requireSession } from "@/lib/server/auth";
 import { orderCancelSchema } from "@/lib/validation";
 import { parseJson } from "@/lib/server/http";
 import { cancelPendingOrder } from "@/lib/domain/orders";
+import { broadcastInvalidation, CHANNEL_GROUPS } from "@/lib/server/realtime-broadcast";
 
 export async function POST(req: NextRequest, context: { params: Promise<{ orderId: string }> }) {
   try {
@@ -12,19 +13,20 @@ export async function POST(req: NextRequest, context: { params: Promise<{ orderI
     const body = await parseJson(req, orderCancelSchema);
     const { orderId } = await context.params;
 
-    const order = await prisma.$transaction((tx) =>
-      cancelPendingOrder(tx, {
+    const order = await prisma.$transaction(async (tx) => {
+      const updated = await cancelPendingOrder(tx, {
         actorId: actor.actorId,
         actorType: actor.actorType,
         orderId,
         reasonText: body.reasonText
-      })
-    );
+      });
+
+      await broadcastInvalidation(tx, CHANNEL_GROUPS.ORDER_FLOW, "orders", "order_canceled");
+      return updated;
+    });
 
     return ok({ order });
   } catch (error) {
     return fail(error);
   }
 }
-
-

@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apiFetch, fmtJpy } from "@/lib/client";
 import { useSession } from "@/components/use-session";
 import { TerminalBanner } from "@/components/terminal-banner";
+import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
 
 type DisplayCategory = {
   id: string;
@@ -21,13 +22,22 @@ export default function MenuDisplayPage() {
   const { loading, session } = useSession(["MENU_DISPLAY"]);
   const [categories, setCategories] = useState<DisplayCategory[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const reloadInFlightRef = useRef(false);
 
   const reload = async () => {
+    if (reloadInFlightRef.current) {
+      return;
+    }
+    reloadInFlightRef.current = true;
+
     try {
       const data = await apiFetch<{ categories: DisplayCategory[] }>("/api/menu-display");
       setCategories(data.categories);
+      setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "読み込み失敗");
+      setError(e instanceof Error ? e.message : "Failed to load menu display");
+    } finally {
+      reloadInFlightRef.current = false;
     }
   };
 
@@ -35,10 +45,20 @@ export default function MenuDisplayPage() {
     if (!session) {
       return;
     }
-    reload();
-    const timer = setInterval(reload, 5000);
-    return () => clearInterval(timer);
+    void reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
+
+  useRealtimeSubscription({
+    enabled: Boolean(session),
+    channels: ["menus", "categories", "orders"],
+    onEvent: () => {
+      void reload();
+    },
+    onResync: () => {
+      void reload();
+    }
+  });
 
   if (loading || !session) {
     return <main>Loading...</main>;
@@ -68,8 +88,8 @@ export default function MenuDisplayPage() {
                     <div>{fmtJpy(menu.priceJpy)}</div>
                     <div className="muted">
                       {menu.leadTimeSecondsMedian30m != null
-                        ? `目安 ${Math.ceil(menu.leadTimeSecondsMedian30m / 60)} 分`
-                        : "目安: 統計不足"}
+                        ? `Lead time ${Math.ceil(menu.leadTimeSecondsMedian30m / 60)} min`
+                        : "Lead time unavailable"}
                     </div>
                     <div>
                       {menu.availability === "AVAILABLE" && <span className="badge ready">AVAILABLE</span>}
@@ -86,5 +106,3 @@ export default function MenuDisplayPage() {
     </>
   );
 }
-
-

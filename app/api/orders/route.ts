@@ -9,6 +9,7 @@ import { parseJson } from "@/lib/server/http";
 import { createOrderAtPaymentStart } from "@/lib/domain/orders";
 import { runPaymentWatchdog } from "@/lib/domain/payment-watchdog";
 import { createSquareAppSwitchRequest } from "@/lib/domain/square";
+import { broadcastInvalidation, CHANNEL_GROUPS, kitchenChannel } from "@/lib/server/realtime-broadcast";
 
 const querySchema = z.object({
   q: z.string().optional(),
@@ -24,6 +25,7 @@ export async function GET(req: NextRequest) {
   try {
     await requireSession(req);
     await runPaymentWatchdog(prisma);
+
 
     const query = querySchema.parse(Object.fromEntries(req.nextUrl.searchParams.entries()));
     const take = Math.min(Number(query.take ?? "100"), 300);
@@ -83,11 +85,27 @@ export async function POST(req: NextRequest) {
     const body = await parseJson(req, orderCreateSchema);
 
     const result = await prisma.$transaction(async (tx) => {
-      return createOrderAtPaymentStart(tx, {
+      const created = await createOrderAtPaymentStart(tx, {
         actorId: actor.actorId,
         actorType: actor.actorType,
         payload: body
       });
+
+      if (!created.duplicated) {
+        const kitchenChannels = created.order.items
+          .map((item) => item.kitchenId)
+          .filter((kitchenId): kitchenId is string => Boolean(kitchenId))
+          .map((kitchenId) => kitchenChannel(kitchenId));
+
+        await broadcastInvalidation(
+          tx,
+          [...CHANNEL_GROUPS.ORDER_FLOW, ...kitchenChannels],
+          "orders",
+          "order_created"
+        );
+      }
+
+      return created;
     });
 
     let square = null;

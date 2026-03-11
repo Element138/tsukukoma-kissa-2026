@@ -6,6 +6,7 @@ import { fail, ok } from "@/lib/response";
 import { parseJson } from "@/lib/server/http";
 import { writeAuditLog } from "@/lib/domain/audit";
 import { withRouteTrace, traceError } from "@/lib/server/trace";
+import { broadcastInvalidation, CHANNEL_GROUPS } from "@/lib/server/realtime-broadcast";
 
 const createSchema = z.object({
   name: z.string().min(1).max(120),
@@ -49,21 +50,23 @@ export async function POST(req: NextRequest) {
       const body = await parseJson(req, createSchema);
       trace("parseJson.ok", { name: body.name });
 
-      const category = await prisma.menuCategory.create({
-        data: body
+      const category = await prisma.$transaction(async (tx) => {
+        const created = await tx.menuCategory.create({ data: body });
+
+        await writeAuditLog(tx, {
+          actorId: actor.actorId,
+          actorType: actor.actorType,
+          actionType: "MENU_CATEGORY_CREATED",
+          entityType: "menu_category",
+          entityId: created.id,
+          afterJson: created,
+          result: "SUCCESS"
+        });
+
+        await broadcastInvalidation(tx, CHANNEL_GROUPS.CATEGORIES, "categories", "category_created");
+        return created;
       });
       trace("db.create.ok", { categoryId: category.id });
-
-      await writeAuditLog(prisma, {
-        actorId: actor.actorId,
-        actorType: actor.actorType,
-        actionType: "MENU_CATEGORY_CREATED",
-        entityType: "menu_category",
-        entityId: category.id,
-        afterJson: category,
-        result: "SUCCESS"
-      });
-      trace("audit.ok");
 
       return ok({ category });
     } catch (error) {
@@ -88,27 +91,31 @@ export async function PATCH(req: NextRequest) {
         return new Response("Not found", { status: 404 });
       }
 
-      const category = await prisma.menuCategory.update({
-        where: { id: body.id },
-        data: {
-          name: body.name,
-          displayOrder: body.displayOrder,
-          isActive: body.isActive
-        }
+      const category = await prisma.$transaction(async (tx) => {
+        const updated = await tx.menuCategory.update({
+          where: { id: body.id },
+          data: {
+            name: body.name,
+            displayOrder: body.displayOrder,
+            isActive: body.isActive
+          }
+        });
+
+        await writeAuditLog(tx, {
+          actorId: actor.actorId,
+          actorType: actor.actorType,
+          actionType: "MENU_CATEGORY_UPDATED",
+          entityType: "menu_category",
+          entityId: updated.id,
+          beforeJson: before,
+          afterJson: updated,
+          result: "SUCCESS"
+        });
+
+        await broadcastInvalidation(tx, CHANNEL_GROUPS.CATEGORIES, "categories", "category_updated");
+        return updated;
       });
       trace("db.update.ok", { categoryId: category.id });
-
-      await writeAuditLog(prisma, {
-        actorId: actor.actorId,
-        actorType: actor.actorType,
-        actionType: "MENU_CATEGORY_UPDATED",
-        entityType: "menu_category",
-        entityId: category.id,
-        beforeJson: before,
-        afterJson: category,
-        result: "SUCCESS"
-      });
-      trace("audit.ok");
 
       return ok({ category });
     } catch (error) {

@@ -254,3 +254,14 @@ model AuditLog {
   @@index([result, timestamp])
   @@index([orderId, timestamp])
 }
+
+model RealtimeEvent {
+  id        Int      @id @default(autoincrement())
+  channel   String   @db.VarChar(80)
+  eventType String   @db.VarChar(32)
+  payload   Json
+  createdAt DateTime @default(now())
+
+  @@index([channel, id])
+  @@index([createdAt])
+}

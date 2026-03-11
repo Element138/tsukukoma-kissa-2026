@@ -5,23 +5,25 @@ import { fail, ok } from "@/lib/response";
 import { parseJson } from "@/lib/server/http";
 import { serveItemSchema } from "@/lib/validation";
 import { serveDineInItem } from "@/lib/domain/waiter";
+import { broadcastInvalidation, CHANNEL_GROUPS } from "@/lib/server/realtime-broadcast";
 
 export async function POST(req: NextRequest) {
   try {
     const actor = await requireSession(req, { actorTypes: ["WAITER"] });
     const body = await parseJson(req, serveItemSchema);
 
-    const order = await prisma.$transaction((tx) =>
-      serveDineInItem(tx, {
+    const order = await prisma.$transaction(async (tx) => {
+      const updated = await serveDineInItem(tx, {
         actorId: actor.actorId,
         orderItemId: body.orderItemId
-      })
-    );
+      });
+
+      await broadcastInvalidation(tx, CHANNEL_GROUPS.ORDER_FLOW, "orders", "waiter_item_served");
+      return updated;
+    });
 
     return ok({ order });
   } catch (error) {
     return fail(error);
   }
 }
-
-

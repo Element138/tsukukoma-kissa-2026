@@ -3,6 +3,7 @@ import { fail, ok } from "@/lib/response";
 import { clearSessionCookie, requireSession, revokeCurrentSession } from "@/lib/server/auth";
 import { prisma } from "@/lib/db";
 import { writeAuditLog } from "@/lib/domain/audit";
+import { broadcastInvalidation, CHANNEL_GROUPS } from "@/lib/server/realtime-broadcast";
 
 export async function POST(req: NextRequest) {
   try {
@@ -25,6 +26,8 @@ export async function POST(req: NextRequest) {
       result: "SUCCESS"
     });
 
+    await broadcastInvalidation(prisma, CHANNEL_GROUPS.ACTORS, "actors", "logout");
+
     const res = ok({ success: true });
     clearSessionCookie(res);
     return res;
@@ -32,5 +35,3 @@ export async function POST(req: NextRequest) {
     return fail(error);
   }
 }
-
-

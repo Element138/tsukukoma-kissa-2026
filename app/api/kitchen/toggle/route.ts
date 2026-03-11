@@ -7,6 +7,7 @@ import { parseJson } from "@/lib/server/http";
 import { toggleKitchenState } from "@/lib/domain/kitchen";
 import { withRouteTrace, traceError } from "@/lib/server/trace";
 import { AppError } from "@/lib/errors";
+import { broadcastInvalidation, CHANNEL_GROUPS, kitchenChannel } from "@/lib/server/realtime-broadcast";
 
 export async function POST(req: NextRequest) {
   return withRouteTrace(req, "kitchen/toggle.POST", async (trace) => {
@@ -24,14 +25,23 @@ export async function POST(req: NextRequest) {
       }
 
       trace("tx.toggle.start");
-      const kitchen = await prisma.$transaction((tx) =>
-        toggleKitchenState(tx, {
+      const kitchen = await prisma.$transaction(async (tx) => {
+        const updated = await toggleKitchenState(tx, {
           actorId: actor.actorId,
           actorType: actor.actorType,
           kitchenId: body.kitchenId,
           kitchenEnabled: body.kitchenEnabled
-        })
-      );
+        });
+
+        await broadcastInvalidation(
+          tx,
+          [...CHANNEL_GROUPS.ACTORS, "assignments", kitchenChannel(body.kitchenId)],
+          "actors",
+          "kitchen_toggled"
+        );
+
+        return updated;
+      });
       trace("tx.toggle.ok");
 
       return ok({ kitchen });

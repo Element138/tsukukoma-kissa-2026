@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { fail } from "@/lib/response";
 import { verifySquareCallbackSignature } from "@/lib/domain/square";
 import { confirmOrderPayment } from "@/lib/domain/orders";
+import { broadcastInvalidation, CHANNEL_GROUPS, kitchenChannel } from "@/lib/server/realtime-broadcast";
 
 function parseSquarePayload(text: string, url: URL) {
   try {
@@ -50,15 +51,27 @@ async function applySquareCallback(payload: { orderId: string | null; result: "S
     return NextResponse.json({ ok: true, data: { alreadyProcessed: true } }, { status: 200 });
   }
 
-  await prisma.$transaction((tx) =>
-    confirmOrderPayment(tx, {
+  await prisma.$transaction(async (tx) => {
+    const order = await confirmOrderPayment(tx, {
       actorId: null,
       actorType: null,
       orderId: payload.orderId!,
       result: payload.result,
       squareTransactionId: payload.squareTransactionId
-    })
-  );
+    });
+
+    const kitchenChannels = order.items
+      .map((item) => item.kitchenId)
+      .filter((kitchenId): kitchenId is string => Boolean(kitchenId))
+      .map((kitchenId) => kitchenChannel(kitchenId));
+
+    await broadcastInvalidation(
+      tx,
+      [...CHANNEL_GROUPS.ORDER_FLOW, ...kitchenChannels],
+      "orders",
+      "square_callback"
+    );
+  });
 
   return NextResponse.json({ ok: true }, { status: 200 });
 }
@@ -95,5 +108,3 @@ export async function GET(req: NextRequest) {
     return fail(error);
   }
 }
-
-

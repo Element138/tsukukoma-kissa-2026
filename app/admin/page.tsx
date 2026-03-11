@@ -6,6 +6,7 @@ import { apiFetch, fmtJpy } from "@/lib/client";
 import { useSession } from "@/components/use-session";
 import { Card, SectionTitle } from "@/components/ui";
 import { TerminalBanner } from "@/components/terminal-banner";
+import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
 
 type Actor = {
   id: string;
@@ -100,11 +101,20 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (!session) return;
-    reload();
-    const timer = setInterval(reload, 6000);
-    return () => clearInterval(timer);
+    void reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
+
+  useRealtimeSubscription({
+    enabled: Boolean(session),
+    channels: ["actors", "menus", "categories", "assignments"],
+    onEvent: () => {
+      void reload();
+    },
+    onResync: () => {
+      void reload();
+    }
+  });
 
   const createActor = async (e: FormEvent) => {
     e.preventDefault();
@@ -421,3 +431,6 @@ export default function AdminPage() {
     </>
   );
 }
+
+
+

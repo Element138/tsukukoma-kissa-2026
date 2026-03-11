@@ -1,6 +1,7 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 import { now, secondsFromNow } from "@/lib/time";
 import { writeAuditLog } from "@/lib/domain/audit";
+import { broadcastInvalidation, CHANNEL_GROUPS } from "@/lib/server/realtime-broadcast";
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
 
@@ -95,10 +96,12 @@ export async function runPaymentWatchdog(db: DbClient) {
     });
   }
 
+  if (awaitingTimeouts.length > 0 || failedTimeouts.length > 0) {
+    await broadcastInvalidation(db, CHANNEL_GROUPS.ORDER_FLOW, "orders", "payment_watchdog");
+  }
+
   return {
     paymentFailed: awaitingTimeouts.length,
     autoCanceled: failedTimeouts.length
   };
 }
-
-

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { apiFetch } from "@/lib/client";
 import { useSession } from "@/components/use-session";
 import { TerminalBanner } from "@/components/terminal-banner";
+import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
 
 type AuditLog = {
   id: string;
@@ -45,8 +46,20 @@ export default function AuditPage() {
 
   useEffect(() => {
     if (!session) return;
-    reload();
+    void reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, actionType, actorType, result, orderNo]);
+
+  useRealtimeSubscription({
+    enabled: Boolean(session),
+    channels: ["audit"],
+    onEvent: () => {
+      void reload();
+    },
+    onResync: () => {
+      void reload();
+    }
+  });
 
   if (loading || !session) {
     return <main>Loading...</main>;
@@ -127,5 +140,7 @@ export default function AuditPage() {
     </>
   );
 }
+
+
 
 

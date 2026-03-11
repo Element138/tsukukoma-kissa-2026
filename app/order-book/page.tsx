@@ -1,10 +1,11 @@
-﻿"use client";
+"use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { apiFetch, fmtJpy } from "@/lib/client";
 import { useSession } from "@/components/use-session";
 import { TerminalBanner } from "@/components/terminal-banner";
+import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
 
 type OrderRow = {
   id: string;
@@ -36,8 +37,14 @@ export default function OrderBookPage() {
   const [qOrderNo, setQOrderNo] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const reloadInFlightRef = useRef(false);
 
   const reload = async () => {
+    if (reloadInFlightRef.current) {
+      return;
+    }
+    reloadInFlightRef.current = true;
+
     try {
       const params = new URLSearchParams();
       if (status) params.set("status", status);
@@ -49,16 +56,27 @@ export default function OrderBookPage() {
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load orders");
+    } finally {
+      reloadInFlightRef.current = false;
     }
   };
 
   useEffect(() => {
     if (!session) return;
-    reload();
-    const timer = setInterval(reload, 5000);
-    return () => clearInterval(timer);
+    void reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, status, paymentMethod, qOrderNo]);
+
+  useRealtimeSubscription({
+    enabled: Boolean(session),
+    channels: ["orders", "actors"],
+    onEvent: () => {
+      void reload();
+    },
+    onResync: () => {
+      void reload();
+    }
+  });
 
   const editNote = async (orderId: string, next: string) => {
     try {
@@ -199,3 +217,5 @@ export default function OrderBookPage() {
     </>
   );
 }
+
+

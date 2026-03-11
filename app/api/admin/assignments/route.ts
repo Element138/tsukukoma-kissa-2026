@@ -8,6 +8,7 @@ import { writeAuditLog } from "@/lib/domain/audit";
 import { updateMenusAvailabilityByKitchenCoverage } from "@/lib/domain/kitchen-assignment";
 import { withRouteTrace, traceError } from "@/lib/server/trace";
 import { AppError } from "@/lib/errors";
+import { broadcastInvalidation, CHANNEL_GROUPS, kitchenChannel } from "@/lib/server/realtime-broadcast";
 
 export async function GET(req: NextRequest) {
   return withRouteTrace(req, "admin/assignments.GET", async (trace) => {
@@ -86,21 +87,27 @@ export async function POST(req: NextRequest) {
         });
 
         await updateMenusAvailabilityByKitchenCoverage(tx, [body.menuId]);
+
+        await writeAuditLog(tx, {
+          actorId: actor.actorId,
+          actorType: actor.actorType,
+          actionType: "MENU_KITCHEN_ASSIGNMENT_UPSERT",
+          entityType: "menu_kitchen_assignment",
+          entityId: `${body.menuId}:${body.kitchenId}`,
+          afterJson: saved,
+          result: "SUCCESS"
+        });
+
+        await broadcastInvalidation(
+          tx,
+          [...CHANNEL_GROUPS.ASSIGNMENTS, kitchenChannel(body.kitchenId)],
+          "assignments",
+          "assignment_upserted"
+        );
+
         return saved;
       });
       trace("tx.upsert.ok");
-
-      trace("audit.start");
-      await writeAuditLog(prisma, {
-        actorId: actor.actorId,
-        actorType: actor.actorType,
-        actionType: "MENU_KITCHEN_ASSIGNMENT_UPSERT",
-        entityType: "menu_kitchen_assignment",
-        entityId: `${body.menuId}:${body.kitchenId}`,
-        afterJson: assignment,
-        result: "SUCCESS"
-      });
-      trace("audit.ok");
 
       return ok({ assignment });
     } catch (error) {

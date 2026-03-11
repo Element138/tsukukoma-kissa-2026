@@ -5,6 +5,7 @@ import { requireSession } from "@/lib/server/auth";
 import { orderConfirmSchema } from "@/lib/validation";
 import { parseJson } from "@/lib/server/http";
 import { confirmOrderPayment } from "@/lib/domain/orders";
+import { broadcastInvalidation, CHANNEL_GROUPS, kitchenChannel } from "@/lib/server/realtime-broadcast";
 
 export async function POST(req: NextRequest, context: { params: Promise<{ orderId: string }> }) {
   try {
@@ -12,21 +13,33 @@ export async function POST(req: NextRequest, context: { params: Promise<{ orderI
     const body = await parseJson(req, orderConfirmSchema);
     const { orderId } = await context.params;
 
-    const order = await prisma.$transaction((tx) =>
-      confirmOrderPayment(tx, {
+    const order = await prisma.$transaction(async (tx) => {
+      const updated = await confirmOrderPayment(tx, {
         actorId: actor.actorId,
         actorType: actor.actorType,
         orderId,
         result: body.result,
         squareTransactionId: body.squareTransactionId,
         reasonText: body.reasonText
-      })
-    );
+      });
+
+      const kitchenChannels = updated.items
+        .map((item) => item.kitchenId)
+        .filter((kitchenId): kitchenId is string => Boolean(kitchenId))
+        .map((kitchenId) => kitchenChannel(kitchenId));
+
+      await broadcastInvalidation(
+        tx,
+        [...CHANNEL_GROUPS.ORDER_FLOW, ...kitchenChannels],
+        "orders",
+        "order_confirmed"
+      );
+
+      return updated;
+    });
 
     return ok({ order });
   } catch (error) {
     return fail(error);
   }
 }
-
-

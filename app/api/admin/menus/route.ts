@@ -7,6 +7,7 @@ import { menuCreateSchema, menuUpdateSchema } from "@/lib/validation";
 import { writeAuditLog } from "@/lib/domain/audit";
 import { withRouteTrace, traceError } from "@/lib/server/trace";
 import { AppError } from "@/lib/errors";
+import { broadcastInvalidation, CHANNEL_GROUPS } from "@/lib/server/realtime-broadcast";
 
 async function hasActiveCoverage(menuId: string) {
   const count = await prisma.menuKitchenAssignment.count({
@@ -61,31 +62,34 @@ export async function POST(req: NextRequest) {
       const body = await parseJson(req, menuCreateSchema);
       trace("parseJson.ok", { name: body.name, categoryId: body.categoryId });
 
-      trace("db.create.start");
-      const menu = await prisma.menu.create({
-        data: {
-          name: body.name,
-          priceJpy: body.priceJpy,
-          availability: body.availability,
-          workloadSeconds: body.workloadSeconds,
-          displayOrder: body.displayOrder,
-          categoryId: body.categoryId,
-          showLeadTime: body.showLeadTime ?? true
-        }
-      });
-      trace("db.create.ok", { menuId: menu.id });
+      trace("tx.create.start");
+      const menu = await prisma.$transaction(async (tx) => {
+        const created = await tx.menu.create({
+          data: {
+            name: body.name,
+            priceJpy: body.priceJpy,
+            availability: body.availability,
+            workloadSeconds: body.workloadSeconds,
+            displayOrder: body.displayOrder,
+            categoryId: body.categoryId,
+            showLeadTime: body.showLeadTime ?? true
+          }
+        });
 
-      trace("audit.start");
-      await writeAuditLog(prisma, {
-        actorId: actor.actorId,
-        actorType: actor.actorType,
-        actionType: "MENU_CREATED",
-        entityType: "menu",
-        entityId: menu.id,
-        afterJson: menu,
-        result: "SUCCESS"
+        await writeAuditLog(tx, {
+          actorId: actor.actorId,
+          actorType: actor.actorType,
+          actionType: "MENU_CREATED",
+          entityType: "menu",
+          entityId: created.id,
+          afterJson: created,
+          result: "SUCCESS"
+        });
+
+        await broadcastInvalidation(tx, CHANNEL_GROUPS.MENUS, "menus", "menu_created");
+        return created;
       });
-      trace("audit.ok");
+      trace("tx.create.ok", { menuId: menu.id });
 
       return ok({ menu });
     } catch (error) {
@@ -118,34 +122,37 @@ export async function PATCH(req: NextRequest) {
         }
       }
 
-      trace("db.update.start");
-      const menu = await prisma.menu.update({
-        where: { id: body.id },
-        data: {
-          name: body.name,
-          priceJpy: body.priceJpy,
-          availability: body.availability,
-          workloadSeconds: body.workloadSeconds,
-          displayOrder: body.displayOrder,
-          categoryId: body.categoryId,
-          isActive: body.isActive,
-          showLeadTime: body.showLeadTime
-        }
-      });
-      trace("db.update.ok");
+      trace("tx.update.start");
+      const menu = await prisma.$transaction(async (tx) => {
+        const updated = await tx.menu.update({
+          where: { id: body.id },
+          data: {
+            name: body.name,
+            priceJpy: body.priceJpy,
+            availability: body.availability,
+            workloadSeconds: body.workloadSeconds,
+            displayOrder: body.displayOrder,
+            categoryId: body.categoryId,
+            isActive: body.isActive,
+            showLeadTime: body.showLeadTime
+          }
+        });
 
-      trace("audit.start");
-      await writeAuditLog(prisma, {
-        actorId: actor.actorId,
-        actorType: actor.actorType,
-        actionType: "MENU_UPDATED",
-        entityType: "menu",
-        entityId: menu.id,
-        beforeJson: before,
-        afterJson: menu,
-        result: "SUCCESS"
+        await writeAuditLog(tx, {
+          actorId: actor.actorId,
+          actorType: actor.actorType,
+          actionType: "MENU_UPDATED",
+          entityType: "menu",
+          entityId: updated.id,
+          beforeJson: before,
+          afterJson: updated,
+          result: "SUCCESS"
+        });
+
+        await broadcastInvalidation(tx, CHANNEL_GROUPS.MENUS, "menus", "menu_updated");
+        return updated;
       });
-      trace("audit.ok");
+      trace("tx.update.ok", { menuId: menu.id });
 
       return ok({ menu });
     } catch (error) {
