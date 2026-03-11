@@ -13,6 +13,110 @@ function isEnvMissingDbUrl(error: unknown): boolean {
   return /Environment variable not found: DATABASE_URL/i.test(error.message);
 }
 
+function failPrismaKnown(error: Prisma.PrismaClientKnownRequestError) {
+  if (error.code === "P2021") {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: {
+          code: "DB_NOT_MIGRATED",
+          message: "Database schema is not ready. Run migrations."
+        }
+      },
+      { status: 503 }
+    );
+  }
+
+  if (error.code === "P2022") {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: {
+          code: "DB_SCHEMA_MISMATCH",
+          message: "Database columns are out of sync with the app schema."
+        }
+      },
+      { status: 503 }
+    );
+  }
+
+  if (error.code === "P1001") {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: {
+          code: "DB_UNREACHABLE",
+          message: "Cannot reach database server"
+        }
+      },
+      { status: 503 }
+    );
+  }
+
+  if (error.code === "P1000") {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: {
+          code: "DB_AUTH_FAILED",
+          message: "Database authentication failed"
+        }
+      },
+      { status: 503 }
+    );
+  }
+
+  if (error.code === "P2002") {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: {
+          code: "UNIQUE_CONSTRAINT",
+          message: "A record with the same unique key already exists."
+        }
+      },
+      { status: 409 }
+    );
+  }
+
+  if (error.code === "P2003") {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: {
+          code: "FK_CONSTRAINT",
+          message: "The requested relation is invalid (foreign key constraint)."
+        }
+      },
+      { status: 409 }
+    );
+  }
+
+  if (error.code === "P2025") {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: {
+          code: "NOT_FOUND",
+          message: "Target record was not found."
+        }
+      },
+      { status: 404 }
+    );
+  }
+
+  return NextResponse.json(
+    {
+      ok: false,
+      error: {
+        code: error.code,
+        message: "Database request failed"
+      }
+    },
+    { status: 500 }
+  );
+}
+
 export function fail(error: unknown) {
   if (error instanceof AppError) {
     return NextResponse.json(
@@ -41,44 +145,7 @@ export function fail(error: unknown) {
   }
 
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
-    if (error.code === "P2021") {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: {
-            code: "DB_NOT_MIGRATED",
-            message: "Database schema is not ready. Run migrations."
-          }
-        },
-        { status: 503 }
-      );
-    }
-
-    if (error.code === "P1001") {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: {
-            code: "DB_UNREACHABLE",
-            message: "Cannot reach database server"
-          }
-        },
-        { status: 503 }
-      );
-    }
-
-    if (error.code === "P1000") {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: {
-            code: "DB_AUTH_FAILED",
-            message: "Database authentication failed"
-          }
-        },
-        { status: 503 }
-      );
-    }
+    return failPrismaKnown(error);
   }
 
   if (isEnvMissingDbUrl(error)) {

@@ -221,6 +221,8 @@ export default function AdminPage() {
         method: "POST",
         body: JSON.stringify({ menuId, kitchenId, enabled })
       });
+      setMessage(`Assignment ${enabled ? "enabled" : "disabled"}`);
+      setError(null);
       await reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to update assignment");

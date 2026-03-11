@@ -9,24 +9,47 @@ export class ApiError extends Error {
   }
 }
 
-export async function apiFetch<T>(input: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(input, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {})
-    },
-    cache: "no-store"
-  });
+type ApiFetchInit = RequestInit & {
+  timeoutMs?: number;
+};
 
-  const json = await res.json().catch(() => null);
-  if (!res.ok || !json?.ok) {
-    const message = json?.error?.message ?? `Request failed: ${res.status}`;
-    const code = json?.error?.code;
-    throw new ApiError(res.status, message, code);
+export async function apiFetch<T>(input: string, init?: ApiFetchInit): Promise<T> {
+  const controller = new AbortController();
+  const timeoutMs = init?.timeoutMs ?? 15000;
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(input, {
+      ...init,
+      signal: init?.signal ?? controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        ...(init?.headers ?? {})
+      },
+      cache: "no-store"
+    });
+
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json?.ok) {
+      const message = json?.error?.message ?? `Request failed: ${res.status}`;
+      const code = json?.error?.code;
+      throw new ApiError(res.status, message, code);
+    }
+
+    return json.data as T;
+  } catch (error) {
+    if (error instanceof ApiError) {
+      throw error;
+    }
+
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new ApiError(408, "Request timed out", "REQUEST_TIMEOUT");
+    }
+
+    throw new ApiError(0, "Network error", "NETWORK_ERROR");
+  } finally {
+    clearTimeout(timeout);
   }
-
-  return json.data as T;
 }
 
 export function isAuthError(error: unknown): boolean {
