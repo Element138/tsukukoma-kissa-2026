@@ -39,6 +39,10 @@ Set these in Vercel Project Settings -> Environment Variables:
 
 ## Vercel deployment bootstrap
 
+Current build mode is destructive for DB (by request): each deploy resets DB, reapplies migrations, then seeds.
+
+
+
 This repo now includes:
 
 - Prisma migration files in `prisma/migrations`
