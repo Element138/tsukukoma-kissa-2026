@@ -1,4 +1,4 @@
-﻿import { ActorType, Prisma, Session } from "@prisma/client";
+import { ActorType, Prisma, Session } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { AppError, assert } from "@/lib/errors";
@@ -7,6 +7,15 @@ import { minutesFromNow, now } from "@/lib/time";
 
 export const SESSION_COOKIE = "kissa_session";
 const SESSION_TTL_MINUTES = 10;
+const HEARTBEAT_TOUCH_MS = 30_000;
+
+type SessionActor = {
+  id: string;
+  actorType: ActorType;
+  label: string;
+  isActive: boolean;
+  lastSeenAt: Date | null;
+};
 
 export type AuthenticatedActor = {
   actorId: string;
@@ -36,7 +45,14 @@ export function clearSessionCookie(response: NextResponse) {
   });
 }
 
-async function loadSession(req: NextRequest): Promise<(Session & { actor: { id: string; actorType: ActorType; label: string; isActive: boolean } }) | null> {
+function isStale(ts: Date | null | undefined) {
+  if (!ts) {
+    return true;
+  }
+  return Date.now() - ts.getTime() >= HEARTBEAT_TOUCH_MS;
+}
+
+async function loadSession(req: NextRequest): Promise<(Session & { actor: SessionActor }) | null> {
   const token = req.cookies.get(SESSION_COOKIE)?.value;
   if (!token) {
     return null;
@@ -51,7 +67,8 @@ async function loadSession(req: NextRequest): Promise<(Session & { actor: { id: 
           id: true,
           actorType: true,
           label: true,
-          isActive: true
+          isActive: true,
+          lastSeenAt: true
         }
       }
     }
@@ -65,7 +82,7 @@ async function loadSession(req: NextRequest): Promise<(Session & { actor: { id: 
 }
 
 async function touchSession(sessionId: string) {
-  await prisma.session.update({
+  await prisma.session.updateMany({
     where: { sessionId },
     data: {
       lastActivityAt: now(),
@@ -75,13 +92,30 @@ async function touchSession(sessionId: string) {
 }
 
 async function touchActorOnline(actorId: string) {
-  await prisma.actor.update({
+  await prisma.actor.updateMany({
     where: { id: actorId },
     data: {
       online: true,
       lastSeenAt: now()
     }
   });
+}
+
+function touchHeartbeatBestEffort(session: Session & { actor: SessionActor }) {
+  const tasks: Promise<unknown>[] = [];
+
+  if (isStale(session.lastActivityAt)) {
+    tasks.push(touchSession(session.sessionId));
+  }
+  if (isStale(session.actor.lastSeenAt)) {
+    tasks.push(touchActorOnline(session.actor.id));
+  }
+
+  if (tasks.length > 0) {
+    void Promise.all(tasks).catch((error) => {
+      console.warn("heartbeat touch failed", error);
+    });
+  }
 }
 
 export async function requireSession(
@@ -97,7 +131,7 @@ export async function requireSession(
     throw new AppError(403, "FORBIDDEN", "Actor type is not allowed");
   }
 
-  await Promise.all([touchSession(session.sessionId), touchActorOnline(session.actor.id)]);
+  touchHeartbeatBestEffort(session);
 
   return {
     actorId: session.actor.id,

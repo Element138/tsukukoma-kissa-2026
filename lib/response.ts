@@ -40,29 +40,29 @@ function failPrismaKnown(error: Prisma.PrismaClientKnownRequestError) {
     );
   }
 
-  if (error.code === "P1001") {
+  if (error.code === "P2024") {
     return NextResponse.json(
       {
         ok: false,
         error: {
-          code: "DB_UNREACHABLE",
-          message: "Cannot reach database server"
+          code: "DB_POOL_TIMEOUT",
+          message: "Database connection pool timeout. Please retry."
         }
       },
       { status: 503 }
     );
   }
 
-  if (error.code === "P1000") {
+  if (error.code === "P2025") {
     return NextResponse.json(
       {
         ok: false,
         error: {
-          code: "DB_AUTH_FAILED",
-          message: "Database authentication failed"
+          code: "NOT_FOUND",
+          message: "Target record was not found."
         }
       },
-      { status: 503 }
+      { status: 404 }
     );
   }
 
@@ -92,16 +92,16 @@ function failPrismaKnown(error: Prisma.PrismaClientKnownRequestError) {
     );
   }
 
-  if (error.code === "P2025") {
+  if (error.code === "P2034") {
     return NextResponse.json(
       {
         ok: false,
         error: {
-          code: "NOT_FOUND",
-          message: "Target record was not found."
+          code: "TX_CONFLICT",
+          message: "Transaction conflict detected. Please retry."
         }
       },
-      { status: 404 }
+      { status: 409 }
     );
   }
 
@@ -110,7 +110,7 @@ function failPrismaKnown(error: Prisma.PrismaClientKnownRequestError) {
       ok: false,
       error: {
         code: error.code,
-        message: "Database request failed"
+        message: `Database request failed (${error.code})`
       }
     },
     { status: 500 }
@@ -146,6 +146,19 @@ export function fail(error: unknown) {
 
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     return failPrismaKnown(error);
+  }
+
+  if (error instanceof Prisma.PrismaClientUnknownRequestError) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: {
+          code: "DB_TIMEOUT",
+          message: "Database operation timed out"
+        }
+      },
+      { status: 503 }
+    );
   }
 
   if (isEnvMissingDbUrl(error)) {

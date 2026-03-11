@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { apiFetch, fmtJpy } from "@/lib/client";
 import { useSession } from "@/components/use-session";
@@ -66,14 +66,20 @@ export default function AdminPage() {
     () => actors.filter((a) => a.actorType === "KITCHEN").sort((a, b) => a.kitchenDisplayOrder - b.kitchenDisplayOrder || a.id.localeCompare(b.id)),
     [actors]
   );
+  const reloadInFlightRef = useRef(false);
 
   const reload = async () => {
+    if (reloadInFlightRef.current) {
+      return;
+    }
+    reloadInFlightRef.current = true;
+
     try {
       const [actorRes, menuRes, categoryRes, assignmentRes] = await Promise.all([
-        apiFetch<{ actors: Actor[] }>("/api/admin/actors"),
-        apiFetch<{ menus: Menu[]; categories: Category[] }>("/api/admin/menus"),
-        apiFetch<{ categories: Category[] }>("/api/admin/categories"),
-        apiFetch<{ assignments: Assignment[] }>("/api/admin/assignments")
+        apiFetch<{ actors: Actor[] }>("/api/admin/actors", { timeoutMs: 30000 }),
+        apiFetch<{ menus: Menu[]; categories: Category[] }>("/api/admin/menus", { timeoutMs: 30000 }),
+        apiFetch<{ categories: Category[] }>("/api/admin/categories", { timeoutMs: 30000 }),
+        apiFetch<{ assignments: Assignment[] }>("/api/admin/assignments", { timeoutMs: 30000 })
       ]);
 
       setActors(actorRes.actors);
@@ -87,6 +93,8 @@ export default function AdminPage() {
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load admin data");
+    } finally {
+      reloadInFlightRef.current = false;
     }
   };
 
