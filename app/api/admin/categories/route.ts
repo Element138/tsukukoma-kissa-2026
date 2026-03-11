@@ -5,6 +5,7 @@ import { requireSession } from "@/lib/server/auth";
 import { fail, ok } from "@/lib/response";
 import { parseJson } from "@/lib/server/http";
 import { writeAuditLog } from "@/lib/domain/audit";
+import { withRouteTrace, traceError } from "@/lib/server/trace";
 
 const createSchema = z.object({
   name: z.string().min(1).max(120),
@@ -19,76 +20,100 @@ const updateSchema = z.object({
 });
 
 export async function GET(req: NextRequest) {
-  try {
-    await requireSession(req, { actorTypes: ["ADMIN", "POS", "MENU_DISPLAY"] });
-    const categories = await prisma.menuCategory.findMany({
-      orderBy: [{ displayOrder: "asc" }, { name: "asc" }]
-    });
-    return ok({ categories });
-  } catch (error) {
-    return fail(error);
-  }
+  return withRouteTrace(req, "admin/categories.GET", async (trace) => {
+    try {
+      trace("auth.start");
+      await requireSession(req, { actorTypes: ["ADMIN", "POS", "MENU_DISPLAY"] });
+      trace("auth.ok");
+
+      const categories = await prisma.menuCategory.findMany({
+        orderBy: [{ displayOrder: "asc" }, { name: "asc" }]
+      });
+      trace("db.findMany.ok", { count: categories.length });
+
+      return ok({ categories });
+    } catch (error) {
+      traceError(trace, "error", error);
+      return fail(error);
+    }
+  });
 }
 
 export async function POST(req: NextRequest) {
-  try {
-    const actor = await requireSession(req, { actorTypes: ["ADMIN"] });
-    const body = await parseJson(req, createSchema);
+  return withRouteTrace(req, "admin/categories.POST", async (trace) => {
+    try {
+      trace("auth.start");
+      const actor = await requireSession(req, { actorTypes: ["ADMIN"] });
+      trace("auth.ok", { actorId: actor.actorId });
 
-    const category = await prisma.menuCategory.create({
-      data: body
-    });
+      const body = await parseJson(req, createSchema);
+      trace("parseJson.ok", { name: body.name });
 
-    await writeAuditLog(prisma, {
-      actorId: actor.actorId,
-      actorType: actor.actorType,
-      actionType: "MENU_CATEGORY_CREATED",
-      entityType: "menu_category",
-      entityId: category.id,
-      afterJson: category,
-      result: "SUCCESS"
-    });
+      const category = await prisma.menuCategory.create({
+        data: body
+      });
+      trace("db.create.ok", { categoryId: category.id });
 
-    return ok({ category });
-  } catch (error) {
-    return fail(error);
-  }
+      await writeAuditLog(prisma, {
+        actorId: actor.actorId,
+        actorType: actor.actorType,
+        actionType: "MENU_CATEGORY_CREATED",
+        entityType: "menu_category",
+        entityId: category.id,
+        afterJson: category,
+        result: "SUCCESS"
+      });
+      trace("audit.ok");
+
+      return ok({ category });
+    } catch (error) {
+      traceError(trace, "error", error);
+      return fail(error);
+    }
+  });
 }
 
 export async function PATCH(req: NextRequest) {
-  try {
-    const actor = await requireSession(req, { actorTypes: ["ADMIN"] });
-    const body = await parseJson(req, updateSchema);
+  return withRouteTrace(req, "admin/categories.PATCH", async (trace) => {
+    try {
+      trace("auth.start");
+      const actor = await requireSession(req, { actorTypes: ["ADMIN"] });
+      trace("auth.ok", { actorId: actor.actorId });
 
-    const before = await prisma.menuCategory.findUnique({ where: { id: body.id } });
-    if (!before) {
-      return new Response("Not found", { status: 404 });
-    }
+      const body = await parseJson(req, updateSchema);
+      trace("parseJson.ok", { categoryId: body.id });
 
-    const category = await prisma.menuCategory.update({
-      where: { id: body.id },
-      data: {
-        name: body.name,
-        displayOrder: body.displayOrder,
-        isActive: body.isActive
+      const before = await prisma.menuCategory.findUnique({ where: { id: body.id } });
+      if (!before) {
+        return new Response("Not found", { status: 404 });
       }
-    });
 
-    await writeAuditLog(prisma, {
-      actorId: actor.actorId,
-      actorType: actor.actorType,
-      actionType: "MENU_CATEGORY_UPDATED",
-      entityType: "menu_category",
-      entityId: category.id,
-      beforeJson: before,
-      afterJson: category,
-      result: "SUCCESS"
-    });
+      const category = await prisma.menuCategory.update({
+        where: { id: body.id },
+        data: {
+          name: body.name,
+          displayOrder: body.displayOrder,
+          isActive: body.isActive
+        }
+      });
+      trace("db.update.ok", { categoryId: category.id });
 
-    return ok({ category });
-  } catch (error) {
-    return fail(error);
-  }
+      await writeAuditLog(prisma, {
+        actorId: actor.actorId,
+        actorType: actor.actorType,
+        actionType: "MENU_CATEGORY_UPDATED",
+        entityType: "menu_category",
+        entityId: category.id,
+        beforeJson: before,
+        afterJson: category,
+        result: "SUCCESS"
+      });
+      trace("audit.ok");
+
+      return ok({ category });
+    } catch (error) {
+      traceError(trace, "error", error);
+      return fail(error);
+    }
+  });
 }
-
-

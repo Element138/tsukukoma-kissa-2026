@@ -3,6 +3,8 @@ import { PrismaClient } from "@prisma/client";
 declare global {
   // eslint-disable-next-line no-var
   var prisma: PrismaClient | undefined;
+  // eslint-disable-next-line no-var
+  var prismaQueryLoggerAttached: boolean | undefined;
 }
 
 function resolveRuntimeDatabaseUrl() {
@@ -31,11 +33,20 @@ function resolveRuntimeDatabaseUrl() {
 }
 
 const runtimeDatabaseUrl = resolveRuntimeDatabaseUrl();
+const traceDbQueries = process.env.KISSA_TRACE_DB !== "0";
+
+const prismaLogs = traceDbQueries
+  ? ([
+      { emit: "event", level: "query" as const },
+      { emit: "stdout", level: "error" as const },
+      { emit: "stdout", level: "warn" as const }
+    ] as const)
+  : (process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"]);
 
 export const prisma =
   global.prisma ||
   new PrismaClient({
-    log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
+    log: prismaLogs as any,
     ...(runtimeDatabaseUrl
       ? {
           datasources: {
@@ -46,6 +57,22 @@ export const prisma =
         }
       : {})
   });
+
+if (traceDbQueries && !global.prismaQueryLoggerAttached) {
+  (prisma as any).$on("query", (e: any) => {
+    const compactQuery = e.query.replace(/\s+/g, " ").slice(0, 500);
+    console.log(
+      JSON.stringify({
+        ts: new Date().toISOString(),
+        kind: "db-query",
+        durationMs: e.duration,
+        target: e.target,
+        query: compactQuery
+      })
+    );
+  });
+  global.prismaQueryLoggerAttached = true;
+}
 
 if (process.env.NODE_ENV !== "production") {
   global.prisma = prisma;

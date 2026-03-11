@@ -6,86 +6,106 @@ import { parseJson } from "@/lib/server/http";
 import { assignmentUpsertSchema } from "@/lib/validation";
 import { writeAuditLog } from "@/lib/domain/audit";
 import { updateMenusAvailabilityByKitchenCoverage } from "@/lib/domain/kitchen-assignment";
+import { withRouteTrace, traceError } from "@/lib/server/trace";
 import { AppError } from "@/lib/errors";
 
 export async function GET(req: NextRequest) {
-  try {
-    await requireSession(req, { actorTypes: ["ADMIN", "KITCHEN"] });
+  return withRouteTrace(req, "admin/assignments.GET", async (trace) => {
+    try {
+      trace("auth.start");
+      await requireSession(req, { actorTypes: ["ADMIN", "KITCHEN"] });
+      trace("auth.ok");
 
-    const assignments = await prisma.menuKitchenAssignment.findMany({
-      include: {
-        menu: {
-          select: {
-            id: true,
-            name: true
-          }
-        },
-        kitchenActor: {
-          select: {
-            id: true,
-            label: true,
-            actorType: true,
-            isActive: true,
-            kitchenEnabled: true,
-            kitchenDisplayOrder: true
+      trace("db.findMany.start");
+      const assignments = await prisma.menuKitchenAssignment.findMany({
+        include: {
+          menu: {
+            select: {
+              id: true,
+              name: true
+            }
+          },
+          kitchenActor: {
+            select: {
+              id: true,
+              label: true,
+              actorType: true,
+              isActive: true,
+              kitchenEnabled: true,
+              kitchenDisplayOrder: true
+            }
           }
         }
-      }
-    });
+      });
+      trace("db.findMany.ok", { count: assignments.length });
 
-    return ok({ assignments });
-  } catch (error) {
-    return fail(error);
-  }
+      return ok({ assignments });
+    } catch (error) {
+      traceError(trace, "error", error);
+      return fail(error);
+    }
+  });
 }
 
 export async function POST(req: NextRequest) {
-  try {
-    const actor = await requireSession(req, { actorTypes: ["ADMIN"] });
-    const body = await parseJson(req, assignmentUpsertSchema);
+  return withRouteTrace(req, "admin/assignments.POST", async (trace) => {
+    try {
+      trace("auth.start");
+      const actor = await requireSession(req, { actorTypes: ["ADMIN"] });
+      trace("auth.ok", { actorId: actor.actorId });
 
-    const assignment = await prisma.$transaction(async (tx) => {
-      const kitchenActor = await tx.actor.findUnique({
-        where: { id: body.kitchenId },
-        select: { id: true, actorType: true }
-      });
-      if (!kitchenActor || kitchenActor.actorType !== "KITCHEN") {
-        throw new AppError(400, "INVALID_KITCHEN_ACTOR", "kitchenId must reference a KITCHEN actor");
-      }
+      trace("parseJson.start");
+      const body = await parseJson(req, assignmentUpsertSchema);
+      trace("parseJson.ok", { menuId: body.menuId, kitchenId: body.kitchenId, enabled: body.enabled });
 
-      const saved = await tx.menuKitchenAssignment.upsert({
-        where: {
-          menuId_kitchenId: {
-            menuId: body.menuId,
-            kitchenId: body.kitchenId
-          }
-        },
-        create: {
-          menuId: body.menuId,
-          kitchenId: body.kitchenId,
-          enabled: body.enabled
-        },
-        update: {
-          enabled: body.enabled
+      trace("tx.upsert.start");
+      const assignment = await prisma.$transaction(async (tx) => {
+        const kitchenActor = await tx.actor.findUnique({
+          where: { id: body.kitchenId },
+          select: { id: true, actorType: true }
+        });
+        if (!kitchenActor || kitchenActor.actorType !== "KITCHEN") {
+          throw new AppError(400, "INVALID_KITCHEN_ACTOR", "kitchenId must reference a KITCHEN actor");
         }
+
+        const saved = await tx.menuKitchenAssignment.upsert({
+          where: {
+            menuId_kitchenId: {
+              menuId: body.menuId,
+              kitchenId: body.kitchenId
+            }
+          },
+          create: {
+            menuId: body.menuId,
+            kitchenId: body.kitchenId,
+            enabled: body.enabled
+          },
+          update: {
+            enabled: body.enabled
+          }
+        });
+
+        await updateMenusAvailabilityByKitchenCoverage(tx, [body.menuId]);
+        return saved;
       });
+      trace("tx.upsert.ok");
 
-      await updateMenusAvailabilityByKitchenCoverage(tx, [body.menuId]);
-      return saved;
-    });
+      trace("audit.start");
+      await writeAuditLog(prisma, {
+        actorId: actor.actorId,
+        actorType: actor.actorType,
+        actionType: "MENU_KITCHEN_ASSIGNMENT_UPSERT",
+        entityType: "menu_kitchen_assignment",
+        entityId: `${body.menuId}:${body.kitchenId}`,
+        afterJson: assignment,
+        result: "SUCCESS"
+      });
+      trace("audit.ok");
 
-    await writeAuditLog(prisma, {
-      actorId: actor.actorId,
-      actorType: actor.actorType,
-      actionType: "MENU_KITCHEN_ASSIGNMENT_UPSERT",
-      entityType: "menu_kitchen_assignment",
-      entityId: `${body.menuId}:${body.kitchenId}`,
-      afterJson: assignment,
-      result: "SUCCESS"
-    });
-
-    return ok({ assignment });
-  } catch (error) {
-    return fail(error);
-  }
+      return ok({ assignment });
+    } catch (error) {
+      traceError(trace, "error", error);
+      return fail(error);
+    }
+  });
 }
