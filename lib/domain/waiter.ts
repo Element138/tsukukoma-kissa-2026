@@ -1,4 +1,4 @@
-import { Prisma, PrismaClient } from "@prisma/client";
+﻿import { Prisma, PrismaClient } from "@prisma/client";
 import { assert, AppError } from "@/lib/errors";
 import { now } from "@/lib/time";
 import { recalcAndPersistOrderStatus } from "@/lib/domain/orders";
@@ -85,7 +85,7 @@ export async function serveDineInItem(
   return updatedOrder;
 }
 
-export async function serveTakeoutOrder(
+export async function serveReadyItemsForOrder(
   db: DbClient,
   params: {
     actorId: string;
@@ -105,14 +105,16 @@ export async function serveTakeoutOrder(
   });
 
   assert(order, 404, "ORDER_NOT_FOUND", "Order not found");
-  assert(order.fulfillmentType === "TAKEOUT", 400, "NOT_TAKEOUT", "Order is not takeout");
   assert(order.orderStatus !== "CANCELED", 409, "ORDER_CANCELED", "Order canceled");
   assert(order.items.length > 0, 409, "ORDER_EMPTY", "Order has no items");
 
-  const allReadyOrServed = order.items.every((i) => i.status === "READY" || i.status === "SERVED");
-  assert(allReadyOrServed, 409, "ORDER_NOT_READY", "All items must be ready before takeout serving");
-
   const readyItemIds = order.items.filter((i) => i.status === "READY").map((i) => i.id);
+  assert(readyItemIds.length > 0, 409, "ORDER_NOT_READY", "No ready items to serve");
+
+  if (order.fulfillmentType === "TAKEOUT") {
+    const allReadyOrServed = order.items.every((i) => i.status === "READY" || i.status === "SERVED");
+    assert(allReadyOrServed, 409, "ORDER_NOT_READY", "All items must be ready before takeout serving");
+  }
 
   for (const itemId of readyItemIds) {
     const changed = await db.orderItem.updateMany({
@@ -128,7 +130,7 @@ export async function serveTakeoutOrder(
     });
 
     if (changed.count !== 1) {
-      throw new AppError(409, "ITEM_CONFLICT", "Some takeout items changed before serving");
+      throw new AppError(409, "ITEM_CONFLICT", "Some items changed before serving");
     }
   }
 
@@ -152,7 +154,7 @@ export async function serveTakeoutOrder(
   await writeAuditLog(db, {
     actorId: params.actorId,
     actorType: "WAITER",
-    actionType: "TAKEOUT_SERVED",
+    actionType: order.fulfillmentType === "TAKEOUT" ? "TAKEOUT_SERVED" : "DINE_IN_BATCH_SERVED",
     entityType: "order",
     entityId: order.id,
     orderId: order.id,
@@ -165,4 +167,24 @@ export async function serveTakeoutOrder(
   });
 
   return updatedOrder;
+}
+
+export async function serveTakeoutOrder(
+  db: DbClient,
+  params: {
+    actorId: string;
+    orderId: string;
+  }
+) {
+  const order = await db.order.findUnique({
+    where: { id: params.orderId },
+    select: {
+      fulfillmentType: true
+    }
+  });
+
+  assert(order, 404, "ORDER_NOT_FOUND", "Order not found");
+  assert(order.fulfillmentType === "TAKEOUT", 400, "NOT_TAKEOUT", "Order is not takeout");
+
+  return serveReadyItemsForOrder(db, params);
 }

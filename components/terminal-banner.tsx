@@ -32,20 +32,26 @@ export function TerminalBanner(props: BannerProps) {
     router.push("/login?reason=LOGOUT_MANUAL");
   };
 
+  const showOfflineToast = () => {
+    if (props.offlineActors.length === 0) {
+      return;
+    }
+
+    notify({
+      id: "critical-offline",
+      level: "warning",
+      sticky: true,
+      message: `${JP.offlinePrefix}${props.offlineActors
+        .map((actor) => `${labelOf(ACTOR_TYPE_LABEL, actor.actorType)}${JP.quoteL}${actor.label}${JP.quoteR}`)
+        .join(JP.sep)}`
+    });
+  };
+
   useEffect(() => {
-    if (props.offlineActors.length > 0) {
-      notify({
-        id: "critical-offline",
-        level: "warning",
-        sticky: true,
-        message: `${JP.offlinePrefix}${props.offlineActors
-          .map((actor) => `${labelOf(ACTOR_TYPE_LABEL, actor.actorType)}${JP.quoteL}${actor.label}${JP.quoteR}`)
-          .join(JP.sep)}`
-      });
-    } else {
+    if (props.offlineActors.length === 0) {
       dismiss("critical-offline");
     }
-  }, [props.offlineActors, notify, dismiss]);
+  }, [props.offlineActors, dismiss]);
 
   return (
     <header className="terminal-banner">
@@ -55,7 +61,9 @@ export function TerminalBanner(props: BannerProps) {
       </div>
       <div className="banner-statuses">
         {props.offlineActors.length > 0 ? (
-          <span className="status warn">{JP.statusOffline}</span>
+          <button type="button" className="status warn banner-status-btn" onClick={showOfflineToast}>
+            {JP.statusOffline}
+          </button>
         ) : (
           <span className="status ok">{JP.statusOnline}</span>
         )}

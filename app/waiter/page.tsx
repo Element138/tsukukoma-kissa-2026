@@ -9,22 +9,24 @@ import { TerminalBanner } from "@/components/terminal-banner";
 import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
 import { useToast } from "@/components/toast";
 
-type DineInItem = {
+type DineInOrder = {
   id: string;
-  name: string;
-  orderId: string;
   orderNo: number;
   tableNo: number | null;
-  readyAt: string;
+  createdAt: string;
   specialNote: string | null;
+  readyItems: Array<{ id: string; name: string }>;
+  readyItemCount: number;
 };
 
 type TakeoutOrder = {
   id: string;
   orderNo: number;
+  createdAt: string;
   totalPriceJpy: number;
   itemCount: number;
   itemNames: string[];
+  readyItemCount: number;
 };
 
 function formatMss(totalSeconds: number) {
@@ -38,7 +40,7 @@ export default function WaiterPage() {
   const { loading, session } = useSession(["WAITER"]);
   const { notify } = useToast();
 
-  const [dineInItems, setDineInItems] = useState<DineInItem[]>([]);
+  const [dineInOrders, setDineInOrders] = useState<DineInOrder[]>([]);
   const [takeoutOrders, setTakeoutOrders] = useState<TakeoutOrder[]>([]);
   const [tickNow, setTickNow] = useState(Date.now());
   const reloadInFlightRef = useRef(false);
@@ -50,8 +52,8 @@ export default function WaiterPage() {
     reloadInFlightRef.current = true;
 
     try {
-      const data = await apiFetch<{ dineInItems: DineInItem[]; takeoutOrders: TakeoutOrder[] }>("/api/waiter/targets");
-      setDineInItems(data.dineInItems);
+      const data = await apiFetch<{ dineInOrders: DineInOrder[]; takeoutOrders: TakeoutOrder[] }>("/api/waiter/targets");
+      setDineInOrders(data.dineInOrders);
       setTakeoutOrders(data.takeoutOrders);
     } catch (e) {
       notify({ level: "error", message: e instanceof Error ? e.message : "配膳データの取得に失敗しました" });
@@ -83,17 +85,43 @@ export default function WaiterPage() {
     }
   });
 
-  const dineInRows = useMemo(
+  const dineInTiles = useMemo(
     () =>
-      dineInItems.map((item) => {
-        const readyMs = new Date(item.readyAt).getTime();
+      dineInOrders.map((order) => {
+        const createdMs = new Date(order.createdAt).getTime();
         return {
-          ...item,
-          readyElapsed: formatMss(Math.floor((tickNow - readyMs) / 1000))
+          ...order,
+          elapsedSinceOrdered: formatMss((tickNow - createdMs) / 1000)
         };
       }),
-    [dineInItems, tickNow]
+    [dineInOrders, tickNow]
   );
+
+  const takeoutTiles = useMemo(
+    () =>
+      takeoutOrders.map((order) => {
+        const createdMs = new Date(order.createdAt).getTime();
+        return {
+          ...order,
+          elapsedSinceOrdered: formatMss((tickNow - createdMs) / 1000)
+        };
+      }),
+    [takeoutOrders, tickNow]
+  );
+
+  const dineInTableReadySummary = useMemo(() => {
+    const summary = new Map<number, { orderIds: string[]; readyCount: number }>();
+    for (const order of dineInOrders) {
+      if (order.tableNo == null) {
+        continue;
+      }
+      const current = summary.get(order.tableNo) ?? { orderIds: [], readyCount: 0 };
+      current.orderIds.push(order.id);
+      current.readyCount += order.readyItems.length;
+      summary.set(order.tableNo, current);
+    }
+    return summary;
+  }, [dineInOrders]);
 
   const serveItem = async (orderItemId: string) => {
     try {
@@ -114,7 +142,27 @@ export default function WaiterPage() {
         method: "POST",
         body: JSON.stringify({ orderId })
       });
-      notify({ level: "success", message: "持ち帰り注文を提供済みにしました" });
+      notify({ level: "success", message: "まとめて提供済みに更新しました" });
+      await reload();
+    } catch (e) {
+      notify({ level: "error", message: e instanceof Error ? e.message : "提供処理に失敗しました" });
+    }
+  };
+
+  const serveTable = async (order: DineInOrder) => {
+    const orderIds =
+      order.tableNo != null
+        ? dineInTableReadySummary.get(order.tableNo)?.orderIds ?? [order.id]
+        : [order.id];
+
+    try {
+      for (const orderId of orderIds) {
+        await apiFetch("/api/waiter/serve-order", {
+          method: "POST",
+          body: JSON.stringify({ orderId })
+        });
+      }
+      notify({ level: "success", message: "テーブル分をまとめて提供済みに更新しました" });
       await reload();
     } catch (e) {
       notify({ level: "error", message: e instanceof Error ? e.message : "提供処理に失敗しました" });
@@ -141,57 +189,77 @@ export default function WaiterPage() {
   return (
     <>
       <TerminalBanner actorId={session.actor.actorId} actorType={session.actor.actorType} actorLabel={session.actor.label} offlineActors={session.offlineActors} />
-      <main className="grid two">
+      <main className="grid">
         <Card>
-          <SectionTitle>店内配膳待ち</SectionTitle>
-          <div className="row wrap" style={{ marginBottom: 10 }}>
-            <button type="button" className="ghost-btn" onClick={undo}>
-              取り消し
-            </button>
-            <Link href="/order-book" className="btn-link ghost-btn">
-              オーダーブック
-            </Link>
+          <div className="row between wrap" style={{ marginBottom: 10 }}>
+            <SectionTitle>配膳ビュー</SectionTitle>
+            <div className="row wrap">
+              <button type="button" className="ghost-btn" onClick={undo}>
+                取り消し
+              </button>
+              <Link href="/order-book" className="btn-link ghost-btn">
+                オーダーブック
+              </Link>
+            </div>
           </div>
 
-          <div className="list">
-            {dineInRows.length === 0 && <div className="muted">配膳待ちはありません</div>}
-            {dineInRows.map((item) => (
-              <div key={item.id} className="list-item">
-                <div className="row between wrap">
-                  <div>
-                    <strong>{item.name}</strong>
-                    <div className="muted">テーブル {item.tableNo ?? "-"} / 注文 #{item.orderNo}</div>
-                    <div className="muted">準備完了から {item.readyElapsed}</div>
-                  </div>
-                  <button type="button" onClick={() => serveItem(item.id)}>
-                    提供済みにする
-                  </button>
-                </div>
-                {item.specialNote && <div className="notice" style={{ marginTop: 8 }}>{item.specialNote}</div>}
-              </div>
-            ))}
-          </div>
-        </Card>
+          <h3 style={{ margin: "6px 0 10px" }}>店内</h3>
+          <div className="waiter-tile-grid">
+            {dineInTiles.length === 0 && <div className="muted">配膳待ちはありません</div>}
+            {dineInTiles.map((order) => {
+              const tableReadyCount =
+                order.tableNo != null
+                  ? dineInTableReadySummary.get(order.tableNo)?.readyCount ?? order.readyItems.length
+                  : order.readyItems.length;
 
-        <Card>
-          <SectionTitle>持ち帰り配膳待ち</SectionTitle>
-          <div className="list">
-            {takeoutOrders.length === 0 && <div className="muted">配膳待ちの持ち帰り注文はありません</div>}
-            {takeoutOrders.map((order) => (
-              <div key={order.id} className="list-item">
-                <div className="row between wrap">
-                  <div>
-                    <strong>注文 #{order.orderNo}</strong>
-                    <div className="muted">{order.itemCount} 品</div>
+              return (
+                <article key={order.id} className="waiter-tile">
+                  <div className="row between wrap">
+                    <strong>Table #{order.tableNo ?? "-"}</strong>
+                    <span className="badge">注文 #{order.orderNo}</span>
                   </div>
-                  <button type="button" onClick={() => serveOrder(order.id)}>
-                    まとめて提供済みにする
-                  </button>
+                  <div className="muted">注文から {order.elapsedSinceOrdered}</div>
+
+                  <div className="list" style={{ marginTop: 8 }}>
+                    {order.readyItems.map((item) => (
+                      <div key={item.id} className="list-item row between wrap" style={{ padding: "8px 10px" }}>
+                        <span>{item.name}</span>
+                        <button type="button" className="ghost-btn" onClick={() => serveItem(item.id)}>
+                          個別提供
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {tableReadyCount > 1 && (
+                    <button type="button" style={{ marginTop: 8 }} onClick={() => serveTable(order)}>
+                      テーブル分をまとめて提供済みにする
+                    </button>
+                  )}
+
+                  {order.specialNote && <div className="notice" style={{ marginTop: 8 }}>{order.specialNote}</div>}
+                </article>
+              );
+            })}
+          </div>
+
+          <h3 style={{ margin: "14px 0 10px" }}>持ち帰り</h3>
+          <div className="waiter-tile-grid">
+            {takeoutTiles.length === 0 && <div className="muted">配膳待ちの持ち帰り注文はありません</div>}
+            {takeoutTiles.map((order) => (
+              <article key={order.id} className="waiter-tile">
+                <div className="row between wrap">
+                  <strong>Order #{order.orderNo}</strong>
+                  <span className="badge">{order.itemCount} 品</span>
                 </div>
+                <div className="muted">注文から {order.elapsedSinceOrdered}</div>
                 <div className="muted" style={{ marginTop: 8 }}>
                   {order.itemNames.join(" / ")}
                 </div>
-              </div>
+                <button type="button" style={{ marginTop: 10 }} onClick={() => serveOrder(order.id)}>
+                  まとめて提供済みにする
+                </button>
+              </article>
             ))}
           </div>
         </Card>

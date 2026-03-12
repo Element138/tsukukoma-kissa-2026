@@ -38,11 +38,60 @@ type OrderRow = {
   }>;
 };
 
+type BundledItem = {
+  key: string;
+  name: string;
+  status: string;
+  kitchenName?: string;
+  count: number;
+};
+
 function formatMss(seconds: number) {
   const sec = Math.max(0, Math.floor(seconds));
   const mm = Math.floor(sec / 60);
   const ss = sec % 60;
   return `${mm}:${String(ss).padStart(2, "0")}`;
+}
+
+function orderStatusClass(orderStatus: string) {
+  switch (orderStatus) {
+    case "PENDING":
+      return "order-status-pending";
+    case "PREPARING":
+      return "order-status-preparing";
+    case "AWAITING_SERVING":
+      return "order-status-awaiting";
+    case "COMPLETED":
+      return "order-status-completed";
+    case "CANCELED":
+      return "order-status-canceled";
+    default:
+      return "";
+  }
+}
+
+function bundleItems(items: OrderRow["items"]): BundledItem[] {
+  const bucket = new Map<string, BundledItem>();
+
+  for (const item of items) {
+    const kitchenName = item.kitchenName ?? "";
+    const key = `${item.name}::${item.status}::${kitchenName}`;
+    const existing = bucket.get(key);
+    if (existing) {
+      existing.count += 1;
+      continue;
+    }
+
+    bucket.set(key, {
+      key,
+      name: item.name,
+      status: item.status,
+      kitchenName: item.kitchenName,
+      count: 1
+    });
+  }
+
+  return [...bucket.values()];
 }
 
 export default function OrderBookPage() {
@@ -137,6 +186,7 @@ export default function OrderBookPage() {
 
       return {
         ...order,
+        bundledItems: bundleItems(order.items),
         elapsedLabel: order.orderStatus === "COMPLETED" ? `提供完了まで ${formatMss(elapsedSec)}` : `注文から ${formatMss(elapsedSec)}`
       };
     });
@@ -200,17 +250,19 @@ export default function OrderBookPage() {
                   <div className="muted">{order.elapsedLabel}</div>
                 </div>
                 <div className="row wrap">
-                  <span className="badge">{labelOf(ORDER_STATUS_LABEL, order.orderStatus)}</span>
+                  <span className={`badge order-status-badge ${orderStatusClass(order.orderStatus)}`}>{labelOf(ORDER_STATUS_LABEL, order.orderStatus)}</span>
                   <span className="badge">{labelOf(PAYMENT_STATUS_LABEL, order.paymentStatus)}</span>
                   <strong>{fmtJpy(order.totalPriceJpy)}</strong>
                 </div>
               </div>
 
+              {order.specialNote && <div className="notice" style={{ marginTop: 8 }}>備考: {order.specialNote}</div>}
+
               <div className="list" style={{ marginTop: 10 }}>
-                {order.items.map((item) => (
-                  <div key={item.id} className="list-item row between wrap">
+                {order.bundledItems.map((item) => (
+                  <div key={item.key} className="list-item row between wrap">
                     <div>
-                      {item.name}
+                      <strong>{item.count}x</strong> {item.name}
                       <span className={`badge ${item.status === "READY" ? "ready" : item.status === "SERVED" ? "served" : "queued"}`} style={{ marginLeft: 8 }}>
                         {labelOf(ORDER_ITEM_STATUS_LABEL, item.status)}
                       </span>

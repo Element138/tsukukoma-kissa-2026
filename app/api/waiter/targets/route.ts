@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+﻿import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession } from "@/lib/server/auth";
 import { fail, ok } from "@/lib/response";
@@ -7,25 +7,34 @@ export async function GET(req: NextRequest) {
   try {
     await requireSession(req, { actorTypes: ["WAITER", "ADMIN"] });
 
-    const dineInItems = await prisma.orderItem.findMany({
+    const dineInOrdersRaw = await prisma.order.findMany({
       where: {
-        status: "READY",
-        order: {
-          fulfillmentType: "DINE_IN",
-          orderStatus: { notIn: ["COMPLETED", "CANCELED"] }
-        }
-      },
-      include: {
-        order: {
-          select: {
-            id: true,
-            orderNo: true,
-            tableNo: true,
-            specialNote: true
+        fulfillmentType: "DINE_IN",
+        orderStatus: { notIn: ["COMPLETED", "CANCELED"] },
+        items: {
+          some: {
+            status: "READY"
           }
         }
       },
-      orderBy: [{ readyAt: "asc" }, { order: { tableNo: "asc" } }]
+      select: {
+        id: true,
+        orderNo: true,
+        tableNo: true,
+        createdAt: true,
+        specialNote: true,
+        items: {
+          where: {
+            status: "READY"
+          },
+          select: {
+            id: true,
+            itemNameSnapshot: true
+          },
+          orderBy: [{ id: "asc" }]
+        }
+      },
+      orderBy: [{ tableNo: "asc" }, { createdAt: "asc" }]
     });
 
     const takeoutOrdersRaw = await prisma.order.findMany({
@@ -35,7 +44,11 @@ export async function GET(req: NextRequest) {
           in: ["AWAITING_SERVING", "PREPARING"]
         }
       },
-      include: {
+      select: {
+        id: true,
+        orderNo: true,
+        createdAt: true,
+        totalPriceJpy: true,
         items: {
           select: {
             id: true,
@@ -58,20 +71,25 @@ export async function GET(req: NextRequest) {
       .map((order) => ({
         id: order.id,
         orderNo: order.orderNo,
+        createdAt: order.createdAt,
         totalPriceJpy: order.totalPriceJpy,
         itemCount: order.items.length,
-        itemNames: order.items.map((i) => i.itemNameSnapshot)
+        itemNames: order.items.map((i) => i.itemNameSnapshot),
+        readyItemCount: order.items.filter((i) => i.status === "READY").length
       }));
 
     return ok({
-      dineInItems: dineInItems.map((i) => ({
-        id: i.id,
-        name: i.itemNameSnapshot,
-        orderId: i.orderId,
-        orderNo: i.order.orderNo,
-        tableNo: i.order.tableNo,
-        readyAt: i.readyAt,
-        specialNote: i.order.specialNote
+      dineInOrders: dineInOrdersRaw.map((order) => ({
+        id: order.id,
+        orderNo: order.orderNo,
+        tableNo: order.tableNo,
+        createdAt: order.createdAt,
+        specialNote: order.specialNote,
+        readyItems: order.items.map((item) => ({
+          id: item.id,
+          name: item.itemNameSnapshot
+        })),
+        readyItemCount: order.items.length
       })),
       takeoutOrders
     });
@@ -79,5 +97,3 @@ export async function GET(req: NextRequest) {
     return fail(error);
   }
 }
-
-

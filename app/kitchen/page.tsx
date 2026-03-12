@@ -328,7 +328,6 @@ export default function KitchenPage() {
               <div key={menu.id} className="list-item">
                 <div className="row between wrap">
                   <strong>{menu.name}</strong>
-                  <span className={`badge availability-${menu.availability.toLowerCase()}`}>{labelOf(AVAILABILITY_LABEL, menu.availability)}</span>
                 </div>
                 <div className="menu-status-grid" style={{ marginTop: 8 }}>
                   {AVAILABILITY_OPTIONS.map((status) => {
@@ -364,3 +363,4 @@ export default function KitchenPage() {
     </>
   );
 }
+

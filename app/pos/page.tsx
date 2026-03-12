@@ -263,7 +263,6 @@ export default function PosPage() {
                 <div key={menu.id} className={`menu-tile ${qty > 0 ? "selected" : ""} ${unavailable ? "unavailable" : ""}`}>
                   <div className="row between">
                     <strong>{menu.name}</strong>
-                    <span className={`badge availability-${menu.availability.toLowerCase()}`}>{labelOf(AVAILABILITY_LABEL, menu.availability)}</span>
                   </div>
                   <div className="menu-tile-footer">
                     <span className="menu-tile-stat">{fmtJpy(menu.priceJpy)}</span>
@@ -415,3 +414,5 @@ export default function PosPage() {
     </>
   );
 }
+
+
