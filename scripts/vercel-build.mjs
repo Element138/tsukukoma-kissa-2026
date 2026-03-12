@@ -68,7 +68,19 @@ const env = {
 
 console.log("[vercel-build] Schema sync mode: prisma db push --accept-data-loss (destructive changes allowed).");
 run(NPX, ["prisma", "generate"], env);
-run(NPX, ["prisma", "db", "push", "--accept-data-loss", "--skip-generate"], env);
+let pushStatus = run(NPX, ["prisma", "db", "push", "--accept-data-loss", "--skip-generate"], env, { allowFailure: true });
+if (pushStatus !== 0) {
+  console.warn("[vercel-build] prisma db push failed. Retrying with --force-reset (all DB data will be dropped).");
+  pushStatus = run(
+    NPX,
+    ["prisma", "db", "push", "--force-reset", "--accept-data-loss", "--skip-generate"],
+    env,
+    { allowFailure: true }
+  );
+}
+if (pushStatus !== 0) {
+  process.exit(pushStatus);
+}
 
 const postDeployStatus = run(
   NPX,
