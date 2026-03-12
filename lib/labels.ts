@@ -1,26 +1,26 @@
 ﻿export const ACTOR_TYPE_LABEL: Record<string, string> = {
   POS: "POS",
   KITCHEN: "キッチン",
-  WAITER: "配膣",
+  WAITER: "配膳",
   MENU_DISPLAY: "メニュー表示",
-  ADMIN: "管理"
+  ADMIN: "管理",
 };
 
 export const AVAILABILITY_LABEL: Record<string, string> = {
   AVAILABLE: "販売中",
   PAUSED: "一時停止",
-  SOLD_OUT: "売り切れ"
+  SOLD_OUT: "売り切れ",
 };
 
 export const FULFILLMENT_LABEL: Record<string, string> = {
   DINE_IN: "店内",
-  TAKEOUT: "持ち帰り"
+  TAKEOUT: "持ち帰り",
 };
 
 export const PAYMENT_METHOD_LABEL: Record<string, string> = {
   CASH: "現金",
   SQUARE: "Square",
-  PAYMENT_SKIPPED: "決済スキップ"
+  PAYMENT_SKIPPED: "決済スキップ",
 };
 
 export const PAYMENT_STATUS_LABEL: Record<string, string> = {
@@ -28,7 +28,7 @@ export const PAYMENT_STATUS_LABEL: Record<string, string> = {
   FAILED: "失敗",
   AWAITING: "確認待ち",
   CANCELED: "取消",
-  SKIPPED: "スキップ"
+  SKIPPED: "スキップ",
 };
 
 export const ORDER_STATUS_LABEL: Record<string, string> = {
@@ -36,26 +36,26 @@ export const ORDER_STATUS_LABEL: Record<string, string> = {
   PREPARING: "調理中",
   AWAITING_SERVING: "提供待ち",
   COMPLETED: "完了",
-  CANCELED: "取消"
+  CANCELED: "取消",
 };
 
 export const ORDER_ITEM_STATUS_LABEL: Record<string, string> = {
   QUEUED: "待ち",
   READY: "提供可",
   SERVED: "提供済",
-  CANCELED: "取消"
+  CANCELED: "取消",
 };
 
 export const AUDIT_RESULT_LABEL: Record<string, string> = {
   SUCCESS: "成功",
-  FAILURE: "失敗"
+  FAILURE: "失敗",
 };
 
 export const PAYMENT_SKIP_REASON_LABEL: Record<string, string> = {
   TEST: "テスト",
   DEVICE_ERROR: "端末エラー",
   NETWORK_ERROR: "通信エラー",
-  OTHER: "その他"
+  OTHER: "その他",
 };
 
 export const SESSION_FAILURE_LABEL: Record<string, string> = {
@@ -66,10 +66,14 @@ export const SESSION_FAILURE_LABEL: Record<string, string> = {
   ACTOR_INACTIVE: "アカウントが無効化されています",
   FORBIDDEN: "この画面を利用する権限がありません",
   UNAUTHORIZED: "認証が必要です",
-  LOGOUT_MANUAL: "ログアウトしました"
+  LOGOUT_MANUAL: "ログアウトしました",
 };
 
-export function labelOf(map: Record<string, string>, value: string | null | undefined, fallback = "-") {
+export function labelOf(
+  map: Record<string, string>,
+  value: string | null | undefined,
+  fallback = "-",
+) {
   if (!value) {
     return fallback;
   }

@@ -26,7 +26,7 @@ export default function HomePage() {
             <button className="ghost-btn">{"キッチン"}</button>
           </Link>
           <Link href="/waiter">
-            <button className="ghost-btn">{"配膣"}</button>
+            <button className="ghost-btn">{"配膳"}</button>
           </Link>
           <Link href="/menu-display">
             <button className="ghost-btn">{"メニュー表示"}</button>
