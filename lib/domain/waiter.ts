@@ -1,5 +1,5 @@
 import { Prisma, PrismaClient } from "@prisma/client";
-import { assert } from "@/lib/errors";
+import { assert, AppError } from "@/lib/errors";
 import { now } from "@/lib/time";
 import { recalcAndPersistOrderStatus } from "@/lib/domain/orders";
 import { saveUndoOperation } from "@/lib/domain/undo";
@@ -34,14 +34,21 @@ export async function serveDineInItem(
   assert(item.status === "READY", 409, "ITEM_NOT_READY", "Only ready item can be served");
   assert(item.order.orderStatus !== "CANCELED", 409, "ORDER_CANCELED", "Order canceled");
 
-  await db.orderItem.update({
-    where: { id: params.orderItemId },
+  const changed = await db.orderItem.updateMany({
+    where: {
+      id: params.orderItemId,
+      status: "READY"
+    },
     data: {
       status: "SERVED",
       servedAt: now(),
       servedByActorId: params.actorId
     }
   });
+
+  if (changed.count !== 1) {
+    throw new AppError(409, "ITEM_CONFLICT", "Item state changed before serving");
+  }
 
   const updatedOrder = await recalcAndPersistOrderStatus(db, item.orderId, true);
 
@@ -53,7 +60,8 @@ export async function serveDineInItem(
     orderId: item.orderId,
     expectedOrderVersion: updatedOrder.lastMutationVersion,
     payload: {
-      orderItemId: params.orderItemId,
+      itemIds: [params.orderItemId],
+      orderIds: [item.orderId],
       from: "READY",
       to: "SERVED"
     }
@@ -106,10 +114,11 @@ export async function serveTakeoutOrder(
 
   const readyItemIds = order.items.filter((i) => i.status === "READY").map((i) => i.id);
 
-  if (readyItemIds.length > 0) {
-    await db.orderItem.updateMany({
+  for (const itemId of readyItemIds) {
+    const changed = await db.orderItem.updateMany({
       where: {
-        id: { in: readyItemIds }
+        id: itemId,
+        status: "READY"
       },
       data: {
         status: "SERVED",
@@ -117,6 +126,10 @@ export async function serveTakeoutOrder(
         servedByActorId: params.actorId
       }
     });
+
+    if (changed.count !== 1) {
+      throw new AppError(409, "ITEM_CONFLICT", "Some takeout items changed before serving");
+    }
   }
 
   const updatedOrder = await recalcAndPersistOrderStatus(db, order.id, true);
@@ -129,7 +142,10 @@ export async function serveTakeoutOrder(
     orderId: order.id,
     expectedOrderVersion: updatedOrder.lastMutationVersion,
     payload: {
-      itemIds: readyItemIds
+      itemIds: readyItemIds,
+      orderIds: [order.id],
+      from: "READY",
+      to: "SERVED"
     }
   });
 
@@ -150,5 +166,3 @@ export async function serveTakeoutOrder(
 
   return updatedOrder;
 }
-
-

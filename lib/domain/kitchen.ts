@@ -8,6 +8,33 @@ import { reassignQueuedItemsFromKitchen, updateMenusAvailabilityByKitchenCoverag
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
 
+type ItemReadyBatchResult = {
+  menuId: string;
+  markedReadyCount: number;
+  affectedOrderCount: number;
+  itemIds: string[];
+  orderIds: string[];
+};
+
+function asReadyBatchResult(value: unknown): ItemReadyBatchResult | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const row = value as Record<string, unknown>;
+  if (typeof row.menuId !== "string") {
+    return null;
+  }
+
+  return {
+    menuId: row.menuId,
+    markedReadyCount: typeof row.markedReadyCount === "number" ? row.markedReadyCount : 0,
+    affectedOrderCount: typeof row.affectedOrderCount === "number" ? row.affectedOrderCount : 0,
+    itemIds: Array.isArray(row.itemIds) ? row.itemIds.filter((x): x is string => typeof x === "string") : [],
+    orderIds: Array.isArray(row.orderIds) ? row.orderIds.filter((x): x is string => typeof x === "string") : []
+  };
+}
+
 export async function markKitchenItemReady(
   db: DbClient,
   params: {
@@ -35,13 +62,21 @@ export async function markKitchenItemReady(
   assert(item.kitchenId === params.kitchenId, 403, "KITCHEN_MISMATCH", "Kitchen can operate only own kitchen items");
   assert(item.order.orderStatus !== "CANCELED", 409, "ORDER_CANCELED", "Order canceled");
 
-  await db.orderItem.update({
-    where: { id: params.itemId },
+  const updatedCount = await db.orderItem.updateMany({
+    where: {
+      id: params.itemId,
+      kitchenId: params.kitchenId,
+      status: "QUEUED"
+    },
     data: {
       status: "READY",
       readyAt: now()
     }
   });
+
+  if (updatedCount.count !== 1) {
+    throw new AppError(409, "ITEM_CONFLICT", "Item state changed before ready update");
+  }
 
   const updatedOrder = await recalcAndPersistOrderStatus(db, item.orderId, true);
 
@@ -53,7 +88,8 @@ export async function markKitchenItemReady(
     orderId: item.orderId,
     expectedOrderVersion: updatedOrder.lastMutationVersion,
     payload: {
-      orderItemId: params.itemId,
+      itemIds: [params.itemId],
+      orderIds: [item.orderId],
       from: "QUEUED",
       to: "READY"
     }
@@ -80,6 +116,137 @@ export async function markKitchenItemReady(
     orderStatus: updatedOrder.orderStatus,
     orderVersion: updatedOrder.lastMutationVersion
   };
+}
+
+export async function markKitchenMenuItemsReady(
+  db: DbClient,
+  params: {
+    actorId: string;
+    kitchenId: string;
+    menuId: string;
+    quantity: number;
+    idempotencyKey: string;
+  }
+): Promise<ItemReadyBatchResult> {
+  const duplicated = await db.auditLog.findFirst({
+    where: {
+      actorId: params.actorId,
+      actionType: "ITEM_READY_BATCH",
+      entityType: "menu",
+      entityId: params.menuId,
+      correlationId: params.idempotencyKey,
+      result: "SUCCESS"
+    },
+    orderBy: { timestamp: "desc" },
+    select: {
+      afterJson: true
+    }
+  });
+
+  const duplicatedResult = asReadyBatchResult(duplicated?.afterJson ?? null);
+  if (duplicatedResult) {
+    return duplicatedResult;
+  }
+
+  const queued = await db.orderItem.findMany({
+    where: {
+      menuId: params.menuId,
+      kitchenId: params.kitchenId,
+      status: "QUEUED",
+      order: {
+        confirmedAt: { not: null },
+        orderStatus: { notIn: ["COMPLETED", "CANCELED"] }
+      }
+    },
+    include: {
+      order: {
+        select: {
+          id: true,
+          orderNo: true
+        }
+      }
+    },
+    orderBy: [{ order: { confirmedAt: "asc" } }, { kitchenAssignedAt: "asc" }, { id: "asc" }]
+  });
+
+  if (queued.length === 0) {
+    return {
+      menuId: params.menuId,
+      markedReadyCount: 0,
+      affectedOrderCount: 0,
+      itemIds: [],
+      orderIds: []
+    };
+  }
+
+  const targets = queued.slice(0, Math.min(params.quantity, queued.length));
+
+  for (const target of targets) {
+    const changed = await db.orderItem.updateMany({
+      where: {
+        id: target.id,
+        kitchenId: params.kitchenId,
+        menuId: params.menuId,
+        status: "QUEUED"
+      },
+      data: {
+        status: "READY",
+        readyAt: now()
+      }
+    });
+
+    if (changed.count !== 1) {
+      throw new AppError(409, "ITEM_CONFLICT", "Some items changed before ready update");
+    }
+  }
+
+  const orderIds = [...new Set(targets.map((item) => item.orderId))];
+
+  const orderVersions = new Map<string, number>();
+  for (const orderId of orderIds) {
+    const updated = await recalcAndPersistOrderStatus(db, orderId, true);
+    orderVersions.set(orderId, updated.lastMutationVersion);
+  }
+
+  const result: ItemReadyBatchResult = {
+    menuId: params.menuId,
+    markedReadyCount: targets.length,
+    affectedOrderCount: orderIds.length,
+    itemIds: targets.map((target) => target.id),
+    orderIds
+  };
+
+  await saveUndoOperation(db, {
+    actorId: params.actorId,
+    operationType: "ITEM_READY_BATCH",
+    targetEntityType: "order_item_batch",
+    targetEntityId: `${params.menuId}:${params.idempotencyKey}`,
+    orderId: orderIds[0] ?? targets[0]!.orderId,
+    expectedOrderVersion: orderVersions.get(orderIds[0] ?? targets[0]!.orderId) ?? 0,
+    payload: {
+      itemIds: result.itemIds,
+      orderIds: result.orderIds,
+      menuId: params.menuId,
+      quantity: targets.length,
+      idempotencyKey: params.idempotencyKey,
+      from: "QUEUED",
+      to: "READY"
+    }
+  });
+
+  await writeAuditLog(db, {
+    actorId: params.actorId,
+    actorType: "KITCHEN",
+    actionType: "ITEM_READY_BATCH",
+    entityType: "menu",
+    entityId: params.menuId,
+    orderId: orderIds[0] ?? null,
+    correlationId: params.idempotencyKey,
+    afterJson: result,
+    result: "SUCCESS"
+  });
+
+  return result;
 }
 
 export async function toggleKitchenState(

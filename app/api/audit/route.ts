@@ -49,16 +49,44 @@ export async function GET(req: NextRequest) {
         ...(query.result ? { result: query.result as any } : {}),
         ...(orderId ? { orderId } : {})
       },
+      include: {
+        actor: {
+          select: {
+            label: true
+          }
+        }
+      },
       orderBy: {
         timestamp: "desc"
       },
       take: Math.min(Number(query.take ?? "500"), 1500)
     });
 
-    return ok({ logs });
+    const actorEntityIds = [...new Set(logs.filter((log) => log.entityType === "actor").map((log) => log.entityId))];
+    const actorEntities =
+      actorEntityIds.length === 0
+        ? []
+        : await prisma.actor.findMany({
+            where: {
+              id: {
+                in: actorEntityIds
+              }
+            },
+            select: {
+              id: true,
+              label: true
+            }
+          });
+    const actorEntityMap = new Map(actorEntities.map((actor) => [actor.id, actor.label]));
+
+    return ok({
+      logs: logs.map((log) => ({
+        ...log,
+        actorLabel: log.actor?.label ?? null,
+        entityLabel: log.entityType === "actor" ? actorEntityMap.get(log.entityId) ?? null : null
+      }))
+    });
   } catch (error) {
     return fail(error);
   }
 }
-
-

@@ -8,11 +8,18 @@ type DbClient = PrismaClient | Prisma.TransactionClient;
 
 export type UndoPayload = Record<string, unknown>;
 
+function asStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((row): row is string => typeof row === "string" && row.length > 0);
+}
+
 export async function saveUndoOperation(
   db: DbClient,
   params: {
     actorId: string;
-    operationType: "ITEM_READY" | "ITEM_SERVED" | "TAKEOUT_ORDER_SERVED";
+    operationType: "ITEM_READY" | "ITEM_READY_BATCH" | "ITEM_SERVED" | "TAKEOUT_ORDER_SERVED";
     targetEntityType: string;
     targetEntityId: string;
     orderId: string;
@@ -20,18 +27,9 @@ export async function saveUndoOperation(
     payload: UndoPayload;
   }
 ) {
-  await db.undoOperation.upsert({
-    where: { actorId: params.actorId },
-    create: {
+  await db.undoOperation.create({
+    data: {
       actorId: params.actorId,
-      operationType: params.operationType,
-      targetEntityType: params.targetEntityType,
-      targetEntityId: params.targetEntityId,
-      orderId: params.orderId,
-      expectedOrderVersion: params.expectedOrderVersion,
-      payload: params.payload as Prisma.InputJsonValue
-    },
-    update: {
       operationType: params.operationType,
       targetEntityType: params.targetEntityType,
       targetEntityId: params.targetEntityId,
@@ -41,6 +39,23 @@ export async function saveUndoOperation(
       createdAt: now()
     }
   });
+
+  const stale = await db.undoOperation.findMany({
+    where: { actorId: params.actorId },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    skip: 3,
+    select: { id: true }
+  });
+
+  if (stale.length > 0) {
+    await db.undoOperation.deleteMany({
+      where: {
+        id: {
+          in: stale.map((row) => row.id)
+        }
+      }
+    });
+  }
 }
 
 export async function executeUndo(db: DbClient, params: { actorId: string; actorType: ActorType }) {
@@ -51,128 +66,158 @@ export async function executeUndo(db: DbClient, params: { actorId: string; actor
     "Undo is allowed only for Kitchen and Waiter"
   );
 
-  const undo = await db.undoOperation.findUnique({
-    where: { actorId: params.actorId }
+  const undo = await db.undoOperation.findFirst({
+    where: { actorId: params.actorId },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }]
   });
 
   assert(undo, 404, "UNDO_NOT_FOUND", "No undo target available");
 
-  const order = await db.order.findUnique({
-    where: { id: undo.orderId },
-    include: {
-      items: {
-        select: {
-          id: true,
-          status: true
-        }
-      }
-    }
-  });
-
-  assert(order, 404, "ORDER_NOT_FOUND", "Order not found");
-  assert(
-    order.lastMutationVersion === undo.expectedOrderVersion,
-    409,
-    "UNDO_CONFLICT",
-    "Undo failed because order was updated by another action"
-  );
+  let targetItemIds: string[] = [];
+  let expectedCurrentStatus: "READY" | "SERVED";
+  let revertData: Prisma.OrderItemUpdateManyMutationInput;
 
   if (undo.operationType === "ITEM_READY") {
-    const changed = await db.orderItem.updateMany({
-      where: { id: undo.targetEntityId, status: "READY" },
-      data: {
-        status: "QUEUED",
-        readyAt: null
-      }
-    });
-    if (changed.count !== 1) {
-      throw new AppError(409, "UNDO_TARGET_CHANGED", "Undo target item was changed");
-    }
+    targetItemIds = [undo.targetEntityId];
+    expectedCurrentStatus = "READY";
+    revertData = {
+      status: "QUEUED",
+      readyAt: null
+    };
+  } else if (undo.operationType === "ITEM_READY_BATCH") {
+    targetItemIds = asStringArray((undo.payload as Record<string, unknown>).itemIds);
+    expectedCurrentStatus = "READY";
+    revertData = {
+      status: "QUEUED",
+      readyAt: null
+    };
   } else if (undo.operationType === "ITEM_SERVED") {
-    const changed = await db.orderItem.updateMany({
-      where: { id: undo.targetEntityId, status: "SERVED" },
-      data: {
-        status: "READY",
-        servedAt: null,
-        servedByActorId: null
-      }
-    });
-    if (changed.count !== 1) {
-      throw new AppError(409, "UNDO_TARGET_CHANGED", "Undo target item was changed");
-    }
+    targetItemIds = [undo.targetEntityId];
+    expectedCurrentStatus = "SERVED";
+    revertData = {
+      status: "READY",
+      servedAt: null
+    };
   } else if (undo.operationType === "TAKEOUT_ORDER_SERVED") {
-    const itemIds = Array.isArray((undo.payload as Record<string, unknown>).itemIds)
-      ? (((undo.payload as Record<string, unknown>).itemIds as string[]) ?? [])
-      : [];
-
-    if (itemIds.length > 0) {
-      await db.orderItem.updateMany({
-        where: {
-          id: { in: itemIds },
-          status: "SERVED"
-        },
-        data: {
-          status: "READY",
-          servedAt: null,
-          servedByActorId: null
-        }
-      });
-    }
+    targetItemIds = asStringArray((undo.payload as Record<string, unknown>).itemIds);
+    expectedCurrentStatus = "SERVED";
+    revertData = {
+      status: "READY",
+      servedAt: null
+    };
   } else {
     throw new AppError(400, "UNDO_UNSUPPORTED", `Unsupported undo operation: ${undo.operationType}`);
   }
 
-  const itemsAfter = await db.orderItem.findMany({
-    where: { orderId: order.id },
-    select: { status: true }
-  });
+  assert(targetItemIds.length > 0, 409, "UNDO_TARGET_MISSING", "Undo target item list is empty");
 
-  const nextStatus = deriveOrderStatus({
-    paymentStatus: order.paymentStatus,
-    fulfillmentType: order.fulfillmentType,
-    items: itemsAfter,
-    canceledAt: order.canceledAt,
-    confirmedAt: order.confirmedAt
-  });
-
-  const updatedOrder = await db.order.update({
-    where: { id: order.id },
-    data: {
-      orderStatus: nextStatus,
-      lastMutationVersion: {
-        increment: 1
+  const targetItems = await db.orderItem.findMany({
+    where: {
+      id: {
+        in: targetItemIds
       }
     },
     select: {
       id: true,
-      orderNo: true,
-      lastMutationVersion: true,
-      orderStatus: true
+      status: true,
+      orderId: true
     }
   });
 
-  await db.undoOperation.delete({ where: { actorId: params.actorId } });
+  if (targetItems.length !== targetItemIds.length) {
+    throw new AppError(409, "UNDO_TARGET_CHANGED", "Undo target item was changed");
+  }
+
+  const orderIds = [...new Set(targetItems.map((item) => item.orderId))];
+
+  for (const itemId of targetItemIds) {
+    const changed = await db.orderItem.updateMany({
+      where: {
+        id: itemId,
+        status: expectedCurrentStatus
+      },
+      data: revertData
+    });
+
+    if (changed.count !== 1) {
+      throw new AppError(409, "UNDO_CONFLICT", "Undo failed because target item state changed");
+    }
+  }
+
+  const updatedOrders: Array<{ id: string; orderNo: number; orderStatus: string; orderVersion: number }> = [];
+
+  for (const orderId of orderIds) {
+    const order = await db.order.findUnique({
+      where: { id: orderId },
+      include: {
+        items: {
+          select: {
+            status: true
+          }
+        }
+      }
+    });
+
+    assert(order, 404, "ORDER_NOT_FOUND", "Order not found");
+
+    const nextStatus = deriveOrderStatus({
+      paymentStatus: order.paymentStatus,
+      fulfillmentType: order.fulfillmentType,
+      items: order.items,
+      canceledAt: order.canceledAt,
+      confirmedAt: order.confirmedAt
+    });
+
+    const updated = await db.order.update({
+      where: { id: order.id },
+      data: {
+        orderStatus: nextStatus,
+        lastMutationVersion: {
+          increment: 1
+        }
+      },
+      select: {
+        id: true,
+        orderNo: true,
+        orderStatus: true,
+        lastMutationVersion: true
+      }
+    });
+
+    updatedOrders.push({
+      id: updated.id,
+      orderNo: updated.orderNo,
+      orderStatus: updated.orderStatus,
+      orderVersion: updated.lastMutationVersion
+    });
+  }
+
+  await db.undoOperation.delete({ where: { id: undo.id } });
 
   await writeAuditLog(db, {
     actorId: params.actorId,
     actorType: params.actorType,
     actionType: "UNDO",
-    entityType: "order",
-    entityId: order.id,
-    orderId: order.id,
+    entityType: "undo_operation",
+    entityId: undo.id,
+    orderId: updatedOrders[0]?.id ?? undo.orderId,
     beforeJson: {
       operationType: undo.operationType,
       targetEntityType: undo.targetEntityType,
-      targetEntityId: undo.targetEntityId
+      targetEntityId: undo.targetEntityId,
+      targetItemCount: targetItemIds.length
     },
     afterJson: {
-      orderStatus: updatedOrder.orderStatus,
-      orderVersion: updatedOrder.lastMutationVersion
+      revertedItemCount: targetItemIds.length,
+      affectedOrderCount: updatedOrders.length,
+      orders: updatedOrders
     },
     result: "SUCCESS"
   });
 
-  return updatedOrder;
+  return {
+    operationType: undo.operationType,
+    revertedItemCount: targetItemIds.length,
+    affectedOrders: updatedOrders
+  };
 }
-
-

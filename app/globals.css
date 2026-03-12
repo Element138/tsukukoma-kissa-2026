@@ -73,9 +73,14 @@ main {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.grid.four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 @media (max-width: 960px) {
   .grid.two,
-  .grid.three {
+  .grid.three,
+  .grid.four {
     grid-template-columns: 1fr;
   }
 }
@@ -181,16 +186,6 @@ button:disabled {
   background: linear-gradient(130deg, #fdfdfd 0%, #f4f4f4 100%);
 }
 
-.logo-placeholder span {
-  font-size: 1.3rem;
-  letter-spacing: 0.03em;
-}
-
-.logo-placeholder small {
-  font-size: 0.68rem;
-  color: #666;
-}
-
 .menu-tile-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
@@ -209,6 +204,11 @@ button:disabled {
 .menu-tile.selected {
   border-color: #111;
   box-shadow: inset 0 0 0 1px #111;
+}
+
+.menu-tile.unavailable {
+  background: #f0f0f0;
+  color: #7a7a7a;
 }
 
 .row {
@@ -259,6 +259,38 @@ button:disabled {
   border-color: #6d95c5;
 }
 
+.badge.availability-available {
+  color: #0a7a5b;
+  border-color: #58b39a;
+}
+
+.badge.availability-paused {
+  color: #9f6a00;
+  border-color: #d2b16c;
+}
+
+.badge.availability-sold_out {
+  color: #8c2020;
+  border-color: #d27e7e;
+}
+
+.status-btn.active {
+  color: #fff;
+  border-color: transparent;
+}
+
+.status-btn.status-available.active {
+  background: #117548;
+}
+
+.status-btn.status-paused.active {
+  background: #8a5a00;
+}
+
+.status-btn.status-sold_out.active {
+  background: #8f1f1f;
+}
+
 .notice {
   padding: 10px 12px;
   border-radius: 10px;
@@ -289,6 +321,7 @@ button:disabled {
   border-bottom: 1px solid #e2e2e2;
   padding: 8px;
   font-size: 0.9rem;
+  vertical-align: top;
 }
 
 .center-box {
@@ -296,4 +329,150 @@ button:disabled {
   margin: 60px auto;
 }
 
+.age-group-grid {
+  display: grid;
+  gap: 8px;
+}
 
+.age-group-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid #d7d7d7;
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+.confirm-slider {
+  position: relative;
+  width: min(420px, 100%);
+  height: 52px;
+  border-radius: 999px;
+  border: 1px solid #7a7a7a;
+  background: linear-gradient(90deg, #132f25 0%, #1f5b45 100%);
+  overflow: hidden;
+  user-select: none;
+}
+
+.confirm-slider.disabled {
+  opacity: 0.55;
+}
+
+.confirm-slider-text {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.confirm-slider-thumb {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  border: none;
+  background: #fff;
+  color: #123226;
+  font-weight: 700;
+}
+
+.queue-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.queue-card {
+  border: 1px solid #cfcfcf;
+  border-radius: 14px;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+  background: #fff;
+}
+
+.queue-card.safe {
+  background: #f1fbf7;
+  border-color: #89c9b0;
+}
+
+.queue-card.warn {
+  background: #fff9ee;
+  border-color: #dbb67c;
+}
+
+.queue-card.danger {
+  background: #fff2f2;
+  border-color: #de8f8f;
+}
+
+.queue-menu-name {
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.queue-count {
+  font-size: 3rem;
+  line-height: 1;
+  font-weight: 800;
+}
+
+.queue-picker {
+  display: grid;
+  gap: 8px;
+}
+
+.toast-stack {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 80;
+  display: grid;
+  gap: 8px;
+  width: min(420px, calc(100vw - 24px));
+}
+
+.toast {
+  border: 1px solid #cfcfcf;
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: flex-start;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
+  background: #fff;
+}
+
+.toast-info {
+  border-color: #8fb0de;
+  background: #f3f8ff;
+}
+
+.toast-success {
+  border-color: #8bc0a9;
+  background: #f4fffa;
+}
+
+.toast-warning {
+  border-color: #d2b16c;
+  background: #fff9ef;
+}
+
+.toast-error {
+  border-color: #d18a8a;
+  background: #fff4f4;
+}
+
+.toast-close {
+  border: none;
+  background: transparent;
+  color: #555;
+  padding: 0 4px;
+  line-height: 1;
+}

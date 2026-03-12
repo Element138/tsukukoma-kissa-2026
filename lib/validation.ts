@@ -66,6 +66,12 @@ export const itemReadySchema = z.object({
   expectedItemStatus: z.enum(["QUEUED"])
 });
 
+export const kitchenMenuReadySchema = z.object({
+  menuId: z.string().uuid(),
+  quantity: z.number().int().min(1).max(999),
+  idempotencyKey: z.string().min(8).max(160)
+});
+
 export const serveItemSchema = z.object({
   orderItemId: z.string().uuid(),
   expectedItemStatus: z.enum(["READY"])
@@ -96,7 +102,6 @@ export const availabilityUpdateSchema = z.object({
 
 export const actorCreateSchema = z
   .object({
-    id: z.string().min(1).max(64),
     actorType: actorTypeSchema,
     label: z.string().min(1).max(120),
     secret: z.string().min(4).max(128),
@@ -113,6 +118,19 @@ export const actorCreateSchema = z
         path: ["actorType"]
       });
     }
+  });
+
+export const actorUpdateSchema = z
+  .object({
+    id: z.string().min(1).max(64),
+    label: z.string().min(1).max(120).optional(),
+    secret: z.string().min(4).max(128).optional(),
+    kitchenEnabled: z.boolean().optional(),
+    kitchenDisplayOrder: z.number().int().min(0).max(999).optional()
+  })
+  .strict()
+  .refine((v) => Object.keys(v).some((key) => key !== "id"), {
+    message: "At least one field to update is required"
   });
 
 export const menuCreateSchema = z.object({

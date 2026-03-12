@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiFetch, isAuthError } from "@/lib/client";
+import { ApiError, apiFetch, isAuthError } from "@/lib/client";
 
 type SessionPayload = {
   actor: {
@@ -10,9 +10,16 @@ type SessionPayload = {
     actorType: "POS" | "KITCHEN" | "WAITER" | "MENU_DISPLAY" | "ADMIN";
     label: string;
   };
-  offlineActors: Array<{ actorId: string; actorType: string }>;
+  offlineActors: Array<{ actorId: string; actorType: string; label: string }>;
   inactiveKitchenQueuedItems: Array<{ orderId: string; orderItemId: string; kitchenName: string }>;
 };
+
+function toReasonCode(error: unknown): string {
+  if (error instanceof ApiError && error.code) {
+    return error.code;
+  }
+  return "UNAUTHORIZED";
+}
 
 export function useSession(requiredTypes?: Array<SessionPayload["actor"]["actorType"]>) {
   const router = useRouter();
@@ -33,7 +40,7 @@ export function useSession(requiredTypes?: Array<SessionPayload["actor"]["actorT
         }
 
         if (requiredTypes && !requiredTypes.includes(data.actor.actorType)) {
-          router.replace("/");
+          router.replace(`/login?reason=FORBIDDEN`);
           return;
         }
 
@@ -44,12 +51,13 @@ export function useSession(requiredTypes?: Array<SessionPayload["actor"]["actorT
           return;
         }
 
-        const msg = e instanceof Error ? e.message : "Session error";
+        const msg = e instanceof Error ? e.message : "\u30bb\u30c3\u30b7\u30e7\u30f3\u30a8\u30e9\u30fc";
         setError(msg);
 
         if (isAuthError(e)) {
           setSession(null);
-          router.replace("/login");
+          const reason = encodeURIComponent(toReasonCode(e));
+          router.replace(`/login?reason=${reason}`);
         }
       } finally {
         if (alive) {
@@ -58,7 +66,7 @@ export function useSession(requiredTypes?: Array<SessionPayload["actor"]["actorT
       }
     };
 
-    load();
+    void load();
     const timer = setInterval(load, 15000);
 
     return () => {

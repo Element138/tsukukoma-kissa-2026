@@ -5,6 +5,8 @@ import { apiFetch, fmtJpy } from "@/lib/client";
 import { useSession } from "@/components/use-session";
 import { TerminalBanner } from "@/components/terminal-banner";
 import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
+import { AVAILABILITY_LABEL, labelOf } from "@/lib/labels";
+import { useToast } from "@/components/toast";
 
 type DisplayCategory = {
   id: string;
@@ -20,8 +22,9 @@ type DisplayCategory = {
 
 export default function MenuDisplayPage() {
   const { loading, session } = useSession(["MENU_DISPLAY"]);
+  const { notify } = useToast();
+
   const [categories, setCategories] = useState<DisplayCategory[]>([]);
-  const [error, setError] = useState<string | null>(null);
   const reloadInFlightRef = useRef(false);
 
   const reload = async () => {
@@ -33,9 +36,8 @@ export default function MenuDisplayPage() {
     try {
       const data = await apiFetch<{ categories: DisplayCategory[] }>("/api/menu-display");
       setCategories(data.categories);
-      setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load menu display");
+      notify({ level: "error", message: e instanceof Error ? e.message : "メニュー表示の取得に失敗しました" });
     } finally {
       reloadInFlightRef.current = false;
     }
@@ -61,7 +63,7 @@ export default function MenuDisplayPage() {
   });
 
   if (loading || !session) {
-    return <main>Loading...</main>;
+    return <main>読み込み中...</main>;
   }
 
   return (
@@ -74,8 +76,7 @@ export default function MenuDisplayPage() {
         inactiveKitchenWarnings={session.inactiveKitchenQueuedItems.map((x) => ({ kitchenName: x.kitchenName }))}
       />
       <main>
-        <h1 style={{ marginTop: 0 }}>Menu Display</h1>
-        {error && <div className="notice error">{error}</div>}
+        <h1 style={{ marginTop: 0 }}>メニュー表示</h1>
 
         <div className="grid">
           {categories.map((category) => (
@@ -88,13 +89,11 @@ export default function MenuDisplayPage() {
                     <div>{fmtJpy(menu.priceJpy)}</div>
                     <div className="muted">
                       {menu.leadTimeSecondsMedian30m != null
-                        ? `Lead time ${Math.ceil(menu.leadTimeSecondsMedian30m / 60)} min`
-                        : "Lead time unavailable"}
+                        ? `\u76ee\u5b89 ${Math.ceil(menu.leadTimeSecondsMedian30m / 60)} \u5206`
+                        : "目安データなし"}
                     </div>
                     <div>
-                      {menu.availability === "AVAILABLE" && <span className="badge ready">AVAILABLE</span>}
-                      {menu.availability === "PAUSED" && <span className="badge queued">PAUSED</span>}
-                      {menu.availability === "SOLD_OUT" && <span className="badge served">SOLD OUT</span>}
+                      <span className={`badge availability-${menu.availability.toLowerCase()}`}>{labelOf(AVAILABILITY_LABEL, menu.availability)}</span>
                     </div>
                   </article>
                 ))}

@@ -63,6 +63,7 @@ enum AuditResult {
 
 enum UndoOperationType {
   ITEM_READY
+  ITEM_READY_BATCH
   ITEM_SERVED
   TAKEOUT_ORDER_SERVED
 }
@@ -92,7 +93,7 @@ model Actor {
   servedItems         OrderItem[]             @relation("OrderItemServedBy")
   kitchenAssignments  MenuKitchenAssignment[] @relation("KitchenActorAssignments")
   kitchenOrderItems   OrderItem[]             @relation("KitchenActorOrderItems")
-  undoOperation       UndoOperation?
+  undoOperations      UndoOperation[]
   auditLogs           AuditLog[]              @relation("AuditActor")
 
   @@index([actorType])
@@ -215,7 +216,8 @@ model OrderItem {
 }
 
 model UndoOperation {
-  actorId              String            @id @db.VarChar(64)
+  id                   String            @id @default(cuid())
+  actorId              String            @db.VarChar(64)
   operationType        UndoOperationType
   targetEntityType     String            @db.VarChar(64)
   targetEntityId       String            @db.VarChar(120)
@@ -225,6 +227,7 @@ model UndoOperation {
   createdAt            DateTime          @default(now())
   actor                Actor             @relation(fields: [actorId], references: [id], onDelete: Cascade)
 
+  @@index([actorId, createdAt])
   @@index([orderId])
 }
 

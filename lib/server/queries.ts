@@ -1,4 +1,4 @@
-﻿import { PrismaClient, Prisma } from "@prisma/client";
+import { PrismaClient, Prisma } from "@prisma/client";
 import { now } from "@/lib/time";
 
 export async function findOfflineActors(db: PrismaClient | Prisma.TransactionClient) {
@@ -14,6 +14,7 @@ export async function findOfflineActors(db: PrismaClient | Prisma.TransactionCli
     select: {
       id: true,
       actorType: true,
+      label: true,
       online: true,
       lastSeenAt: true
     }
@@ -23,7 +24,8 @@ export async function findOfflineActors(db: PrismaClient | Prisma.TransactionCli
     .filter((a) => !a.lastSeenAt || a.lastSeenAt < threshold)
     .map((a) => ({
       actorId: a.id,
-      actorType: a.actorType
+      actorType: a.actorType,
+      label: a.label
     }));
 }
 

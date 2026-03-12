@@ -1,22 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { apiFetch } from "@/lib/client";
 import { useSession } from "@/components/use-session";
 import { Card, SectionTitle } from "@/components/ui";
 import { TerminalBanner } from "@/components/terminal-banner";
 import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
+import { useToast } from "@/components/toast";
 
-type QueueItem = {
-  id: string;
-  name: string;
-  orderId: string;
-  orderNo: number;
-  fulfillmentType: "DINE_IN" | "TAKEOUT";
-  tableNo: number | null;
-  specialNote: string | null;
-  elapsed: string;
+type QueueMenu = {
+  menuId: string;
+  menuName: string;
+  queuedCount: number;
+  oldestQueuedSeconds: number;
+  oldestElapsed: string;
   kitchenName: string;
   kitchenInactiveWarning: boolean;
 };
@@ -30,54 +28,53 @@ type KitchenActor = {
   kitchenDisplayOrder: number;
 };
 
-type Assignment = {
-  menuId: string;
-  kitchenId: string;
-  enabled: boolean;
-  menu: { id: string; name: string };
-};
+function newMutationKey() {
+  try {
+    return crypto.randomUUID();
+  } catch {
+    return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+}
 
-type Menu = { id: string; name: string; availability: "AVAILABLE" | "PAUSED" | "SOLD_OUT" };
+function queueTone(seconds: number) {
+  if (seconds >= 600) {
+    return "danger";
+  }
+  if (seconds >= 240) {
+    return "warn";
+  }
+  return "safe";
+}
 
 export default function KitchenPage() {
   const { loading, session } = useSession(["KITCHEN"]);
-  const [items, setItems] = useState<QueueItem[]>([]);
-  const [kitchens, setKitchens] = useState<KitchenActor[]>([]);
-  const [menus, setMenus] = useState<Menu[]>([]);
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const { notify } = useToast();
 
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [targetKitchenId, setTargetKitchenId] = useState<string>("");
+  const [queues, setQueues] = useState<QueueMenu[]>([]);
+  const [myKitchen, setMyKitchen] = useState<KitchenActor | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const myKitchenId = session?.actor.actorId ?? null;
+  const [pickerMenuId, setPickerMenuId] = useState<string | null>(null);
+  const [pickerQuantity, setPickerQuantity] = useState<number>(1);
+
   const reloadInFlightRef = useRef(false);
 
   const reload = async () => {
-    if (reloadInFlightRef.current) {
+    if (!session || reloadInFlightRef.current) {
       return;
     }
     reloadInFlightRef.current = true;
 
     try {
-      const [queue, actorPayload, menuPayload, assignmentPayload] = await Promise.all([
-        apiFetch<{ items: QueueItem[] }>("/api/kitchen/queue"),
-        apiFetch<{ actors: KitchenActor[] }>("/api/admin/actors"),
-        apiFetch<{ menus: Menu[] }>("/api/admin/menus"),
-        apiFetch<{ assignments: Assignment[] }>("/api/admin/assignments")
+      const [queue, actorPayload] = await Promise.all([
+        apiFetch<{ queues: QueueMenu[] }>("/api/kitchen/queue"),
+        apiFetch<{ actors: KitchenActor[] }>("/api/admin/actors")
       ]);
 
-      setItems(queue.items);
-      setKitchens(
-        actorPayload.actors
-          .filter((a) => a.actorType === "KITCHEN")
-          .sort((a, b) => a.kitchenDisplayOrder - b.kitchenDisplayOrder || a.id.localeCompare(b.id))
-      );
-      setMenus(menuPayload.menus);
-      setAssignments(assignmentPayload.assignments);
-      setError(null);
+      setQueues(queue.queues);
+      setMyKitchen(actorPayload.actors.find((actor) => actor.id === session.actor.actorId) ?? null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load kitchen data");
+      notify({ level: "error", message: e instanceof Error ? e.message : "キッチンデータの取得に失敗しました" });
     } finally {
       reloadInFlightRef.current = false;
     }
@@ -93,9 +90,7 @@ export default function KitchenPage() {
 
   useRealtimeSubscription({
     enabled: Boolean(session),
-    channels: session
-      ? ["orders", "menus", "actors", "assignments", `kitchen:${session.actor.actorId}`]
-      : ["orders", "menus", "actors", "assignments"],
+    channels: session ? ["orders", "menus", "actors", `kitchen:${session.actor.actorId}`] : ["orders"],
     onEvent: () => {
       void reload();
     },
@@ -104,82 +99,70 @@ export default function KitchenPage() {
     }
   });
 
-  const myKitchen = kitchens.find((k) => k.id === myKitchenId);
-
-  const myMenus = useMemo(() => {
-    const menuIds = new Set(assignments.filter((a) => a.kitchenId === myKitchenId && a.enabled).map((a) => a.menuId));
-    return menus.filter((m) => menuIds.has(m.id));
-  }, [assignments, menus, myKitchenId]);
-
-  const markReady = async (itemId: string) => {
+  const submitReady = async (menuId: string, quantity: number) => {
+    setBusy(true);
     try {
-      await apiFetch(`/api/kitchen/items/${itemId}/ready`, {
+      const result = await apiFetch<{ markedReadyCount: number; affectedOrderCount: number }>("/api/kitchen/menus/ready", {
         method: "POST",
-        body: JSON.stringify({ expectedItemStatus: "QUEUED" })
+        body: JSON.stringify({ menuId, quantity, idempotencyKey: newMutationKey() })
       });
-      setMessage("Item marked READY");
+
+      notify({
+        level: "success",
+        message: `${result.markedReadyCount}品を提供可能に更新しました（対象注文 ${result.affectedOrderCount} 件）`
+      });
+
+      setPickerMenuId(null);
+      setPickerQuantity(1);
       await reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to mark READY");
+      notify({ level: "error", message: e instanceof Error ? e.message : "提供可能への更新に失敗しました" });
+    } finally {
+      setBusy(false);
     }
+  };
+
+  const readyFromCard = async (queue: QueueMenu) => {
+    if (queue.queuedCount <= 1) {
+      await submitReady(queue.menuId, 1);
+      return;
+    }
+    setPickerMenuId(queue.menuId);
+    setPickerQuantity(Math.min(queue.queuedCount, 1));
   };
 
   const undo = async () => {
     try {
-      await apiFetch("/api/undo", {
+      const data = await apiFetch<{ result: { revertedItemCount: number } }>("/api/undo", {
         method: "POST",
         body: JSON.stringify({ confirm: true })
       });
-      setMessage("Undo completed");
+      notify({ level: "success", message: `取り消しを実行しました（${data.result.revertedItemCount}品）` });
       await reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to undo");
+      notify({ level: "error", message: e instanceof Error ? e.message : "取り消しに失敗しました" });
     }
   };
 
   const toggleKitchen = async () => {
-    if (!myKitchenId || !myKitchen) return;
+    if (!session || !myKitchen) {
+      return;
+    }
+
     try {
       await apiFetch("/api/kitchen/toggle", {
         method: "POST",
-        body: JSON.stringify({ kitchenId: myKitchenId, kitchenEnabled: !myKitchen.kitchenEnabled })
+        body: JSON.stringify({ kitchenId: session.actor.actorId, kitchenEnabled: !myKitchen.kitchenEnabled })
       });
-      setMessage(`Kitchen ${!myKitchen.kitchenEnabled ? "enabled" : "disabled"}`);
+      notify({ level: "success", message: myKitchen.kitchenEnabled ? "キッチンを停止しました" : "キッチンを有効化しました" });
       await reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to toggle kitchen");
-    }
-  };
-
-  const forceReassign = async () => {
-    if (!myKitchenId || !targetKitchenId) return;
-    try {
-      await apiFetch("/api/kitchen/reassign", {
-        method: "POST",
-        body: JSON.stringify({ fromKitchenId: myKitchenId, toKitchenId: targetKitchenId })
-      });
-      setMessage("Queued items reassigned");
-      await reload();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to reassign items");
-    }
-  };
-
-  const setAvailability = async (menuId: string, availability: "AVAILABLE" | "PAUSED" | "SOLD_OUT") => {
-    try {
-      await apiFetch("/api/kitchen/menu-availability", {
-        method: "POST",
-        body: JSON.stringify({ menuId, availability })
-      });
-      setMessage(`Menu availability set to ${availability}`);
-      await reload();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to update menu availability");
+      notify({ level: "error", message: e instanceof Error ? e.message : "キッチン状態の変更に失敗しました" });
     }
   };
 
   if (loading || !session) {
-    return <main>Loading...</main>;
+    return <main>読み込み中...</main>;
   }
 
   return (
@@ -191,85 +174,71 @@ export default function KitchenPage() {
         offlineActors={session.offlineActors}
         inactiveKitchenWarnings={session.inactiveKitchenQueuedItems.map((x) => ({ kitchenName: x.kitchenName }))}
       />
-      <main className="grid two">
+      <main className="grid">
         <Card>
-          <SectionTitle>Kitchen Queue</SectionTitle>
-          <div className="row wrap" style={{ marginBottom: 10 }}>
-            <button onClick={undo} className="ghost-btn">Undo Last Action</button>
-            <button onClick={toggleKitchen} className="ghost-btn">
-              Kitchen: {myKitchen?.kitchenEnabled ? "Disable" : "Enable"}
-            </button>
-            <Link href="/order-book"><button className="ghost-btn">Order Book</button></Link>
+          <div className="row between wrap" style={{ marginBottom: 10 }}>
+            <SectionTitle>キッチンキュー</SectionTitle>
+            <div className="row wrap">
+              <button onClick={undo} className="ghost-btn">
+                取り消し
+              </button>
+              <button onClick={toggleKitchen} className="ghost-btn">
+                {myKitchen?.kitchenEnabled ? "キッチン停止" : "キッチン有効化"}
+              </button>
+              <Link href="/order-book">
+                <button className="ghost-btn">オーダーブック</button>
+              </Link>
+            </div>
           </div>
 
-          <div className="list">
-            {items.length === 0 && <div className="muted">No queued items.</div>}
-            {items.map((item) => (
-              <div key={item.id} className="list-item">
-                <div className="row between wrap">
-                  <div>
-                    <strong>{item.name}</strong>
-                    <div className="muted">
-                      Order #{item.orderNo} / {item.fulfillmentType}
-                      {item.tableNo ? ` / table ${item.tableNo}` : ""}
+          <div className="queue-grid">
+            {queues.length === 0 && <div className="muted">現在キューはありません</div>}
+            {queues.map((queue) => {
+              const tone = queueTone(queue.oldestQueuedSeconds);
+              const pickerOpen = pickerMenuId === queue.menuId;
+
+              return (
+                <div key={queue.menuId} className={`queue-card ${tone}`}>
+                  <div className="queue-menu-name">{queue.menuName}</div>
+
+                  {pickerOpen ? (
+                    <div className="queue-picker">
+                      <input
+                        type="number"
+                        min={1}
+                        max={queue.queuedCount}
+                        value={pickerQuantity}
+                        onChange={(e) => {
+                          const raw = Number(e.target.value);
+                          if (Number.isFinite(raw)) {
+                            setPickerQuantity(Math.max(1, Math.min(queue.queuedCount, raw)));
+                          }
+                        }}
+                      />
+                      <div className="row wrap">
+                        <button disabled={busy} onClick={() => submitReady(queue.menuId, pickerQuantity)}>
+                          提供可能にする
+                        </button>
+                        <button className="ghost-btn" disabled={busy} onClick={() => setPickerMenuId(null)}>
+                          戻る
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                  <div className="row wrap">
-                    <span className="badge queued">queued</span>
-                    <span className="muted">{item.elapsed}</span>
-                    <button onClick={() => markReady(item.id)}>Ready</button>
-                  </div>
+                  ) : (
+                    <>
+                      <div className="queue-count">{queue.queuedCount}</div>
+                      <div className="muted">最古: {queue.oldestElapsed}</div>
+                      <button disabled={busy} onClick={() => readyFromCard(queue)}>
+                        提供処理
+                      </button>
+                    </>
+                  )}
                 </div>
-                {item.specialNote && <div className="notice" style={{ marginTop: 8 }}>{item.specialNote}</div>}
-                {item.kitchenInactiveWarning && <div className="notice error">Assigned kitchen is inactive: {item.kitchenName}</div>}
-              </div>
-            ))}
+              );
+            })}
           </div>
-        </Card>
-
-        <Card>
-          <SectionTitle>Kitchen / Menu Control</SectionTitle>
-          <label>
-            Reassign queued items to kitchen
-            <select value={targetKitchenId} onChange={(e) => setTargetKitchenId(e.target.value)}>
-              <option value="">Select</option>
-              {kitchens
-                .filter((kitchen) => kitchen.id !== myKitchenId)
-                .map((kitchen) => (
-                  <option key={kitchen.id} value={kitchen.id}>
-                    {kitchen.label} ({kitchen.isActive && kitchen.kitchenEnabled ? "active" : "inactive"})
-                  </option>
-                ))}
-            </select>
-          </label>
-          <div style={{ marginTop: 10 }}>
-            <button onClick={forceReassign} className="ghost-btn" disabled={!targetKitchenId}>Force Reassign</button>
-          </div>
-
-          <hr style={{ margin: "18px 0", border: "none", borderTop: "1px solid #ddd" }} />
-
-          <div className="list">
-            {myMenus.map((menu) => (
-              <div className="list-item" key={menu.id}>
-                <div className="row between wrap">
-                  <strong>{menu.name}</strong>
-                  <span className="muted">{menu.availability}</span>
-                </div>
-                <div className="row wrap" style={{ marginTop: 8 }}>
-                  <button className="ghost-btn" onClick={() => setAvailability(menu.id, "AVAILABLE")}>available</button>
-                  <button className="ghost-btn" onClick={() => setAvailability(menu.id, "PAUSED")}>paused</button>
-                  <button className="ghost-btn" onClick={() => setAvailability(menu.id, "SOLD_OUT")}>sold_out</button>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {message && <div className="notice ok">{message}</div>}
-          {error && <div className="notice error">{error}</div>}
         </Card>
       </main>
     </>
   );
 }
-
-

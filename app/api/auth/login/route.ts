@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
           ok: false,
           error: {
             code: "INVALID_CREDENTIALS",
-            message: "Invalid actor id or secret"
+            message: "ログイン情報が正しくありません"
           }
         },
         { status: 401 }
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
       actorType: actor.actorType,
       label: actor.label
     });
-    setSessionCookie(response, session.token);
+    setSessionCookie(response, session.token, actor.actorType);
     return response;
   } catch (error) {
     return fail(error);

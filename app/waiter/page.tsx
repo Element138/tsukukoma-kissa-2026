@@ -7,6 +7,7 @@ import { useSession } from "@/components/use-session";
 import { Card, SectionTitle } from "@/components/ui";
 import { TerminalBanner } from "@/components/terminal-banner";
 import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
+import { useToast } from "@/components/toast";
 
 type DineInItem = {
   id: string;
@@ -28,10 +29,10 @@ type TakeoutOrder = {
 
 export default function WaiterPage() {
   const { loading, session } = useSession(["WAITER"]);
+  const { notify } = useToast();
+
   const [dineInItems, setDineInItems] = useState<DineInItem[]>([]);
   const [takeoutOrders, setTakeoutOrders] = useState<TakeoutOrder[]>([]);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const reloadInFlightRef = useRef(false);
 
   const reload = async () => {
@@ -44,9 +45,8 @@ export default function WaiterPage() {
       const data = await apiFetch<{ dineInItems: DineInItem[]; takeoutOrders: TakeoutOrder[] }>("/api/waiter/targets");
       setDineInItems(data.dineInItems);
       setTakeoutOrders(data.takeoutOrders);
-      setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "read failed");
+      notify({ level: "error", message: e instanceof Error ? e.message : "配膳データの取得に失敗しました" });
     } finally {
       reloadInFlightRef.current = false;
     }
@@ -77,10 +77,10 @@ export default function WaiterPage() {
         method: "POST",
         body: JSON.stringify({ orderItemId, expectedItemStatus: "READY" })
       });
-      setMessage("item served を記録しました");
+      notify({ level: "success", message: "提供済みに更新しました" });
       await reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "serve item failed");
+      notify({ level: "error", message: e instanceof Error ? e.message : "提供処理に失敗しました" });
     }
   };
 
@@ -90,28 +90,28 @@ export default function WaiterPage() {
         method: "POST",
         body: JSON.stringify({ orderId })
       });
-      setMessage("takeout order served を記録しました");
+      notify({ level: "success", message: "持ち帰り注文を提供済みにしました" });
       await reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "serve order failed");
+      notify({ level: "error", message: e instanceof Error ? e.message : "提供処理に失敗しました" });
     }
   };
 
   const undo = async () => {
     try {
-      await apiFetch("/api/undo", {
+      const data = await apiFetch<{ result: { revertedItemCount: number } }>("/api/undo", {
         method: "POST",
         body: JSON.stringify({ confirm: true })
       });
-      setMessage("Undoを実行しました");
+      notify({ level: "success", message: `取り消しを実行しました（${data.result.revertedItemCount}品）` });
       await reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "undo failed");
+      notify({ level: "error", message: e instanceof Error ? e.message : "取り消しに失敗しました" });
     }
   };
 
   if (loading || !session) {
-    return <main>Loading...</main>;
+    return <main>読み込み中...</main>;
   }
 
   return (
@@ -125,28 +125,28 @@ export default function WaiterPage() {
       />
       <main className="grid two">
         <Card>
-          <SectionTitle>Dine-in Ready Items</SectionTitle>
+          <SectionTitle>店内提供待ち</SectionTitle>
           <div className="row wrap" style={{ marginBottom: 10 }}>
             <button className="ghost-btn" onClick={undo}>
-              Undo Last Action
+              取り消し
             </button>
             <Link href="/order-book">
-              <button className="ghost-btn">Order Book</button>
+              <button className="ghost-btn">オーダーブック</button>
             </Link>
           </div>
 
           <div className="list">
-            {dineInItems.length === 0 && <div className="muted">ready item はありません</div>}
+            {dineInItems.length === 0 && <div className="muted">提供待ちはありません</div>}
             {dineInItems.map((item) => (
               <div key={item.id} className="list-item">
                 <div className="row between wrap">
                   <div>
                     <strong>{item.name}</strong>
                     <div className="muted">
-                      table {item.tableNo ?? "-"} / order #{item.orderNo}
+                      テーブル {item.tableNo ?? "-"} / 注文 #{item.orderNo}
                     </div>
                   </div>
-                  <button onClick={() => serveItem(item.id)}>Serve</button>
+                  <button onClick={() => serveItem(item.id)}>提供済みにする</button>
                 </div>
                 {item.specialNote && <div className="notice" style={{ marginTop: 8 }}>{item.specialNote}</div>}
               </div>
@@ -155,17 +155,17 @@ export default function WaiterPage() {
         </Card>
 
         <Card>
-          <SectionTitle>Takeout Orders (All Ready)</SectionTitle>
+          <SectionTitle>持ち帰り（提供待ち）</SectionTitle>
           <div className="list">
-            {takeoutOrders.length === 0 && <div className="muted">受け渡し可能なtakeoutはありません</div>}
+            {takeoutOrders.length === 0 && <div className="muted">提供待ちの持ち帰り注文はありません</div>}
             {takeoutOrders.map((order) => (
               <div key={order.id} className="list-item">
                 <div className="row between wrap">
                   <div>
-                    <strong>Order #{order.orderNo}</strong>
-                    <div className="muted">{order.itemCount} items</div>
+                    <strong>注文 #{order.orderNo}</strong>
+                    <div className="muted">{order.itemCount} ?</div>
                   </div>
-                  <button onClick={() => serveOrder(order.id)}>Serve All</button>
+                  <button onClick={() => serveOrder(order.id)}>まとめて提供済みにする</button>
                 </div>
                 <div className="muted" style={{ marginTop: 8 }}>
                   {order.itemNames.join(" / ")}
@@ -173,15 +173,8 @@ export default function WaiterPage() {
               </div>
             ))}
           </div>
-
-          {message && <div className="notice ok">{message}</div>}
-          {error && <div className="notice error">{error}</div>}
         </Card>
       </main>
     </>
   );
 }
-
-
-
-

@@ -1,34 +1,71 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { apiFetch } from "@/lib/client";
 import { useSession } from "@/components/use-session";
 import { TerminalBanner } from "@/components/terminal-banner";
 import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
+import { ACTOR_TYPE_LABEL, AUDIT_RESULT_LABEL, labelOf } from "@/lib/labels";
+import { useToast } from "@/components/toast";
 
 type AuditLog = {
   id: string;
   timestamp: string;
   actorId: string | null;
+  actorLabel: string | null;
   actorType: string | null;
   actionType: string;
   entityType: string;
   entityId: string;
+  entityLabel: string | null;
   orderId: string | null;
   result: "SUCCESS" | "FAILURE";
   reasonType: string | null;
   reasonText: string | null;
+  beforeJson: Record<string, unknown> | null;
+  afterJson: Record<string, unknown> | null;
 };
+
+function toText(value: unknown) {
+  if (value === null || value === undefined) {
+    return "-";
+  }
+  if (typeof value === "object") {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return "[object]";
+    }
+  }
+  return String(value);
+}
+
+function diffSummary(before: Record<string, unknown> | null, after: Record<string, unknown> | null) {
+  const b = before ?? {};
+  const a = after ?? {};
+  const keys = [...new Set([...Object.keys(b), ...Object.keys(a)])];
+  const changed = keys.filter((key) => JSON.stringify(b[key]) !== JSON.stringify(a[key]));
+
+  if (changed.length === 0) {
+    return "変更情報なし";
+  }
+
+  return changed
+    .slice(0, 6)
+    .map((key) => `${key}: ${toText(b[key])} -> ${toText(a[key])}`)
+    .join(" / ");
+}
 
 export default function AuditPage() {
   const { loading, session } = useSession(["ADMIN"]);
+  const { notify } = useToast();
+
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [actionType, setActionType] = useState("");
   const [actorType, setActorType] = useState("");
   const [result, setResult] = useState("");
   const [orderNo, setOrderNo] = useState("");
-  const [error, setError] = useState<string | null>(null);
 
   const reload = async () => {
     try {
@@ -40,7 +77,7 @@ export default function AuditPage() {
       const data = await apiFetch<{ logs: AuditLog[] }>(`/api/audit?${params.toString()}`);
       setLogs(data.logs);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "audit load failed");
+      notify({ level: "error", message: e instanceof Error ? e.message : "監査ログの取得に失敗しました" });
     }
   };
 
@@ -61,8 +98,17 @@ export default function AuditPage() {
     }
   });
 
+  const rows = useMemo(
+    () =>
+      logs.map((log) => ({
+        ...log,
+        diff: diffSummary(log.beforeJson, log.afterJson)
+      })),
+    [logs]
+  );
+
   if (loading || !session) {
-    return <main>Loading...</main>;
+    return <main>読み込み中...</main>;
   }
 
   return (
@@ -76,60 +122,60 @@ export default function AuditPage() {
       />
       <main>
         <div className="row between wrap" style={{ marginBottom: 12 }}>
-          <h1 style={{ margin: 0 }}>Audit Log</h1>
+          <h1 style={{ margin: 0 }}>監査ログ</h1>
           <div className="row wrap">
             <a href="/api/audit/export">
-              <button className="ghost-btn">CSV Export</button>
+              <button className="ghost-btn">CSV出力</button>
             </a>
             <Link href="/admin">
-              <button className="ghost-btn">Back to Admin</button>
+              <button className="ghost-btn">管理画面へ戻る</button>
             </Link>
           </div>
         </div>
 
         <div className="card row wrap" style={{ marginBottom: 12 }}>
-          <input value={actionType} onChange={(e) => setActionType(e.target.value)} placeholder="actionType" style={{ maxWidth: 220 }} />
+          <input value={actionType} onChange={(e) => setActionType(e.target.value)} placeholder="操作名" style={{ maxWidth: 220 }} />
           <select value={actorType} onChange={(e) => setActorType(e.target.value)} style={{ maxWidth: 180 }}>
-            <option value="">actorType: all</option>
+            <option value="">ロール種別: すべて</option>
             <option value="POS">POS</option>
-            <option value="KITCHEN">KITCHEN</option>
-            <option value="WAITER">WAITER</option>
-            <option value="ADMIN">ADMIN</option>
+            <option value="KITCHEN">キッチン</option>
+            <option value="WAITER">配膳</option>
+            <option value="ADMIN">管理者</option>
           </select>
           <select value={result} onChange={(e) => setResult(e.target.value)} style={{ maxWidth: 170 }}>
-            <option value="">result: all</option>
-            <option value="SUCCESS">SUCCESS</option>
-            <option value="FAILURE">FAILURE</option>
+            <option value="">結果: すべて</option>
+            <option value="SUCCESS">成功</option>
+            <option value="FAILURE">失敗</option>
           </select>
-          <input value={orderNo} onChange={(e) => setOrderNo(e.target.value)} placeholder="orderNo" style={{ maxWidth: 120 }} />
+          <input value={orderNo} onChange={(e) => setOrderNo(e.target.value)} placeholder="注文番号" style={{ maxWidth: 120 }} />
         </div>
-
-        {error && <div className="notice error">{error}</div>}
 
         <div className="card" style={{ overflowX: "auto" }}>
           <table className="table">
             <thead>
               <tr>
-                <th>Time</th>
-                <th>Action</th>
-                <th>Actor</th>
-                <th>Entity</th>
-                <th>Result</th>
-                <th>Reason</th>
+                <th>時刻</th>
+                <th>操作</th>
+                <th>ロール</th>
+                <th>対象</th>
+                <th>結果</th>
+                <th>変更内容</th>
+                <th>理由</th>
               </tr>
             </thead>
             <tbody>
-              {logs.map((log) => (
+              {rows.map((log) => (
                 <tr key={log.id}>
                   <td>{new Date(log.timestamp).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}</td>
                   <td>{log.actionType}</td>
                   <td>
-                    {log.actorType ?? "-"} / {log.actorId ?? "-"}
+                    {labelOf(ACTOR_TYPE_LABEL, log.actorType)} / {log.actorLabel ?? "-"}
                   </td>
                   <td>
-                    {log.entityType}:{log.entityId}
+                    {log.entityType === "actor" ? `actor:${log.entityLabel ?? "-"}` : `${log.entityType}:${log.entityId}`}
                   </td>
-                  <td>{log.result}</td>
+                  <td>{labelOf(AUDIT_RESULT_LABEL, log.result)}</td>
+                  <td>{log.diff}</td>
                   <td>{log.reasonType ?? log.reasonText ?? ""}</td>
                 </tr>
               ))}
@@ -140,7 +186,3 @@ export default function AuditPage() {
     </>
   );
 }
-
-
-
-

@@ -1,9 +1,10 @@
+import { randomUUID } from "node:crypto";
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession } from "@/lib/server/auth";
 import { fail, ok } from "@/lib/response";
 import { parseJson } from "@/lib/server/http";
-import { actorCreateSchema } from "@/lib/validation";
+import { actorCreateSchema, actorUpdateSchema } from "@/lib/validation";
 import { hashSecret } from "@/lib/crypto";
 import { writeAuditLog } from "@/lib/domain/audit";
 import { updateMenusAvailabilityByKitchenCoverage } from "@/lib/domain/kitchen-assignment";
@@ -21,6 +22,11 @@ const actorPublicSelect = {
   kitchenDisplayOrder: true
 } as const;
 
+function makeActorId(actorType: "POS" | "KITCHEN" | "WAITER" | "MENU_DISPLAY" | "ADMIN") {
+  const suffix = randomUUID().replace(/-/g, "").slice(0, 10);
+  return `${actorType.toLowerCase()}-${suffix}`;
+}
+
 export async function GET(req: NextRequest) {
   return withRouteTrace(req, "admin/actors.GET", async (trace) => {
     try {
@@ -32,7 +38,7 @@ export async function GET(req: NextRequest) {
       const actors = await prisma.actor.findMany({
         where: actor.actorType === "KITCHEN" ? { actorType: "KITCHEN" } : undefined,
         select: actorPublicSelect,
-        orderBy: [{ actorType: "asc" }, { kitchenDisplayOrder: "asc" }, { id: "asc" }]
+        orderBy: [{ actorType: "asc" }, { kitchenDisplayOrder: "asc" }, { label: "asc" }, { id: "asc" }]
       });
       trace("db.findMany.ok", { count: actors.length });
 
@@ -53,14 +59,25 @@ export async function POST(req: NextRequest) {
 
       trace("parseJson.start");
       const body = await parseJson(req, actorCreateSchema);
-      trace("parseJson.ok", { actorType: body.actorType, id: body.id });
+      trace("parseJson.ok", { actorType: body.actorType });
 
-      if (body.actorType === "ADMIN" && body.id !== "admin") {
-        throw new AppError(400, "INVALID_ADMIN_ID", "Admin ID must be 'admin'");
+      if (body.actorType === "ADMIN") {
+        throw new AppError(400, "INVALID_ACTOR_TYPE", "管理者アカウントは追加できません");
       }
 
       trace("tx.create.start");
       const actor = await prisma.$transaction(async (tx) => {
+        if (body.actorType === "MENU_DISPLAY") {
+          const existingCount = await tx.actor.count({
+            where: {
+              actorType: "MENU_DISPLAY"
+            }
+          });
+          if (existingCount > 0) {
+            throw new AppError(409, "MENU_DISPLAY_SINGLETON", "メニュー表示ロールは1つのみ作成できます");
+          }
+        }
+
         const nextKitchenOrder =
           body.actorType === "KITCHEN" && typeof body.kitchenDisplayOrder !== "number"
             ? ((await tx.actor.aggregate({
@@ -71,7 +88,7 @@ export async function POST(req: NextRequest) {
 
         const created = await tx.actor.create({
           data: {
-            id: body.id,
+            id: makeActorId(body.actorType),
             actorType: body.actorType,
             label: body.label,
             secretHash: hashSecret(body.secret),
@@ -111,6 +128,85 @@ export async function POST(req: NextRequest) {
         return created;
       });
       trace("tx.create.ok", { createdActorId: actor.id });
+
+      return ok({ actor });
+    } catch (error) {
+      traceError(trace, "error", error);
+      return fail(error);
+    }
+  });
+}
+
+export async function PATCH(req: NextRequest) {
+  return withRouteTrace(req, "admin/actors.PATCH", async (trace) => {
+    try {
+      trace("auth.start");
+      const admin = await requireSession(req, { actorTypes: ["ADMIN"] });
+      trace("auth.ok", { actorId: admin.actorId });
+
+      const body = await parseJson(req, actorUpdateSchema);
+      trace("parseJson.ok", { actorId: body.id });
+
+      const actor = await prisma.$transaction(async (tx) => {
+        const before = await tx.actor.findUnique({
+          where: { id: body.id },
+          select: {
+            id: true,
+            actorType: true,
+            label: true,
+            kitchenEnabled: true,
+            kitchenDisplayOrder: true
+          }
+        });
+
+        if (!before) {
+          throw new AppError(404, "ACTOR_NOT_FOUND", "Actor not found");
+        }
+
+        if (before.actorType !== "KITCHEN" && (typeof body.kitchenEnabled === "boolean" || typeof body.kitchenDisplayOrder === "number")) {
+          throw new AppError(400, "INVALID_KITCHEN_FIELD", "Kitchen settings can be changed only for kitchen actors");
+        }
+
+        const updated = await tx.actor.update({
+          where: { id: body.id },
+          data: {
+            label: body.label,
+            secretHash: body.secret ? hashSecret(body.secret) : undefined,
+            kitchenEnabled: body.kitchenEnabled,
+            kitchenDisplayOrder: body.kitchenDisplayOrder
+          },
+          select: actorPublicSelect
+        });
+
+        await writeAuditLog(tx, {
+          actorId: admin.actorId,
+          actorType: admin.actorType,
+          actionType: "ACTOR_UPDATED",
+          entityType: "actor",
+          entityId: updated.id,
+          beforeJson: {
+            label: before.label,
+            kitchenEnabled: before.kitchenEnabled,
+            kitchenDisplayOrder: before.kitchenDisplayOrder
+          },
+          afterJson: {
+            label: updated.label,
+            kitchenEnabled: updated.kitchenEnabled,
+            kitchenDisplayOrder: updated.kitchenDisplayOrder,
+            passwordUpdated: Boolean(body.secret)
+          },
+          result: "SUCCESS"
+        });
+
+        await broadcastInvalidation(
+          tx,
+          [...CHANNEL_GROUPS.ACTORS, ...(updated.actorType === "KITCHEN" ? [kitchenChannel(updated.id)] : [])],
+          "actors",
+          "actor_updated"
+        );
+
+        return updated;
+      });
 
       return ok({ actor });
     } catch (error) {
@@ -176,7 +272,7 @@ export async function DELETE(req: NextRequest) {
         await writeAuditLog(tx, {
           actorId: admin.actorId,
           actorType: admin.actorType,
-          actionType: "ACTOR_DEACTIVATED",
+          actionType: "ACTOR_DELETED",
           entityType: "actor",
           entityId: actorId,
           beforeJson: { actorType: existing.actorType, isActive: existing.isActive },
@@ -192,14 +288,14 @@ export async function DELETE(req: NextRequest) {
             ...(existing.actorType === "KITCHEN" ? [kitchenChannel(actorId)] : [])
           ],
           "actors",
-          "actor_deactivated"
+          "actor_deleted"
         );
 
         return existing;
       });
       trace("tx.deactivate.ok", { actorType: target.actorType });
 
-      return ok({ actorId, deactivated: true });
+      return ok({ actorId, deleted: true });
     } catch (error) {
       traceError(trace, "error", error);
       return fail(error);

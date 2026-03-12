@@ -7,6 +7,7 @@ import { minutesFromNow, now } from "@/lib/time";
 
 export const SESSION_COOKIE = "kissa_session";
 const SESSION_TTL_MINUTES = 10;
+const MENU_DISPLAY_TTL_MINUTES = 60 * 24 * 365 * 10;
 const HEARTBEAT_TOUCH_MS = 30_000;
 
 type SessionActor = {
@@ -24,7 +25,38 @@ export type AuthenticatedActor = {
   sessionId: string;
 };
 
-export function setSessionCookie(response: NextResponse, token: string) {
+type SessionFailureCode =
+  | "SESSION_MISSING"
+  | "SESSION_INVALID"
+  | "SESSION_REVOKED"
+  | "SESSION_EXPIRED"
+  | "ACTOR_INACTIVE";
+
+type SessionLoadResult = {
+  session: (Session & { actor: SessionActor }) | null;
+  failureCode: SessionFailureCode | null;
+};
+
+const SESSION_FAILURE_MESSAGE: Record<SessionFailureCode, string> = {
+  SESSION_MISSING: "Session required",
+  SESSION_INVALID: "Session is invalid",
+  SESSION_REVOKED: "Session was revoked",
+  SESSION_EXPIRED: "Session expired",
+  ACTOR_INACTIVE: "Actor is inactive"
+};
+
+function sessionTtlMinutes(actorType: ActorType) {
+  return actorType === "MENU_DISPLAY" ? MENU_DISPLAY_TTL_MINUTES : SESSION_TTL_MINUTES;
+}
+
+function isStale(ts: Date | null | undefined) {
+  if (!ts) {
+    return true;
+  }
+  return Date.now() - ts.getTime() >= HEARTBEAT_TOUCH_MS;
+}
+
+export function setSessionCookie(response: NextResponse, token: string, actorType: ActorType) {
   response.cookies.set({
     name: SESSION_COOKIE,
     value: token,
@@ -32,7 +64,7 @@ export function setSessionCookie(response: NextResponse, token: string) {
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    expires: minutesFromNow(SESSION_TTL_MINUTES)
+    expires: minutesFromNow(sessionTtlMinutes(actorType))
   });
 }
 
@@ -45,17 +77,10 @@ export function clearSessionCookie(response: NextResponse) {
   });
 }
 
-function isStale(ts: Date | null | undefined) {
-  if (!ts) {
-    return true;
-  }
-  return Date.now() - ts.getTime() >= HEARTBEAT_TOUCH_MS;
-}
-
-async function loadSession(req: NextRequest): Promise<(Session & { actor: SessionActor }) | null> {
+async function loadSession(req: NextRequest): Promise<SessionLoadResult> {
   const token = req.cookies.get(SESSION_COOKIE)?.value;
   if (!token) {
-    return null;
+    return { session: null, failureCode: "SESSION_MISSING" };
   }
 
   const tokenHash = sha256Hex(token);
@@ -74,19 +99,32 @@ async function loadSession(req: NextRequest): Promise<(Session & { actor: Sessio
     }
   });
 
-  if (!session || session.revokedAt || session.expiresAt <= now() || !session.actor.isActive) {
-    return null;
+  if (!session) {
+    return { session: null, failureCode: "SESSION_INVALID" };
+  }
+  if (session.revokedAt) {
+    return { session: null, failureCode: "SESSION_REVOKED" };
+  }
+  if (!session.actor.isActive) {
+    return { session: null, failureCode: "ACTOR_INACTIVE" };
+  }
+  if (session.actor.actorType !== "MENU_DISPLAY" && session.expiresAt <= now()) {
+    return { session: null, failureCode: "SESSION_EXPIRED" };
   }
 
-  return session;
+  return { session, failureCode: null };
 }
 
-async function touchSession(sessionId: string) {
+async function touchSession(session: Session & { actor: SessionActor }) {
   await prisma.session.updateMany({
-    where: { sessionId },
+    where: { sessionId: session.sessionId },
     data: {
       lastActivityAt: now(),
-      expiresAt: minutesFromNow(SESSION_TTL_MINUTES)
+      ...(session.actor.actorType === "MENU_DISPLAY"
+        ? {}
+        : {
+            expiresAt: minutesFromNow(SESSION_TTL_MINUTES)
+          })
     }
   });
 }
@@ -105,7 +143,7 @@ function touchHeartbeatBestEffort(session: Session & { actor: SessionActor }) {
   const tasks: Promise<unknown>[] = [];
 
   if (isStale(session.lastActivityAt)) {
-    tasks.push(touchSession(session.sessionId));
+    tasks.push(touchSession(session));
   }
   if (isStale(session.actor.lastSeenAt)) {
     tasks.push(touchActorOnline(session.actor.id));
@@ -124,20 +162,20 @@ export async function requireSession(
     actorTypes?: ActorType[];
   }
 ): Promise<AuthenticatedActor> {
-  const session = await loadSession(req);
-  assert(session, 401, "UNAUTHORIZED", "Session required");
+  const loaded = await loadSession(req);
+  assert(loaded.session, 401, loaded.failureCode ?? "UNAUTHORIZED", SESSION_FAILURE_MESSAGE[loaded.failureCode ?? "SESSION_INVALID"]);
 
-  if (options?.actorTypes && !options.actorTypes.includes(session.actor.actorType)) {
+  if (options?.actorTypes && !options.actorTypes.includes(loaded.session.actor.actorType)) {
     throw new AppError(403, "FORBIDDEN", "Actor type is not allowed");
   }
 
-  touchHeartbeatBestEffort(session);
+  touchHeartbeatBestEffort(loaded.session);
 
   return {
-    actorId: session.actor.id,
-    actorType: session.actor.actorType,
-    label: session.actor.label,
-    sessionId: session.sessionId
+    actorId: loaded.session.actor.id,
+    actorType: loaded.session.actor.actorType,
+    label: loaded.session.actor.label,
+    sessionId: loaded.session.sessionId
   };
 }
 
@@ -163,7 +201,7 @@ export async function createSession(actor: { id: string; actorType: ActorType },
     data: {
       actorId: actor.id,
       tokenHash,
-      expiresAt: minutesFromNow(SESSION_TTL_MINUTES)
+      expiresAt: minutesFromNow(sessionTtlMinutes(actor.actorType))
     }
   });
 

@@ -115,6 +115,14 @@ export async function PATCH(req: NextRequest) {
         throw new AppError(404, "MENU_NOT_FOUND", "menu not found");
       }
 
+      if (!before.isActive) {
+        throw new AppError(409, "MENU_DELETED", "Deleted menu cannot be edited");
+      }
+
+      if (body.isActive === true) {
+        throw new AppError(409, "MENU_DELETE_PERMANENT", "Deleted menu cannot be restored");
+      }
+
       if (body.availability === "AVAILABLE") {
         const covered = await hasActiveCoverage(body.id);
         if (!covered) {
@@ -141,7 +149,7 @@ export async function PATCH(req: NextRequest) {
         await writeAuditLog(tx, {
           actorId: actor.actorId,
           actorType: actor.actorType,
-          actionType: "MENU_UPDATED",
+          actionType: body.isActive === false ? "MENU_DELETED" : "MENU_UPDATED",
           entityType: "menu",
           entityId: updated.id,
           beforeJson: before,

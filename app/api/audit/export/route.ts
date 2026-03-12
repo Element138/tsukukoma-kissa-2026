@@ -16,6 +16,13 @@ export async function GET(req: NextRequest) {
     await requireSession(req, { actorTypes: ["ADMIN"] });
 
     const logs = await prisma.auditLog.findMany({
+      include: {
+        actor: {
+          select: {
+            label: true
+          }
+        }
+      },
       orderBy: {
         timestamp: "desc"
       },
@@ -25,6 +32,7 @@ export async function GET(req: NextRequest) {
     const header = [
       "timestamp",
       "actor_id",
+      "actor_label",
       "actor_type",
       "action_type",
       "entity_type",
@@ -33,6 +41,8 @@ export async function GET(req: NextRequest) {
       "result",
       "reason_type",
       "reason_text",
+      "before_json",
+      "after_json",
       "correlation_id"
     ].join(",");
 
@@ -42,6 +52,7 @@ export async function GET(req: NextRequest) {
         [
           log.timestamp.toISOString(),
           log.actorId ?? "",
+          log.actor?.label ?? "",
           log.actorType ?? "",
           log.actionType,
           log.entityType,
@@ -50,6 +61,8 @@ export async function GET(req: NextRequest) {
           log.result,
           log.reasonType ?? "",
           log.reasonText ?? "",
+          JSON.stringify(log.beforeJson ?? null),
+          JSON.stringify(log.afterJson ?? null),
           log.correlationId ?? ""
         ]
           .map(csvEscape)
@@ -68,5 +81,3 @@ export async function GET(req: NextRequest) {
     return fail(error);
   }
 }
-
-
