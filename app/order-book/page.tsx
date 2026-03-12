@@ -5,6 +5,7 @@ import Link from "next/link";
 import { apiFetch, fmtJpy } from "@/lib/client";
 import { useSession } from "@/components/use-session";
 import { TerminalBanner } from "@/components/terminal-banner";
+import { DashboardShell } from "@/components/dashboard-shell";
 import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
 import {
   FULFILLMENT_LABEL,
@@ -201,7 +202,12 @@ export default function OrderBookPage() {
   return (
     <>
       <TerminalBanner actorId={session.actor.actorId} actorType={session.actor.actorType} actorLabel={session.actor.label} offlineActors={session.offlineActors} />
-      <main>
+      <DashboardShell
+        eyebrow="ORDER TIMELINE"
+        title="オーダーブック"
+        subtitle="注文進行と決済状態を時系列で追跡"
+      >
+        <div>
         <div className="row between wrap" style={{ marginBottom: 12 }}>
           <h1 style={{ margin: 0 }}>オーダーブック</h1>
           <div className="row wrap">
@@ -298,7 +304,9 @@ export default function OrderBookPage() {
             </article>
           ))}
         </div>
-      </main>
+        </div>
+      </DashboardShell>
     </>
   );
 }
+

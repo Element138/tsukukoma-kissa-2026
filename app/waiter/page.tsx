@@ -6,6 +6,7 @@ import { apiFetch } from "@/lib/client";
 import { useSession } from "@/components/use-session";
 import { Card, SectionTitle } from "@/components/ui";
 import { TerminalBanner } from "@/components/terminal-banner";
+import { DashboardShell } from "@/components/dashboard-shell";
 import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
 import { useToast } from "@/components/toast";
 
@@ -189,7 +190,12 @@ export default function WaiterPage() {
   return (
     <>
       <TerminalBanner actorId={session.actor.actorId} actorType={session.actor.actorType} actorLabel={session.actor.label} offlineActors={session.offlineActors} />
-      <main className="grid">
+      <DashboardShell
+        eyebrow="SERVICE FLOW"
+        title="配膳ダッシュボード"
+        subtitle="提供待ちとテーブル進行を見える化"
+      >
+        <div className="grid">
         <Card>
           <div className="row between wrap" style={{ marginBottom: 10 }}>
             <SectionTitle>配膳ビュー</SectionTitle>
@@ -263,7 +269,9 @@ export default function WaiterPage() {
             ))}
           </div>
         </Card>
-      </main>
+        </div>
+      </DashboardShell>
     </>
   );
 }
+

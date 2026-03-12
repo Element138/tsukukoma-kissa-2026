@@ -6,6 +6,7 @@ import { apiFetch, fmtJpy } from "@/lib/client";
 import { useSession } from "@/components/use-session";
 import { Card, SectionTitle } from "@/components/ui";
 import { TerminalBanner } from "@/components/terminal-banner";
+import { DashboardShell } from "@/components/dashboard-shell";
 import { ConfirmSlider } from "@/components/confirm-slider";
 import {
   AVAILABILITY_LABEL,
@@ -252,7 +253,12 @@ export default function PosPage() {
   return (
     <>
       <TerminalBanner actorId={session.actor.actorId} actorType={session.actor.actorType} actorLabel={session.actor.label} offlineActors={session.offlineActors} />
-      <main className="grid two">
+      <DashboardShell
+        eyebrow="POINT OF SALE"
+        title="POSダッシュボード"
+        subtitle="受注、会計、販売状態を一画面で管理"
+      >
+        <div className="grid two">
         <Card>
           <SectionTitle>メニュー</SectionTitle>
           <div className="menu-tile-grid">
@@ -410,9 +416,11 @@ export default function PosPage() {
             </Link>
           </div>
         </Card>
-      </main>
+        </div>
+      </DashboardShell>
     </>
   );
 }
+
 
 

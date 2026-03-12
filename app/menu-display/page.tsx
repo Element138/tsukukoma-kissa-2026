@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { apiFetch, fmtJpy } from "@/lib/client";
 import { useSession } from "@/components/use-session";
 import { TerminalBanner } from "@/components/terminal-banner";
+import { DashboardShell } from "@/components/dashboard-shell";
 import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
 import { AVAILABILITY_LABEL, labelOf } from "@/lib/labels";
 import { useToast } from "@/components/toast";
@@ -75,9 +76,12 @@ export default function MenuDisplayPage() {
   return (
     <>
       <TerminalBanner actorId={session.actor.actorId} actorType={session.actor.actorType} actorLabel={session.actor.label} offlineActors={session.offlineActors} />
-      <main>
-        <h1 style={{ marginTop: 0 }}>メニュー表示</h1>
-
+      <DashboardShell
+        eyebrow="LIVE MENU BOARD"
+        title="メニュー表示"
+        subtitle="提供状況と目安時間をリアルタイム表示"
+      >
+        <div>
         <div className="grid">
           {categories.map((category) => (
             <section key={category.id} className="card">
@@ -109,7 +113,9 @@ export default function MenuDisplayPage() {
             </section>
           ))}
         </div>
-      </main>
+        </div>
+      </DashboardShell>
     </>
   );
 }
+

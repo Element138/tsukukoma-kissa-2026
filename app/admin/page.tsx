@@ -6,6 +6,7 @@ import { apiFetch, fmtJpy } from "@/lib/client";
 import { useSession } from "@/components/use-session";
 import { Card } from "@/components/ui";
 import { TerminalBanner } from "@/components/terminal-banner";
+import { DashboardShell } from "@/components/dashboard-shell";
 import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
 import { ACTOR_TYPE_LABEL, AVAILABILITY_LABEL, labelOf } from "@/lib/labels";
 import { useToast } from "@/components/toast";
@@ -407,18 +408,18 @@ export default function AdminPage() {
   return (
     <>
       <TerminalBanner actorId={session.actor.actorId} actorType={session.actor.actorType} actorLabel={session.actor.label} offlineActors={session.offlineActors} />
-      <main className="admin-shell">
-        <div className="row between wrap" style={{ marginBottom: 10 }}>
-          <div>
-            <h1 style={{ margin: 0 }}>管理画面</h1>
-            <p className="muted" style={{ margin: "4px 0 0" }}>Compact control center</p>
-          </div>
+      <DashboardShell
+        className="admin-shell"
+        eyebrow="ADMIN CONTROL"
+        title="管理ダッシュボード"
+        subtitle="アカウント、カテゴリ、メニュー、担当設定をまとめて運用"
+        actions={
           <div className="row wrap">
             <Link href="/order-book" className="btn-link ghost-btn">オーダーブック</Link>
             <Link href="/audit" className="btn-link ghost-btn">監査ログ</Link>
           </div>
-        </div>
-
+        }
+      >
         <div className="admin-columns">
           <Card>
             <SectionHeader title="アカウント" subtitle="役割とオンライン状態" icon={<span>◼</span>} />
@@ -570,7 +571,8 @@ export default function AdminPage() {
             <button type="button" className="ghost-btn danger-btn" onClick={() => purge("AUDIT_LOGS")}>監査ログを削除</button>
           </div>
         </Card>
-      </main>
+      </DashboardShell>
     </>
   );
 }
+

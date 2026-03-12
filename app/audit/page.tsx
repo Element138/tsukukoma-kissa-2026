@@ -5,6 +5,7 @@ import Link from "next/link";
 import { apiFetch } from "@/lib/client";
 import { useSession } from "@/components/use-session";
 import { TerminalBanner } from "@/components/terminal-banner";
+import { DashboardShell } from "@/components/dashboard-shell";
 import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
 import { ACTOR_TYPE_LABEL, AUDIT_RESULT_LABEL, labelOf } from "@/lib/labels";
 import { useToast } from "@/components/toast";
@@ -113,7 +114,12 @@ export default function AuditPage() {
   return (
     <>
       <TerminalBanner actorId={session.actor.actorId} actorType={session.actor.actorType} actorLabel={session.actor.label} offlineActors={session.offlineActors} />
-      <main>
+      <DashboardShell
+        eyebrow="AUDIT TRAIL"
+        title="監査ログ"
+        subtitle="操作履歴と変更要約を即時確認"
+      >
+        <div>
         <div className="row between wrap" style={{ marginBottom: 12 }}>
           <h1 style={{ margin: 0 }}>監査ログ</h1>
           <div className="row wrap">
@@ -173,7 +179,9 @@ export default function AuditPage() {
             </tbody>
           </table>
         </div>
-      </main>
+        </div>
+      </DashboardShell>
     </>
   );
 }
+

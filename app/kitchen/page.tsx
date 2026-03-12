@@ -6,6 +6,7 @@ import { apiFetch } from "@/lib/client";
 import { useSession } from "@/components/use-session";
 import { Card, SectionTitle } from "@/components/ui";
 import { TerminalBanner } from "@/components/terminal-banner";
+import { DashboardShell } from "@/components/dashboard-shell";
 import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
 import { AVAILABILITY_LABEL, labelOf } from "@/lib/labels";
 import { useToast } from "@/components/toast";
@@ -249,7 +250,12 @@ export default function KitchenPage() {
   return (
     <>
       <TerminalBanner actorId={session.actor.actorId} actorType={session.actor.actorType} actorLabel={session.actor.label} offlineActors={session.offlineActors} />
-      <main className="grid">
+      <DashboardShell
+        eyebrow="KITCHEN OPS"
+        title="キッチンダッシュボード"
+        subtitle="キューと提供状態をリアルタイムで制御"
+      >
+        <div className="grid">
         <Card>
           <div className="row between wrap" style={{ marginBottom: 10 }}>
             <SectionTitle>キッチンキュー</SectionTitle>
@@ -359,8 +365,10 @@ export default function KitchenPage() {
             ))}
           </div>
         </Card>
-      </main>
+        </div>
+      </DashboardShell>
     </>
   );
 }
+
 
