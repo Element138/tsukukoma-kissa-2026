@@ -1,4 +1,29 @@
-﻿:root {
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --tw-background: 208 60% 97%;
+  --tw-foreground: 216 46% 14%;
+  --tw-card: 0 0% 100%;
+  --tw-card-foreground: 216 46% 14%;
+  --tw-popover: 0 0% 100%;
+  --tw-popover-foreground: 216 46% 14%;
+  --tw-primary: 175 77% 26%;
+  --tw-primary-foreground: 0 0% 100%;
+  --tw-secondary: 210 35% 93%;
+  --tw-secondary-foreground: 216 30% 22%;
+  --tw-muted: 212 34% 91%;
+  --tw-muted-foreground: 215 18% 43%;
+  --tw-accent: 175 72% 92%;
+  --tw-accent-foreground: 175 77% 22%;
+  --tw-destructive: 6 74% 41%;
+  --tw-destructive-foreground: 0 0% 98%;
+  --tw-border: 214 22% 82%;
+  --tw-input: 214 22% 82%;
+  --tw-ring: 175 77% 26%;
+
+
   --bg-base: #edf2f8;
   --bg-soft: #f8fbff;
   --ink: #122033;
@@ -911,3 +936,6 @@ button:disabled,
     grid-template-columns: 1fr;
   }
 }
+
+
+

@@ -1,15 +1,36 @@
-﻿"use client";
+"use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import {
+  Add20Regular,
+  AppsList20Regular,
+  ArrowDown20Regular,
+  ArrowUp20Regular,
+  Box20Regular,
+  Delete20Regular,
+  Edit20Regular,
+  Key20Regular,
+  Power20Regular,
+  Save20Regular,
+  SignOut20Regular
+} from "@fluentui/react-icons";
 import { apiFetch, fmtJpy } from "@/lib/client";
 import { useSession } from "@/components/use-session";
-import { Card } from "@/components/ui";
 import { TerminalBanner } from "@/components/terminal-banner";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
 import { ACTOR_TYPE_LABEL, AVAILABILITY_LABEL, labelOf } from "@/lib/labels";
 import { useToast } from "@/components/toast";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 
 type Actor = {
   id: string;
@@ -54,20 +75,46 @@ type MenuEdit = {
 };
 
 const AVAILABILITY_OPTIONS: Array<Menu["availability"]> = ["AVAILABLE", "PAUSED", "SOLD_OUT"];
+const AVAILABILITY_TONE: Record<Menu["availability"], string> = {
+  AVAILABLE: "bg-emerald-600 text-white hover:bg-emerald-700",
+  PAUSED: "bg-amber-600 text-white hover:bg-amber-700",
+  SOLD_OUT: "bg-rose-600 text-white hover:bg-rose-700"
+};
 
 function confirmDanger(message: string) {
   return window.confirm(message);
 }
 
-function SectionHeader(props: { title: string; subtitle: string; icon: React.ReactNode }) {
+function SectionHeader(props: { title: string; subtitle: string; icon: ReactNode }) {
   return (
-    <div className="admin-panel-title">
-      <span className="admin-panel-icon">{props.icon}</span>
+    <div className="flex items-center gap-3">
+      <div className="grid h-8 w-8 place-items-center rounded-md border bg-muted/30 text-foreground">{props.icon}</div>
       <div>
-        <h2>{props.title}</h2>
-        <p>{props.subtitle}</p>
+        <h2 className="text-sm font-semibold leading-none tracking-tight">{props.title}</h2>
+        <p className="mt-1 text-xs text-muted-foreground">{props.subtitle}</p>
       </div>
     </div>
+  );
+}
+
+function IconActionButton(props: { label: string; icon: ReactNode; className?: string; disabled?: boolean; onClick: () => void }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className={cn("h-8 w-8", props.className)}
+          onClick={props.onClick}
+          disabled={props.disabled}
+        >
+          {props.icon}
+          <span className="sr-only">{props.label}</span>
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{props.label}</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -168,7 +215,7 @@ export default function AdminPage() {
         setNewMenuCategoryId(categoryRes.categories[0]!.id);
       }
     } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "管理データの更新に失敗しました" });
+      notify({ level: "error", message: e instanceof Error ? e.message : "�Ǘ��f�[�^�̍X�V�Ɏ��s���܂���" });
     } finally {
       reloadInFlightRef.current = false;
     }
@@ -192,7 +239,7 @@ export default function AdminPage() {
       notify({ level: "success", message: successMessage });
       await reload();
     } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "アカウント更新に失敗しました" });
+      notify({ level: "error", message: e instanceof Error ? e.message : "�A�J�E���g�X�V�Ɏ��s���܂���" });
     }
   };
 
@@ -208,44 +255,44 @@ export default function AdminPage() {
           ...(newActorType === "KITCHEN" ? { kitchenEnabled: true, kitchenDisplayOrder: Number(newKitchenDisplayOrder) } : {})
         })
       });
-      notify({ level: "success", message: "アカウントを作成しました" });
+      notify({ level: "success", message: "�A�J�E���g��쐬���܂���" });
       setNewActorLabel("");
       setNewActorSecret("");
       setNewKitchenDisplayOrder("0");
       await reload();
     } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "アカウント作成に失敗しました" });
+      notify({ level: "error", message: e instanceof Error ? e.message : "�A�J�E���g�쐬�Ɏ��s���܂���" });
     }
   };
 
   const deleteActor = async (actor: Actor) => {
-    if (!confirmDanger(`アカウント「${actor.label}」を削除します。よろしいですか？`)) return;
+    if (!confirmDanger(`�A�J�E���g�u${actor.label}�v��폜���܂��B��낵���ł����H`)) return;
     try {
       await apiFetch(`/api/admin/actors?id=${encodeURIComponent(actor.id)}`, { method: "DELETE" });
-      notify({ level: "success", message: "アカウントを削除しました" });
+      notify({ level: "success", message: "�A�J�E���g��폜���܂���" });
       await reload();
     } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "アカウント削除に失敗しました" });
+      notify({ level: "error", message: e instanceof Error ? e.message : "�A�J�E���g�폜�Ɏ��s���܂���" });
     }
   };
 
   const forceLogout = async (id: string) => {
     try {
       await apiFetch("/api/admin/sessions/force-logout", { method: "POST", body: JSON.stringify({ actorId: id }) });
-      notify({ level: "success", message: "強制ログアウトしました" });
+      notify({ level: "success", message: "�������O�A�E�g���܂���" });
       await reload();
     } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "強制ログアウトに失敗しました" });
+      notify({ level: "error", message: e instanceof Error ? e.message : "�������O�A�E�g�Ɏ��s���܂���" });
     }
   };
 
   const toggleKitchenEnabled = async (actor: Actor) => {
     try {
       await apiFetch("/api/kitchen/toggle", { method: "POST", body: JSON.stringify({ kitchenId: actor.id, kitchenEnabled: !actor.kitchenEnabled }) });
-      notify({ level: "success", message: !actor.kitchenEnabled ? "キッチンを稼働にしました" : "キッチンを停止にしました" });
+      notify({ level: "success", message: !actor.kitchenEnabled ? "�L�b�`����ғ��ɂ��܂���" : "�L�b�`�����~�ɂ��܂���" });
       await reload();
     } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "キッチン状態の更新に失敗しました" });
+      notify({ level: "error", message: e instanceof Error ? e.message : "�L�b�`����Ԃ̍X�V�Ɏ��s���܂���" });
     }
   };
 
@@ -261,10 +308,10 @@ export default function AdminPage() {
         body: JSON.stringify({ name: newCategoryName, displayOrder: (activeCategories.at(-1)?.displayOrder ?? 0) + 1 })
       });
       setNewCategoryName("");
-      notify({ level: "success", message: "カテゴリを作成しました" });
+      notify({ level: "success", message: "�J�e�S����쐬���܂���" });
       await reload();
     } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "カテゴリ作成に失敗しました" });
+      notify({ level: "error", message: e instanceof Error ? e.message : "�J�e�S���쐬�Ɏ��s���܂���" });
     }
   };
 
@@ -275,23 +322,23 @@ export default function AdminPage() {
     if (index < 0 || !target) return;
     try {
       await Promise.all([
-        patchCategory(sorted[index]!.id, { displayOrder: target.displayOrder }, "カテゴリ順を更新しました"),
-        patchCategory(target.id, { displayOrder: sorted[index]!.displayOrder }, "カテゴリ順を更新しました")
+        patchCategory(sorted[index]!.id, { displayOrder: target.displayOrder }, "�J�e�S������X�V���܂���"),
+        patchCategory(target.id, { displayOrder: sorted[index]!.displayOrder }, "�J�e�S������X�V���܂���")
       ]);
       await reload();
     } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "カテゴリ順更新に失敗しました" });
+      notify({ level: "error", message: e instanceof Error ? e.message : "�J�e�S�����X�V�Ɏ��s���܂���" });
     }
   };
 
   const deleteCategory = async (category: Category) => {
-    if (!confirmDanger(`カテゴリ「${category.name}」を削除します。配下メニューも無効化されます。よろしいですか？`)) return;
+    if (!confirmDanger(`�J�e�S���u${category.name}�v��폜���܂��B�z�����j���[�����������܂��B��낵���ł����H`)) return;
     try {
       await apiFetch(`/api/admin/categories?id=${encodeURIComponent(category.id)}`, { method: "DELETE" });
-      notify({ level: "success", message: "カテゴリを削除しました" });
+      notify({ level: "success", message: "�J�e�S����폜���܂���" });
       await reload();
     } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "カテゴリ削除に失敗しました" });
+      notify({ level: "error", message: e instanceof Error ? e.message : "�J�e�S���폜�Ɏ��s���܂���" });
     }
   };
 
@@ -309,11 +356,11 @@ export default function AdminPage() {
           showLeadTime: true
         })
       });
-      notify({ level: "success", message: "メニューを作成しました" });
+      notify({ level: "success", message: "���j���[��쐬���܂���" });
       setNewMenuName("");
       await reload();
     } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "メニュー作成に失敗しました" });
+      notify({ level: "error", message: e instanceof Error ? e.message : "���j���[�쐬�Ɏ��s���܂���" });
     }
   };
 
@@ -324,16 +371,16 @@ export default function AdminPage() {
 
   const changeMenuAvailability = async (menu: Menu, status: Menu["availability"]) => {
     if (status === "AVAILABLE" && !menu.hasActiveKitchenCoverage) {
-      notify({ level: "error", message: "現在対応できるキッチンがないため、販売中にできません" });
+      notify({ level: "error", message: "���ݑΉ��ł���L�b�`�����Ȃ����߁A�̔����ɂł��܂���" });
       return;
     }
 
     setMenuAvailabilityBusyId(menu.id);
     try {
-      await patchMenu(menu, { availability: status }, "販売状態を更新しました");
+      await patchMenu(menu, { availability: status }, "�̔���Ԃ�X�V���܂���");
       await reload();
     } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "販売状態更新に失敗しました" });
+      notify({ level: "error", message: e instanceof Error ? e.message : "�̔���ԍX�V�Ɏ��s���܂���" });
     } finally {
       setMenuAvailabilityBusyId(null);
     }
@@ -343,10 +390,10 @@ export default function AdminPage() {
     const edit = menuEdits[menu.id];
     if (!edit) return;
     try {
-      await patchMenu(menu, { name: edit.name, priceJpy: Number(edit.priceJpy), workloadSeconds: Number(edit.workloadSeconds), categoryId: edit.categoryId }, "メニューを更新しました");
+      await patchMenu(menu, { name: edit.name, priceJpy: Number(edit.priceJpy), workloadSeconds: Number(edit.workloadSeconds), categoryId: edit.categoryId }, "���j���[��X�V���܂���");
       await reload();
     } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "メニュー更新に失敗しました" });
+      notify({ level: "error", message: e instanceof Error ? e.message : "���j���[�X�V�Ɏ��s���܂���" });
     }
   };
 
@@ -357,52 +404,52 @@ export default function AdminPage() {
     if (index < 0 || !target) return;
     try {
       await Promise.all([
-        patchMenu(menu, { displayOrder: target.displayOrder }, "メニュー順を更新しました"),
-        patchMenu(target, { displayOrder: menu.displayOrder }, "メニュー順を更新しました")
+        patchMenu(menu, { displayOrder: target.displayOrder }, "���j���[����X�V���܂���"),
+        patchMenu(target, { displayOrder: menu.displayOrder }, "���j���[����X�V���܂���")
       ]);
       await reload();
     } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "メニュー順更新に失敗しました" });
+      notify({ level: "error", message: e instanceof Error ? e.message : "���j���[���X�V�Ɏ��s���܂���" });
     }
   };
 
   const deleteMenu = async (menu: Menu) => {
-    if (!confirmDanger(`メニュー「${menu.name}」を削除します。よろしいですか？`)) return;
+    if (!confirmDanger(`���j���[�u${menu.name}�v��폜���܂��B��낵���ł����H`)) return;
     try {
-      await patchMenu(menu, { isActive: false }, "メニューを削除しました");
+      await patchMenu(menu, { isActive: false }, "���j���[��폜���܂���");
       await reload();
     } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "メニュー削除に失敗しました" });
+      notify({ level: "error", message: e instanceof Error ? e.message : "���j���[�폜�Ɏ��s���܂���" });
     }
   };
 
   const toggleAssignment = async (menuId: string, kitchenId: string, enabled: boolean) => {
     try {
       await apiFetch("/api/admin/assignments", { method: "POST", body: JSON.stringify({ menuId, kitchenId, enabled }) });
-      notify({ level: "success", message: enabled ? "担当を有効化しました" : "担当を無効化しました" });
+      notify({ level: "success", message: enabled ? "�S����L�������܂���" : "�S���𖳌������܂���" });
       await reload();
     } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "担当更新に失敗しました" });
+      notify({ level: "error", message: e instanceof Error ? e.message : "�S���X�V�Ɏ��s���܂���" });
     }
   };
 
   const purge = async (target: "ORDERS" | "AUDIT_LOGS") => {
-    const label = target === "ORDERS" ? "注文データ" : "監査ログ";
-    if (!confirmDanger(`${label}を削除します。復元できません。実行しますか？`)) return;
+    const label = target === "ORDERS" ? "�����f�[�^" : "�č����O";
+    if (!confirmDanger(`${label}��폜���܂��B�����ł��܂���B���s���܂����H`)) return;
 
     try {
       await apiFetch("/api/admin/purge", { method: "POST", body: JSON.stringify({ target, confirmationText: "DELETE" }) });
-      notify({ level: "warning", message: `${label}を削除しました` });
+      notify({ level: "warning", message: `${label}��폜���܂���` });
       await reload();
     } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "削除に失敗しました" });
+      notify({ level: "error", message: e instanceof Error ? e.message : "�폜�Ɏ��s���܂���" });
     }
   };
 
   const assignmentMap = new Map(assignments.map((a) => [`${a.menuId}:${a.kitchenId}`, a.enabled]));
 
   if (loading || !session) {
-    return <main>読み込み中...</main>;
+    return <main>�ǂݍ��ݒ�...</main>;
   }
 
   return (
@@ -411,168 +458,366 @@ export default function AdminPage() {
       <DashboardShell
         className="admin-shell"
         eyebrow="ADMIN CONTROL"
-        title="管理ダッシュボード"
-        subtitle="アカウント、カテゴリ、メニュー、担当設定をまとめて運用"
+        title="�Ǘ��_�b�V���{�[�h"
+        subtitle="�A�J�E���g�A�J�e�S���A���j���[�A�S���ݒ��܂Ƃ߂ĉ^�p"
         actions={
-          <div className="row wrap">
-            <Link href="/order-book" className="btn-link ghost-btn">オーダーブック</Link>
-            <Link href="/audit" className="btn-link ghost-btn">監査ログ</Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button asChild variant="outline" size="sm">
+              <Link href="/order-book">
+                <Box20Regular />
+                �I�[�_�[�u�b�N
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/audit">
+                <AppsList20Regular />
+                �č����O
+              </Link>
+            </Button>
           </div>
         }
       >
-        <div className="admin-columns">
-          <Card>
-            <SectionHeader title="アカウント" subtitle="役割とオンライン状態" icon={<span>◼</span>} />
-            <details className="admin-details" open>
-              <summary>新規アカウント追加</summary>
-              <form onSubmit={createActor} className="admin-inline-form">
-                <select value={newActorType} onChange={(e) => setNewActorType(e.target.value as Actor["actorType"])}>
-                  <option value="POS">POS</option>
-                  <option value="KITCHEN">キッチン</option>
-                  <option value="WAITER">配膳</option>
-                </select>
-                {newActorType === "KITCHEN" && <input placeholder="表示順" value={newKitchenDisplayOrder} onChange={(e) => setNewKitchenDisplayOrder(e.target.value)} />}
-                <input placeholder="表示名" value={newActorLabel} onChange={(e) => setNewActorLabel(e.target.value)} required />
-                <input placeholder="パスワード" value={newActorSecret} onChange={(e) => setNewActorSecret(e.target.value)} required />
-                <button type="submit">作成</button>
-              </form>
-            </details>
+        <TooltipProvider delayDuration={120}>
+          <div className="grid gap-3 xl:grid-cols-[1.08fr_0.92fr]">
+            <Card>
+              <CardHeader className="pb-3">
+                <SectionHeader title="�A�J�E���g" subtitle="����E��ԁE��������" icon={<span>�l</span>} />
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Accordion type="single" collapsible defaultValue="new-actor" className="rounded-lg border px-3">
+                  <AccordionItem value="new-actor" className="border-b-0">
+                    <AccordionTrigger className="py-2 text-sm">�V�K�A�J�E���g��ǉ�</AccordionTrigger>
+                    <AccordionContent>
+                      <form onSubmit={createActor} className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                        <Select value={newActorType} onValueChange={(value) => setNewActorType(value as Actor["actorType"])}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="���[��" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="POS">POS</SelectItem>
+                            <SelectItem value="KITCHEN">�L�b�`��</SelectItem>
+                            <SelectItem value="WAITER">�z�V</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {newActorType === "KITCHEN" && (
+                          <Input placeholder="�\����" value={newKitchenDisplayOrder} onChange={(e) => setNewKitchenDisplayOrder(e.target.value)} />
+                        )}
+                        <Input placeholder="�\����" value={newActorLabel} onChange={(e) => setNewActorLabel(e.target.value)} required />
+                        <Input placeholder="�p�X���[�h" value={newActorSecret} onChange={(e) => setNewActorSecret(e.target.value)} required />
+                        <Button type="submit" className="sm:col-span-2 lg:col-span-1">
+                          <Add20Regular />
+                          �쐬
+                        </Button>
+                      </form>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
 
-            <div className="admin-list">
-              {actors.map((actor) => (
-                <article key={actor.id} className="admin-row">
-                  <div className="admin-row-head">
-                    <div>
-                      <strong>{actor.label}</strong>
-                      <div className="muted">{labelOf(ACTOR_TYPE_LABEL, actor.actorType)}{actor.actorType === "KITCHEN" ? ` / ${actor.kitchenEnabled ? "稼働" : "停止"} / 順位 ${actor.kitchenDisplayOrder}` : ""}</div>
+                <div className="grid gap-2">
+                  {actors.map((actor) => (
+                    <article key={actor.id} className="rounded-lg border bg-card/70 p-3">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <strong className="text-sm">{actor.label}</strong>
+                          <div className="mt-1 text-xs text-muted-foreground">
+                            {labelOf(ACTOR_TYPE_LABEL, actor.actorType)}
+                            {actor.actorType === "KITCHEN" ? ` / ${actor.kitchenEnabled ? "�ғ�" : "��~"} / ���� ${actor.kitchenDisplayOrder}` : ""}
+                          </div>
+                        </div>
+                        <Badge variant={actor.online ? "secondary" : "outline"} className={actor.online ? "bg-emerald-100 text-emerald-800" : ""}>
+                          {actor.online ? "ONLINE" : "OFFLINE"}
+                        </Badge>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        <IconActionButton
+                          label="�\�����ύX"
+                          icon={<Edit20Regular />}
+                          disabled={!actor.isActive}
+                          onClick={() => {
+                            const next = prompt("�V�����\����", actor.label);
+                            if (next && next !== actor.label) {
+                              void updateActor(actor.id, { label: next }, "�\������X�V���܂���");
+                            }
+                          }}
+                        />
+                        <IconActionButton
+                          label="�p�X���[�h�ύX"
+                          icon={<Key20Regular />}
+                          disabled={!actor.isActive}
+                          onClick={() => {
+                            const next = prompt("�V�����p�X���[�h", "");
+                            if (next) {
+                              void updateActor(actor.id, { secret: next }, "�p�X���[�h��X�V���܂���");
+                            }
+                          }}
+                        />
+                        {actor.actorType === "KITCHEN" && (
+                          <>
+                            <IconActionButton
+                              label={actor.kitchenEnabled ? "�L�b�`����~" : "�L�b�`���ғ�"}
+                              icon={<Power20Regular />}
+                              disabled={!actor.isActive}
+                              onClick={() => void toggleKitchenEnabled(actor)}
+                            />
+                            <IconActionButton
+                              label="�L�b�`���\����"
+                              icon={<ArrowUp20Regular />}
+                              disabled={!actor.isActive}
+                              onClick={() => {
+                                const next = prompt("�L�b�`���\����", String(actor.kitchenDisplayOrder));
+                                if (next != null && next.trim() !== "") {
+                                  void updateActor(actor.id, { kitchenDisplayOrder: Number(next) }, "�L�b�`���\������X�V���܂���");
+                                }
+                              }}
+                            />
+                          </>
+                        )}
+                        <IconActionButton
+                          label="�������O�A�E�g"
+                          icon={<SignOut20Regular />}
+                          disabled={!actor.isActive}
+                          onClick={() => void forceLogout(actor.id)}
+                        />
+                        {actor.id !== "admin" && actor.actorType !== "MENU_DISPLAY" && (
+                          <IconActionButton
+                            label="�폜"
+                            icon={<Delete20Regular />}
+                            className="text-destructive hover:text-destructive"
+                            disabled={!actor.isActive}
+                            onClick={() => void deleteActor(actor)}
+                          />
+                        )}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <SectionHeader title="�J�e�S��" subtitle="���O�E���я�" icon={<span>��</span>} />
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Input placeholder="�V�����J�e�S����" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} className="max-w-xs" />
+                  <Button type="button" variant="outline" onClick={createCategory} disabled={!newCategoryName}>
+                    <Add20Regular />
+                    �ǉ�
+                  </Button>
+                </div>
+
+                <div className="grid gap-2">
+                  {activeCategories.map((category, index) => (
+                    <article key={category.id} className="rounded-lg border bg-card/70 p-2.5">
+                      <div className="flex items-center gap-2">
+                        <Input
+                          value={categoryNameDrafts[category.id] ?? category.name}
+                          onChange={(e) => setCategoryNameDrafts((prev) => ({ ...prev, [category.id]: e.target.value }))}
+                        />
+                        <Badge variant="outline">#{category.displayOrder}</Badge>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        <IconActionButton
+                          label="�ۑ�"
+                          icon={<Save20Regular />}
+                          onClick={() => {
+                            void (async () => {
+                              try {
+                                await patchCategory(category.id, { name: categoryNameDrafts[category.id] ?? category.name }, "�J�e�S������X�V���܂���");
+                                await reload();
+                              } catch (e) {
+                                notify({ level: "error", message: e instanceof Error ? e.message : "�J�e�S���X�V�Ɏ��s���܂���" });
+                              }
+                            })();
+                          }}
+                        />
+                        <IconActionButton label="���" icon={<ArrowUp20Regular />} disabled={index === 0} onClick={() => void moveCategory(category.id, -1)} />
+                        <IconActionButton
+                          label="����"
+                          icon={<ArrowDown20Regular />}
+                          disabled={index === activeCategories.length - 1}
+                          onClick={() => void moveCategory(category.id, 1)}
+                        />
+                        <IconActionButton
+                          label="�폜"
+                          icon={<Delete20Regular />}
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => void deleteCategory(category)}
+                        />
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <SectionHeader title="���j���[" subtitle="�̔���ԁE�ҏW�E�S���ݒ�" icon={<span>�i</span>} />
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Accordion type="single" collapsible defaultValue="new-menu" className="rounded-lg border px-3">
+                <AccordionItem value="new-menu" className="border-b-0">
+                  <AccordionTrigger className="py-2 text-sm">�V�K���j���[��ǉ�</AccordionTrigger>
+                  <AccordionContent>
+                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                      <Input placeholder="�V�������j���[��" value={newMenuName} onChange={(e) => setNewMenuName(e.target.value)} />
+                      <Input placeholder="���i" value={newMenuPrice} onChange={(e) => setNewMenuPrice(e.target.value)} />
+                      <Input placeholder="�����b��" value={newMenuWorkloadSeconds} onChange={(e) => setNewMenuWorkloadSeconds(e.target.value)} />
+                      <Select value={newMenuCategoryId} onValueChange={setNewMenuCategoryId}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="�J�e�S��" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {activeCategories.map((cat) => (
+                            <SelectItem key={cat.id} value={cat.id}>
+                              {cat.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        type="button"
+                        onClick={createMenu}
+                        disabled={!newMenuName || !newMenuCategoryId || !newMenuPrice || !newMenuWorkloadSeconds}
+                      >
+                        <Add20Regular />
+                        �ǉ�
+                      </Button>
                     </div>
-                    <span className={`badge ${actor.online ? "ready" : "queued"}`}>{actor.online ? "ONLINE" : "OFFLINE"}</span>
-                  </div>
-                  <details className="admin-actions">
-                    <summary>操作</summary>
-                    <div className="row wrap">
-                      <button type="button" className="ghost-btn" onClick={() => { const next = prompt("新しい表示名", actor.label); if (next && next !== actor.label) void updateActor(actor.id, { label: next }, "表示名を更新しました"); }} disabled={!actor.isActive}>表示名</button>
-                      <button type="button" className="ghost-btn" onClick={() => { const next = prompt("新しいパスワード", ""); if (next) void updateActor(actor.id, { secret: next }, "パスワードを更新しました"); }} disabled={!actor.isActive}>パスワード</button>
-                      {actor.actorType === "KITCHEN" && (
-                        <>
-                          <button type="button" className="ghost-btn" onClick={() => toggleKitchenEnabled(actor)} disabled={!actor.isActive}>{actor.kitchenEnabled ? "停止" : "稼働"}</button>
-                          <button type="button" className="ghost-btn" onClick={() => { const next = prompt("キッチン表示順", String(actor.kitchenDisplayOrder)); if (next != null && next.trim() !== "") void updateActor(actor.id, { kitchenDisplayOrder: Number(next) }, "キッチン表示順を更新しました"); }} disabled={!actor.isActive}>順位</button>
-                        </>
-                      )}
-                      <button type="button" className="ghost-btn" onClick={() => forceLogout(actor.id)} disabled={!actor.isActive}>強制ログアウト</button>
-                      {actor.id !== "admin" && actor.actorType !== "MENU_DISPLAY" && <button type="button" className="ghost-btn danger-btn" onClick={() => deleteActor(actor)} disabled={!actor.isActive}>削除</button>}
-                    </div>
-                  </details>
-                </article>
-              ))}
-            </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+
+              <Accordion type="single" collapsible className="space-y-2">
+                {activeMenus.map((menu) => {
+                  const edit = menuEdits[menu.id] ?? {
+                    name: menu.name,
+                    priceJpy: String(menu.priceJpy),
+                    workloadSeconds: String(menu.workloadSeconds),
+                    categoryId: menu.categoryId
+                  };
+
+                  return (
+                    <AccordionItem key={menu.id} value={menu.id} className="rounded-lg border bg-card/70 px-3">
+                      <AccordionTrigger className="py-3 hover:no-underline">
+                        <div className="flex w-full flex-col gap-2 text-left md:flex-row md:items-center md:justify-between">
+                          <div>
+                            <strong className="text-sm">{menu.name}</strong>
+                            <div className="mt-1 text-xs text-muted-foreground">
+                              {fmtJpy(menu.priceJpy)} / {menu.workloadSeconds}�b
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-3 gap-1 md:min-w-72" onClick={(e) => e.stopPropagation()}>
+                            {AVAILABILITY_OPTIONS.map((status) => {
+                              const noCoverageForAvailable = status === "AVAILABLE" && !menu.hasActiveKitchenCoverage;
+                              const pseudoDisabled = noCoverageForAvailable || menuAvailabilityBusyId === menu.id;
+                              return (
+                                <Button
+                                  key={status}
+                                  type="button"
+                                  size="sm"
+                                  variant={menu.availability === status ? "default" : "outline"}
+                                  className={cn("h-7 px-2 text-[11px]", menu.availability === status && AVAILABILITY_TONE[status])}
+                                  disabled={pseudoDisabled}
+                                  onClick={() => void changeMenuAvailability(menu, status)}
+                                >
+                                  {labelOf(AVAILABILITY_LABEL, status)}
+                                </Button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent className="space-y-3">
+                        <Separator />
+                        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                          <Input value={edit.name} onChange={(e) => setMenuEdits((prev) => ({ ...prev, [menu.id]: { ...edit, name: e.target.value } }))} />
+                          <Input
+                            value={edit.priceJpy}
+                            onChange={(e) => setMenuEdits((prev) => ({ ...prev, [menu.id]: { ...edit, priceJpy: e.target.value } }))}
+                          />
+                          <Input
+                            value={edit.workloadSeconds}
+                            onChange={(e) => setMenuEdits((prev) => ({ ...prev, [menu.id]: { ...edit, workloadSeconds: e.target.value } }))}
+                          />
+                          <Select
+                            value={edit.categoryId}
+                            onValueChange={(value) => setMenuEdits((prev) => ({ ...prev, [menu.id]: { ...edit, categoryId: value } }))}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="�J�e�S��" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {activeCategories.map((cat) => (
+                                <SelectItem key={cat.id} value={cat.id}>
+                                  {cat.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="flex flex-wrap gap-1">
+                          <IconActionButton label="�ۑ�" icon={<Save20Regular />} onClick={() => void saveMenuEdit(menu)} />
+                          <IconActionButton label="���" icon={<ArrowUp20Regular />} onClick={() => void moveMenu(menu, -1)} />
+                          <IconActionButton label="����" icon={<ArrowDown20Regular />} onClick={() => void moveMenu(menu, 1)} />
+                          <IconActionButton
+                            label="�폜"
+                            icon={<Delete20Regular />}
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => void deleteMenu(menu)}
+                          />
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          {kitchenActors.map((kitchen) => {
+                            const key = `${menu.id}:${kitchen.id}`;
+                            const enabled = assignmentMap.get(key) ?? false;
+                            return (
+                              <Button
+                                key={key}
+                                type="button"
+                                size="sm"
+                                variant={enabled ? "secondary" : "outline"}
+                                onClick={() => void toggleAssignment(menu.id, kitchen.id, !enabled)}
+                              >
+                                {kitchen.label}: {enabled ? "�L��" : "����"}
+                              </Button>
+                            );
+                          })}
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  );
+                })}
+              </Accordion>
+            </CardContent>
           </Card>
 
           <Card>
-            <SectionHeader title="カテゴリ" subtitle="カテゴリ名と順序" icon={<span>◻</span>} />
-            <div className="row wrap" style={{ marginBottom: 10 }}>
-              <input placeholder="新しいカテゴリ名" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} style={{ maxWidth: 220 }} />
-              <button type="button" className="ghost-btn" onClick={createCategory} disabled={!newCategoryName}>追加</button>
-            </div>
-            <div className="admin-list">
-              {activeCategories.map((category, index) => (
-                <article key={category.id} className="admin-row">
-                  <div className="admin-row-head">
-                    <input value={categoryNameDrafts[category.id] ?? category.name} onChange={(e) => setCategoryNameDrafts((prev) => ({ ...prev, [category.id]: e.target.value }))} style={{ maxWidth: 260 }} />
-                    <span className="badge">#{category.displayOrder}</span>
-                  </div>
-                  <div className="row wrap">
-                    <button type="button" className="ghost-btn" onClick={async () => { try { await patchCategory(category.id, { name: categoryNameDrafts[category.id] ?? category.name }, "カテゴリ名を更新しました"); await reload(); } catch (e) { notify({ level: "error", message: e instanceof Error ? e.message : "カテゴリ更新に失敗しました" }); } }}>保存</button>
-                    <button type="button" className="ghost-btn" onClick={() => moveCategory(category.id, -1)} disabled={index === 0}>↑</button>
-                    <button type="button" className="ghost-btn" onClick={() => moveCategory(category.id, 1)} disabled={index === activeCategories.length - 1}>↓</button>
-                    <button type="button" className="ghost-btn danger-btn" onClick={() => deleteCategory(category)}>削除</button>
-                  </div>
-                </article>
-              ))}
-            </div>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm">�f�[�^�폜</CardTitle>
+              <CardDescription>�����s�̑���</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-2">
+              <Button type="button" variant="destructive" onClick={() => void purge("ORDERS")}>
+                <Delete20Regular />
+                �����f�[�^��폜
+              </Button>
+              <Button type="button" variant="destructive" onClick={() => void purge("AUDIT_LOGS")}>
+                <Delete20Regular />
+                �č����O��폜
+              </Button>
+            </CardContent>
           </Card>
-        </div>
-
-        <Card>
-          <SectionHeader title="メニュー" subtitle="販売状態、編集、担当設定" icon={<span>◧</span>} />
-          <details className="admin-details" open>
-            <summary>新規メニュー追加</summary>
-            <div className="admin-inline-form">
-              <input placeholder="新しいメニュー名" value={newMenuName} onChange={(e) => setNewMenuName(e.target.value)} />
-              <input placeholder="価格" value={newMenuPrice} onChange={(e) => setNewMenuPrice(e.target.value)} style={{ maxWidth: 120 }} />
-              <input placeholder="調理秒数" value={newMenuWorkloadSeconds} onChange={(e) => setNewMenuWorkloadSeconds(e.target.value)} style={{ maxWidth: 120 }} />
-              <select value={newMenuCategoryId} onChange={(e) => setNewMenuCategoryId(e.target.value)}>
-                <option value="">カテゴリを選択</option>
-                {activeCategories.map((cat) => (<option key={cat.id} value={cat.id}>{cat.name}</option>))}
-              </select>
-              <button type="button" className="ghost-btn" onClick={createMenu} disabled={!newMenuName || !newMenuCategoryId || !newMenuPrice || !newMenuWorkloadSeconds}>追加</button>
-            </div>
-          </details>
-
-          <div className="admin-list">
-            {activeMenus.map((menu) => {
-              const edit = menuEdits[menu.id] ?? { name: menu.name, priceJpy: String(menu.priceJpy), workloadSeconds: String(menu.workloadSeconds), categoryId: menu.categoryId };
-              return (
-                <article key={menu.id} className="admin-row">
-                  <div className="admin-row-head">
-                    <div>
-                      <strong>{menu.name}</strong>
-                      <div className="muted">{fmtJpy(menu.priceJpy)} / {menu.workloadSeconds}秒</div>
-                    </div>
-                    <div className="menu-status-grid" style={{ minWidth: 280 }}>
-                      {AVAILABILITY_OPTIONS.map((status) => {
-                        const noCoverageForAvailable = status === "AVAILABLE" && !menu.hasActiveKitchenCoverage;
-                        const pseudoDisabled = noCoverageForAvailable || menuAvailabilityBusyId === menu.id;
-                        return (
-                          <button key={status} type="button" className={`ghost-btn status-btn ${menu.availability === status ? `status-${status.toLowerCase()} active` : ""}`} aria-disabled={pseudoDisabled ? "true" : undefined} onClick={() => { if (pseudoDisabled) { if (noCoverageForAvailable) notify({ level: "error", message: "現在対応できるキッチンがないため、販売中にできません" }); return; } void changeMenuAvailability(menu, status); }}>{labelOf(AVAILABILITY_LABEL, status)}</button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <details className="admin-actions">
-                    <summary>編集・担当・削除</summary>
-                    <div className="grid four" style={{ marginBottom: 8 }}>
-                      <input value={edit.name} onChange={(e) => setMenuEdits((prev) => ({ ...prev, [menu.id]: { ...edit, name: e.target.value } }))} />
-                      <input value={edit.priceJpy} onChange={(e) => setMenuEdits((prev) => ({ ...prev, [menu.id]: { ...edit, priceJpy: e.target.value } }))} />
-                      <input value={edit.workloadSeconds} onChange={(e) => setMenuEdits((prev) => ({ ...prev, [menu.id]: { ...edit, workloadSeconds: e.target.value } }))} />
-                      <select value={edit.categoryId} onChange={(e) => setMenuEdits((prev) => ({ ...prev, [menu.id]: { ...edit, categoryId: e.target.value } }))}>
-                        {activeCategories.map((cat) => (<option key={cat.id} value={cat.id}>{cat.name}</option>))}
-                      </select>
-                    </div>
-                    <div className="row wrap" style={{ marginBottom: 8 }}>
-                      <button type="button" className="ghost-btn" onClick={() => saveMenuEdit(menu)}>保存</button>
-                      <button type="button" className="ghost-btn" onClick={() => moveMenu(menu, -1)}>↑</button>
-                      <button type="button" className="ghost-btn" onClick={() => moveMenu(menu, 1)}>↓</button>
-                      <button type="button" className="ghost-btn danger-btn" onClick={() => deleteMenu(menu)}>削除</button>
-                    </div>
-                    <div className="row wrap">
-                      {kitchenActors.map((kitchen) => {
-                        const key = `${menu.id}:${kitchen.id}`;
-                        const enabled = assignmentMap.get(key) ?? false;
-                        return (
-                          <button key={key} type="button" className="ghost-btn" onClick={() => toggleAssignment(menu.id, kitchen.id, !enabled)}>
-                            {kitchen.label}: {enabled ? "有効" : "無効"}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </details>
-                </article>
-              );
-            })}
-          </div>
-        </Card>
-
-        <Card>
-          <SectionHeader title="データ削除" subtitle="復元不可操作" icon={<span>◉</span>} />
-          <div className="row wrap">
-            <button type="button" className="ghost-btn danger-btn" onClick={() => purge("ORDERS")}>注文データを削除</button>
-            <button type="button" className="ghost-btn danger-btn" onClick={() => purge("AUDIT_LOGS")}>監査ログを削除</button>
-          </div>
-        </Card>
+        </TooltipProvider>
       </DashboardShell>
     </>
   );
 }
+
+
 
