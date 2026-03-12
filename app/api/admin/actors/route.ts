@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+﻿import { randomUUID } from "node:crypto";
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession } from "@/lib/server/auth";
@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
       trace("parseJson.ok", { actorType: body.actorType });
 
       if (body.actorType === "ADMIN") {
-        throw new AppError(400, "INVALID_ACTOR_TYPE", "管理者アカウントは追加できません");
+        throw new AppError(400, "INVALID_ACTOR_TYPE", "邂｡逅・・い繧ｫ繧ｦ繝ｳ繝医・霑ｽ蜉縺ｧ縺阪∪縺帙ｓ");
       }
 
       trace("tx.create.start");
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
             }
           });
           if (existingCount > 0) {
-            throw new AppError(409, "MENU_DISPLAY_SINGLETON", "メニュー表示ロールは1つのみ作成できます");
+            throw new AppError(409, "MENU_DISPLAY_SINGLETON", "MENU_DISPLAY account can only be created once");
           }
         }
 
@@ -243,6 +243,10 @@ export async function DELETE(req: NextRequest) {
           throw new AppError(404, "ACTOR_NOT_FOUND", "Actor not found");
         }
 
+        if (existing.actorType === "MENU_DISPLAY") {
+          throw new AppError(400, "INVALID_OPERATION", "MENU_DISPLAY actor cannot be deleted");
+        }
+
         await tx.actor.update({
           where: { id: actorId },
           data: {
@@ -302,3 +306,4 @@ export async function DELETE(req: NextRequest) {
     }
   });
 }
+

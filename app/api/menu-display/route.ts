@@ -1,18 +1,17 @@
-import { NextRequest } from "next/server";
+﻿import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession } from "@/lib/server/auth";
 import { fail, ok } from "@/lib/response";
 
-function median(values: number[]): number | null {
+function percentile75(values: number[]): number | null {
   if (values.length === 0) {
     return null;
   }
+
   const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  if (sorted.length % 2 === 0) {
-    return Math.round((sorted[mid - 1] + sorted[mid]) / 2);
-  }
-  return sorted[mid] ?? null;
+  const rawIndex = Math.ceil(sorted.length * 0.75) - 1;
+  const index = Math.min(sorted.length - 1, Math.max(0, rawIndex));
+  return sorted[index] ?? null;
 }
 
 export async function GET(req: NextRequest) {
@@ -51,6 +50,7 @@ export async function GET(req: NextRequest) {
       if (!row.servedAt || !row.order.confirmedAt) {
         continue;
       }
+
       const leadSec = Math.max(0, Math.floor((row.servedAt.getTime() - row.order.confirmedAt.getTime()) / 1000));
       const arr = leadMap.get(row.menuId) ?? [];
       arr.push(leadSec);
@@ -63,16 +63,13 @@ export async function GET(req: NextRequest) {
       displayOrder: cat.displayOrder,
       menus: menus
         .filter((m) => m.categoryId === cat.id)
-        .map((menu) => {
-          const med = menu.showLeadTime ? median(leadMap.get(menu.id) ?? []) : null;
-          return {
-            id: menu.id,
-            name: menu.name,
-            priceJpy: menu.priceJpy,
-            availability: menu.availability,
-            leadTimeSecondsMedian30m: med
-          };
-        })
+        .map((menu) => ({
+          id: menu.id,
+          name: menu.name,
+          priceJpy: menu.priceJpy,
+          availability: menu.availability,
+          leadTimeSecondsP75_30m: menu.showLeadTime ? percentile75(leadMap.get(menu.id) ?? []) : null
+        }))
     }));
 
     return ok({ categories: result });
@@ -80,5 +77,3 @@ export async function GET(req: NextRequest) {
     return fail(error);
   }
 }
-
-

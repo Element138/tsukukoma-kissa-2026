@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useRef, useState } from "react";
 import { apiFetch, fmtJpy } from "@/lib/client";
@@ -16,9 +16,16 @@ type DisplayCategory = {
     name: string;
     priceJpy: number;
     availability: "AVAILABLE" | "PAUSED" | "SOLD_OUT";
-    leadTimeSecondsMedian30m: number | null;
+    leadTimeSecondsP75_30m: number | null;
   }>;
 };
+
+function formatEta(seconds: number | null) {
+  if (seconds == null) {
+    return "-- 分";
+  }
+  return `${Math.max(1, Math.ceil(seconds / 60))} 分`;
+}
 
 export default function MenuDisplayPage() {
   const { loading, session } = useSession(["MENU_DISPLAY"]);
@@ -48,7 +55,6 @@ export default function MenuDisplayPage() {
       return;
     }
     void reload();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
 
   useRealtimeSubscription({
@@ -68,13 +74,7 @@ export default function MenuDisplayPage() {
 
   return (
     <>
-      <TerminalBanner
-        actorId={session.actor.actorId}
-        actorType={session.actor.actorType}
-        actorLabel={session.actor.label}
-        offlineActors={session.offlineActors}
-        inactiveKitchenWarnings={session.inactiveKitchenQueuedItems.map((x) => ({ kitchenName: x.kitchenName }))}
-      />
+      <TerminalBanner actorId={session.actor.actorId} actorType={session.actor.actorType} actorLabel={session.actor.label} offlineActors={session.offlineActors} />
       <main>
         <h1 style={{ marginTop: 0 }}>メニュー表示</h1>
 
@@ -83,20 +83,28 @@ export default function MenuDisplayPage() {
             <section key={category.id} className="card">
               <h2 style={{ marginTop: 0 }}>{category.name}</h2>
               <div className="menu-tile-grid">
-                {category.menus.map((menu) => (
-                  <article key={menu.id} className="menu-tile">
-                    <strong>{menu.name}</strong>
-                    <div>{fmtJpy(menu.priceJpy)}</div>
-                    <div className="muted">
-                      {menu.leadTimeSecondsMedian30m != null
-                        ? `目安 ${Math.ceil(menu.leadTimeSecondsMedian30m / 60)} 分`
-                        : "目安データなし"}
-                    </div>
-                    <div>
-                      <span className={`badge availability-${menu.availability.toLowerCase()}`}>{labelOf(AVAILABILITY_LABEL, menu.availability)}</span>
-                    </div>
-                  </article>
-                ))}
+                {category.menus.map((menu) => {
+                  const unavailable = menu.availability !== "AVAILABLE";
+                  return (
+                    <article key={menu.id} className={`menu-tile ${unavailable ? "unavailable" : ""}`}>
+                      <strong>{menu.name}</strong>
+
+                      {unavailable ? (
+                        <div className="menu-tile-status">{labelOf(AVAILABILITY_LABEL, menu.availability)}</div>
+                      ) : (
+                        <div className="menu-tile-footer">
+                          <div className="menu-tile-stat">{fmtJpy(menu.priceJpy)}</div>
+                          <div style={{ textAlign: "right" }}>
+                            <div className="muted" style={{ fontSize: "0.75rem" }}>
+                              提供目安 (75%)
+                            </div>
+                            <div className="menu-tile-stat">{formatEta(menu.leadTimeSecondsP75_30m)}</div>
+                          </div>
+                        </div>
+                      )}
+                    </article>
+                  );
+                })}
               </div>
             </section>
           ))}

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -11,7 +11,6 @@ type BannerProps = {
   actorType: string;
   actorId: string;
   offlineActors: Array<{ actorId: string; actorType: string; label: string }>;
-  inactiveKitchenWarnings: Array<{ kitchenName: string }>;
 };
 
 const JP = {
@@ -19,10 +18,8 @@ const JP = {
   quoteL: "「",
   quoteR: "」",
   sep: "、",
-  inactivePrefix: "停止中キッチンに滞留: ",
-  statusOffline: "端末のオフラインを検知",
-  statusOnline: "端末はすべてオンライン",
-  statusInactiveKitchen: "停止中キッチンに未処理あり",
+  statusOffline: "オフライン端末があります",
+  statusOnline: "全端末オンライン",
   logout: "ログアウト"
 };
 
@@ -50,19 +47,6 @@ export function TerminalBanner(props: BannerProps) {
     }
   }, [props.offlineActors, notify, dismiss]);
 
-  useEffect(() => {
-    if (props.inactiveKitchenWarnings.length > 0) {
-      notify({
-        id: "critical-kitchen",
-        level: "error",
-        sticky: true,
-        message: `${JP.inactivePrefix}${[...new Set(props.inactiveKitchenWarnings.map((w) => w.kitchenName))].join(JP.sep)}`
-      });
-    } else {
-      dismiss("critical-kitchen");
-    }
-  }, [props.inactiveKitchenWarnings, notify, dismiss]);
-
   return (
     <header className="terminal-banner">
       <div>
@@ -75,10 +59,8 @@ export function TerminalBanner(props: BannerProps) {
         ) : (
           <span className="status ok">{JP.statusOnline}</span>
         )}
-
-        {props.inactiveKitchenWarnings.length > 0 && <span className="status error">{JP.statusInactiveKitchen}</span>}
       </div>
-      <button className="ghost-btn" onClick={doLogout}>
+      <button className="ghost-btn" type="button" onClick={doLogout}>
         {JP.logout}
       </button>
     </header>

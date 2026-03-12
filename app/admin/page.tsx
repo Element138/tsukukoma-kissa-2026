@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -36,6 +36,7 @@ type Menu = {
   displayOrder: number;
   categoryId: string;
   isActive: boolean;
+  hasActiveKitchenCoverage: boolean;
 };
 
 type Assignment = {
@@ -50,6 +51,12 @@ type MenuEdit = {
   workloadSeconds: string;
   categoryId: string;
 };
+
+const AVAILABILITY_OPTIONS: Array<Menu["availability"]> = ["AVAILABLE", "PAUSED", "SOLD_OUT"];
+
+function confirmDanger(message: string) {
+  return window.confirm(message);
+}
 
 export default function AdminPage() {
   const { loading, session } = useSession(["ADMIN"]);
@@ -73,6 +80,7 @@ export default function AdminPage() {
   const [newMenuCategoryId, setNewMenuCategoryId] = useState("");
   const [newMenuWorkloadSeconds, setNewMenuWorkloadSeconds] = useState("300");
   const [menuEdits, setMenuEdits] = useState<Record<string, MenuEdit>>({});
+  const [menuAvailabilityBusyId, setMenuAvailabilityBusyId] = useState<string | null>(null);
 
   const kitchenActors = useMemo(
     () =>
@@ -87,9 +95,23 @@ export default function AdminPage() {
     [categories]
   );
 
+  const categoryOrderMap = useMemo(() => new Map(activeCategories.map((cat) => [cat.id, cat.displayOrder])), [activeCategories]);
+
   const activeMenus = useMemo(
-    () => menus.filter((menu) => menu.isActive).sort((a, b) => a.displayOrder - b.displayOrder || a.name.localeCompare(b.name, "ja")),
-    [menus]
+    () =>
+      menus
+        .filter((menu) => menu.isActive)
+        .sort((a, b) => {
+          const categoryDiff = (categoryOrderMap.get(a.categoryId) ?? 9999) - (categoryOrderMap.get(b.categoryId) ?? 9999);
+          if (categoryDiff !== 0) {
+            return categoryDiff;
+          }
+          if (a.displayOrder !== b.displayOrder) {
+            return a.displayOrder - b.displayOrder;
+          }
+          return a.name.localeCompare(b.name, "ja");
+        }),
+    [menus, categoryOrderMap]
   );
 
   const reloadInFlightRef = useRef(false);
@@ -139,7 +161,7 @@ export default function AdminPage() {
         setNewMenuCategoryId(categoryRes.categories[0]!.id);
       }
     } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "管理データの取得に失敗しました" });
+      notify({ level: "error", message: e instanceof Error ? e.message : "管理データの更新に失敗しました" });
     } finally {
       reloadInFlightRef.current = false;
     }
@@ -150,7 +172,6 @@ export default function AdminPage() {
       return;
     }
     void reload();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
 
   useRealtimeSubscription({
@@ -204,9 +225,13 @@ export default function AdminPage() {
     }
   };
 
-  const deleteActor = async (id: string) => {
+  const deleteActor = async (actor: Actor) => {
+    if (!confirmDanger(`アカウント「${actor.label}」を削除します。よろしいですか？`)) {
+      return;
+    }
+
     try {
-      await apiFetch(`/api/admin/actors?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+      await apiFetch(`/api/admin/actors?id=${encodeURIComponent(actor.id)}`, { method: "DELETE" });
       notify({ level: "success", message: "アカウントを削除しました" });
       await reload();
     } catch (e) {
@@ -220,7 +245,7 @@ export default function AdminPage() {
         method: "POST",
         body: JSON.stringify({ actorId: id })
       });
-      notify({ level: "success", message: "強制ログアウトを実行しました" });
+      notify({ level: "success", message: "強制ログアウトしました" });
       await reload();
     } catch (e) {
       notify({ level: "error", message: e instanceof Error ? e.message : "強制ログアウトに失敗しました" });
@@ -237,10 +262,10 @@ export default function AdminPage() {
           kitchenEnabled: nextEnabled
         })
       });
-      notify({ level: "success", message: nextEnabled ? "キッチンを有効化しました" : "キッチンを停止しました" });
+      notify({ level: "success", message: nextEnabled ? "キッチンを稼働にしました" : "キッチンを停止にしました" });
       await reload();
     } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "キッチン状態の変更に失敗しました" });
+      notify({ level: "error", message: e instanceof Error ? e.message : "キッチン状態の更新に失敗しました" });
     }
   };
 
@@ -248,7 +273,10 @@ export default function AdminPage() {
     try {
       await apiFetch("/api/admin/categories", {
         method: "POST",
-        body: JSON.stringify({ name: newCategoryName, displayOrder: activeCategories.length + 1 })
+        body: JSON.stringify({
+          name: newCategoryName,
+          displayOrder: (activeCategories.at(-1)?.displayOrder ?? 0) + 1
+        })
       });
       setNewCategoryName("");
       notify({ level: "success", message: "カテゴリを作成しました" });
@@ -266,6 +294,20 @@ export default function AdminPage() {
     notify({ level: "success", message: successMessage });
   };
 
+  const deleteCategory = async (category: Category) => {
+    if (!confirmDanger(`カテゴリ「${category.name}」を削除します。配下メニューも無効化されます。よろしいですか？`)) {
+      return;
+    }
+
+    try {
+      await apiFetch(`/api/admin/categories?id=${encodeURIComponent(category.id)}`, { method: "DELETE" });
+      notify({ level: "success", message: "カテゴリを削除しました" });
+      await reload();
+    } catch (e) {
+      notify({ level: "error", message: e instanceof Error ? e.message : "カテゴリ削除に失敗しました" });
+    }
+  };
+
   const moveCategory = async (categoryId: string, direction: -1 | 1) => {
     const sorted = [...activeCategories];
     const index = sorted.findIndex((cat) => cat.id === categoryId);
@@ -281,7 +323,7 @@ export default function AdminPage() {
       ]);
       await reload();
     } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "カテゴリ順の更新に失敗しました" });
+      notify({ level: "error", message: e instanceof Error ? e.message : "カテゴリ順更新に失敗しました" });
     }
   };
 
@@ -294,7 +336,7 @@ export default function AdminPage() {
           priceJpy: Number(newMenuPrice),
           availability: "PAUSED",
           workloadSeconds: Number(newMenuWorkloadSeconds),
-          displayOrder: activeMenus.length + 1,
+          displayOrder: (activeMenus.at(-1)?.displayOrder ?? 0) + 1,
           categoryId: newMenuCategoryId,
           showLeadTime: true
         })
@@ -330,11 +372,15 @@ export default function AdminPage() {
       ]);
       await reload();
     } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "メニュー順の更新に失敗しました" });
+      notify({ level: "error", message: e instanceof Error ? e.message : "メニュー順更新に失敗しました" });
     }
   };
 
   const deleteMenu = async (menu: Menu) => {
+    if (!confirmDanger(`メニュー「${menu.name}」を削除します。よろしいですか？`)) {
+      return;
+    }
+
     try {
       await patchMenu(menu, { isActive: false }, "メニューを削除しました");
       await reload();
@@ -366,21 +412,40 @@ export default function AdminPage() {
     }
   };
 
+  const changeMenuAvailability = async (menu: Menu, status: Menu["availability"]) => {
+    if (status === "AVAILABLE" && !menu.hasActiveKitchenCoverage) {
+      notify({ level: "error", message: "現在対応できるキッチンがないため、販売中にできません" });
+      return;
+    }
+
+    setMenuAvailabilityBusyId(menu.id);
+
+    try {
+      await patchMenu(menu, { availability: status }, "販売状態を更新しました");
+      await reload();
+    } catch (e) {
+      notify({ level: "error", message: e instanceof Error ? e.message : "販売状態更新に失敗しました" });
+    } finally {
+      setMenuAvailabilityBusyId(null);
+    }
+  };
+
   const toggleAssignment = async (menuId: string, kitchenId: string, enabled: boolean) => {
     try {
       await apiFetch("/api/admin/assignments", {
         method: "POST",
         body: JSON.stringify({ menuId, kitchenId, enabled })
       });
-      notify({ level: "success", message: enabled ? "全員を有効化しました" : "全員を無効化しました" });
+      notify({ level: "success", message: enabled ? "担当を有効化しました" : "担当を無効化しました" });
       await reload();
     } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "全員更新に失敗しました" });
+      notify({ level: "error", message: e instanceof Error ? e.message : "担当更新に失敗しました" });
     }
   };
 
   const purge = async (target: "ORDERS" | "AUDIT_LOGS") => {
-    const confirmed = window.confirm(`${target === "ORDERS" ? "注文" : "監査ログ"}を全削除します。実行しますか？`);
+    const label = target === "ORDERS" ? "注文データ" : "監査ログ";
+    const confirmed = confirmDanger(`${label}を削除します。復元できません。実行しますか？`);
     if (!confirmed) {
       return;
     }
@@ -390,10 +455,10 @@ export default function AdminPage() {
         method: "POST",
         body: JSON.stringify({ target, confirmationText: "DELETE" })
       });
-      notify({ level: "warning", message: `${target === "ORDERS" ? "注文" : "監査ログ"}を削除しました` });
+      notify({ level: "warning", message: `${label}を削除しました` });
       await reload();
     } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "削除処理に失敗しました" });
+      notify({ level: "error", message: e instanceof Error ? e.message : "削除に失敗しました" });
     }
   };
 
@@ -405,22 +470,16 @@ export default function AdminPage() {
 
   return (
     <>
-      <TerminalBanner
-        actorId={session.actor.actorId}
-        actorType={session.actor.actorType}
-        actorLabel={session.actor.label}
-        offlineActors={session.offlineActors}
-        inactiveKitchenWarnings={session.inactiveKitchenQueuedItems.map((x) => ({ kitchenName: x.kitchenName }))}
-      />
+      <TerminalBanner actorId={session.actor.actorId} actorType={session.actor.actorType} actorLabel={session.actor.label} offlineActors={session.offlineActors} />
       <main className="grid">
         <div className="row between wrap">
           <h1 style={{ margin: 0 }}>管理画面</h1>
           <div className="row wrap">
-            <Link href="/order-book">
-              <button className="ghost-btn">オーダーブック</button>
+            <Link href="/order-book" className="btn-link ghost-btn">
+              オーダーブック
             </Link>
-            <Link href="/audit">
-              <button className="ghost-btn">監査ログ</button>
+            <Link href="/audit" className="btn-link ghost-btn">
+              監査ログ
             </Link>
           </div>
         </div>
@@ -434,15 +493,11 @@ export default function AdminPage() {
               <option value="WAITER">配膳</option>
             </select>
             {newActorType === "KITCHEN" && (
-              <input
-                placeholder="表示順"
-                value={newKitchenDisplayOrder}
-                onChange={(e) => setNewKitchenDisplayOrder(e.target.value)}
-              />
+              <input placeholder="表示順" value={newKitchenDisplayOrder} onChange={(e) => setNewKitchenDisplayOrder(e.target.value)} />
             )}
             <input placeholder="表示名" value={newActorLabel} onChange={(e) => setNewActorLabel(e.target.value)} required />
             <input placeholder="パスワード" value={newActorSecret} onChange={(e) => setNewActorSecret(e.target.value)} required />
-            <button>アカウント作成</button>
+            <button type="submit">アカウント作成</button>
           </form>
 
           <div className="list" style={{ marginTop: 12 }}>
@@ -452,12 +507,13 @@ export default function AdminPage() {
                   <strong>{actor.label}</strong>
                   <div className="muted">
                     {labelOf(ACTOR_TYPE_LABEL, actor.actorType)}
-                    {actor.actorType === "KITCHEN" ? ` / ${actor.kitchenEnabled ? "有効" : "停止"} / 順序:${actor.kitchenDisplayOrder}` : ""}
+                    {actor.actorType === "KITCHEN" ? ` / ${actor.kitchenEnabled ? "稼働" : "停止"} / 表示順 ${actor.kitchenDisplayOrder}` : ""}
                   </div>
                   <div className="muted">{actor.online ? "オンライン" : "オフライン"}</div>
                 </div>
                 <div className="row wrap">
                   <button
+                    type="button"
                     className="ghost-btn"
                     onClick={() => {
                       const next = prompt("新しい表示名", actor.label);
@@ -470,9 +526,10 @@ export default function AdminPage() {
                     表示名変更
                   </button>
                   <button
+                    type="button"
                     className="ghost-btn"
                     onClick={() => {
-                      const next = prompt("新しいパスワード（4文字以上）", "");
+                      const next = prompt("新しいパスワード", "");
                       if (next) {
                         void updateActor(actor.id, { secret: next }, "パスワードを更新しました");
                       }
@@ -483,10 +540,11 @@ export default function AdminPage() {
                   </button>
                   {actor.actorType === "KITCHEN" && (
                     <>
-                      <button className="ghost-btn" onClick={() => toggleKitchenEnabled(actor)} disabled={!actor.isActive}>
-                        {actor.kitchenEnabled ? "キッチン停止" : "キッチン有効化"}
+                      <button type="button" className="ghost-btn" onClick={() => toggleKitchenEnabled(actor)} disabled={!actor.isActive}>
+                        {actor.kitchenEnabled ? "キッチン停止" : "キッチン稼働"}
                       </button>
                       <button
+                        type="button"
                         className="ghost-btn"
                         onClick={() => {
                           const next = prompt("キッチン表示順", String(actor.kitchenDisplayOrder));
@@ -500,11 +558,11 @@ export default function AdminPage() {
                       </button>
                     </>
                   )}
-                  <button className="ghost-btn" onClick={() => forceLogout(actor.id)} disabled={!actor.isActive}>
+                  <button type="button" className="ghost-btn" onClick={() => forceLogout(actor.id)} disabled={!actor.isActive}>
                     強制ログアウト
                   </button>
-                  {actor.id !== "admin" && (
-                    <button className="ghost-btn" onClick={() => deleteActor(actor.id)} disabled={!actor.isActive}>
+                  {actor.id !== "admin" && actor.actorType !== "MENU_DISPLAY" && (
+                    <button type="button" className="ghost-btn danger-btn" onClick={() => deleteActor(actor)} disabled={!actor.isActive}>
                       削除
                     </button>
                   )}
@@ -517,8 +575,8 @@ export default function AdminPage() {
         <Card>
           <SectionTitle>カテゴリ管理</SectionTitle>
           <div className="row wrap">
-            <input placeholder="新規カテゴリ名" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} style={{ maxWidth: 220 }} />
-            <button className="ghost-btn" onClick={createCategory} disabled={!newCategoryName}>
+            <input placeholder="新しいカテゴリ名" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} style={{ maxWidth: 220 }} />
+            <button type="button" className="ghost-btn" onClick={createCategory} disabled={!newCategoryName}>
               追加
             </button>
           </div>
@@ -538,6 +596,7 @@ export default function AdminPage() {
                     style={{ maxWidth: 320 }}
                   />
                   <button
+                    type="button"
                     className="ghost-btn"
                     onClick={async () => {
                       try {
@@ -552,15 +611,14 @@ export default function AdminPage() {
                   </button>
                 </div>
                 <div className="row wrap">
-                  <button className="ghost-btn" onClick={() => moveCategory(category.id, -1)} disabled={index === 0}>
-                    ?
+                  <button type="button" className="ghost-btn" onClick={() => moveCategory(category.id, -1)} disabled={index === 0}>
+                    ↑
                   </button>
-                  <button
-                    className="ghost-btn"
-                    onClick={() => moveCategory(category.id, 1)}
-                    disabled={index === activeCategories.length - 1}
-                  >
-                    ?
+                  <button type="button" className="ghost-btn" onClick={() => moveCategory(category.id, 1)} disabled={index === activeCategories.length - 1}>
+                    ↓
+                  </button>
+                  <button type="button" className="ghost-btn danger-btn" onClick={() => deleteCategory(category)}>
+                    削除
                   </button>
                 </div>
               </div>
@@ -571,14 +629,9 @@ export default function AdminPage() {
         <Card>
           <SectionTitle>メニュー管理</SectionTitle>
           <div className="row wrap">
-            <input placeholder="新規メニュー名" value={newMenuName} onChange={(e) => setNewMenuName(e.target.value)} style={{ maxWidth: 220 }} />
+            <input placeholder="新しいメニュー名" value={newMenuName} onChange={(e) => setNewMenuName(e.target.value)} style={{ maxWidth: 220 }} />
             <input placeholder="価格" value={newMenuPrice} onChange={(e) => setNewMenuPrice(e.target.value)} style={{ maxWidth: 120 }} />
-            <input
-              placeholder="作業秒数"
-              value={newMenuWorkloadSeconds}
-              onChange={(e) => setNewMenuWorkloadSeconds(e.target.value)}
-              style={{ maxWidth: 120 }}
-            />
+            <input placeholder="調理秒数" value={newMenuWorkloadSeconds} onChange={(e) => setNewMenuWorkloadSeconds(e.target.value)} style={{ maxWidth: 120 }} />
             <select value={newMenuCategoryId} onChange={(e) => setNewMenuCategoryId(e.target.value)} style={{ maxWidth: 220 }}>
               <option value="">カテゴリを選択</option>
               {activeCategories.map((cat) => (
@@ -588,6 +641,7 @@ export default function AdminPage() {
               ))}
             </select>
             <button
+              type="button"
               className="ghost-btn"
               onClick={createMenu}
               disabled={!newMenuName || !newMenuCategoryId || !newMenuPrice || !newMenuWorkloadSeconds}
@@ -605,28 +659,40 @@ export default function AdminPage() {
                 categoryId: menu.categoryId
               };
 
-              const availabilityButtons: Array<Menu["availability"]> = ["AVAILABLE", "PAUSED", "SOLD_OUT"];
-
               return (
                 <div key={menu.id} className="list-item">
                   <div className="row between wrap">
                     <div>
                       <strong>{menu.name}</strong>
-                      <div className="muted">{fmtJpy(menu.priceJpy)} / {menu.workloadSeconds}?</div>
+                      <div className="muted">
+                        {fmtJpy(menu.priceJpy)} / {menu.workloadSeconds}秒
+                      </div>
                     </div>
-                    <div className="row wrap">
-                      {availabilityButtons.map((status) => (
-                        <button
-                          key={status}
-                          className={`ghost-btn status-btn ${menu.availability === status ? `status-${status.toLowerCase()} active` : ""}`}
-                          onClick={() => patchMenu(menu, { availability: status }, "販売状態を更新しました")}
-                        >
-                          {labelOf(AVAILABILITY_LABEL, status)}
-                        </button>
-                      ))}
-                      <button className="ghost-btn" onClick={() => deleteMenu(menu)}>
-                        削除
-                      </button>
+                    <div className="menu-status-grid" style={{ minWidth: 360 }}>
+                      {AVAILABILITY_OPTIONS.map((status) => {
+                        const noCoverageForAvailable = status === "AVAILABLE" && !menu.hasActiveKitchenCoverage;
+                        const pseudoDisabled = noCoverageForAvailable || menuAvailabilityBusyId === menu.id;
+
+                        return (
+                          <button
+                            key={status}
+                            type="button"
+                            className={`ghost-btn status-btn ${menu.availability === status ? `status-${status.toLowerCase()} active` : ""}`}
+                            aria-disabled={pseudoDisabled ? "true" : undefined}
+                            onClick={() => {
+                              if (pseudoDisabled) {
+                                if (noCoverageForAvailable) {
+                                  notify({ level: "error", message: "現在対応できるキッチンがないため、販売中にできません" });
+                                }
+                                return;
+                              }
+                              void changeMenuAvailability(menu, status);
+                            }}
+                          >
+                            {labelOf(AVAILABILITY_LABEL, status)}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -688,14 +754,17 @@ export default function AdminPage() {
                   </div>
 
                   <div className="row wrap" style={{ marginTop: 8 }}>
-                    <button className="ghost-btn" onClick={() => saveMenuEdit(menu)}>
-                      変更保存
+                    <button type="button" className="ghost-btn" onClick={() => saveMenuEdit(menu)}>
+                      変更を保存
                     </button>
-                    <button className="ghost-btn" onClick={() => moveMenu(menu, -1)}>
-                      ?
+                    <button type="button" className="ghost-btn" onClick={() => moveMenu(menu, -1)}>
+                      ↑
                     </button>
-                    <button className="ghost-btn" onClick={() => moveMenu(menu, 1)}>
-                      ?
+                    <button type="button" className="ghost-btn" onClick={() => moveMenu(menu, 1)}>
+                      ↓
+                    </button>
+                    <button type="button" className="ghost-btn danger-btn" onClick={() => deleteMenu(menu)}>
+                      削除
                     </button>
                   </div>
 
@@ -705,6 +774,7 @@ export default function AdminPage() {
                       const enabled = assignmentMap.get(key) ?? false;
                       return (
                         <button
+                          type="button"
                           key={key}
                           className="ghost-btn"
                           onClick={() => toggleAssignment(menu.id, kitchen.id, !enabled)}
@@ -722,10 +792,14 @@ export default function AdminPage() {
         </Card>
 
         <Card>
-          <SectionTitle>大量削除</SectionTitle>
+          <SectionTitle>データ削除</SectionTitle>
           <div className="row wrap">
-            <button className="ghost-btn" onClick={() => purge("ORDERS")}>注文データを全削除</button>
-            <button className="ghost-btn" onClick={() => purge("AUDIT_LOGS")}>監査ログを全削除</button>
+            <button type="button" className="ghost-btn danger-btn" onClick={() => purge("ORDERS")}>
+              注文データを削除
+            </button>
+            <button type="button" className="ghost-btn danger-btn" onClick={() => purge("AUDIT_LOGS")}>
+              監査ログを削除
+            </button>
           </div>
         </Card>
       </main>

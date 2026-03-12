@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -11,9 +11,9 @@ import {
   AVAILABILITY_LABEL,
   FULFILLMENT_LABEL,
   PAYMENT_METHOD_LABEL,
+  PAYMENT_SKIP_REASON_LABEL,
   PAYMENT_STATUS_LABEL,
   ORDER_STATUS_LABEL,
-  PAYMENT_SKIP_REASON_LABEL,
   labelOf
 } from "@/lib/labels";
 import { useToast } from "@/components/toast";
@@ -26,12 +26,17 @@ type MenuPayload = {
     availability: "AVAILABLE" | "PAUSED" | "SOLD_OUT";
     isActive: boolean;
     categoryId: string;
+    displayOrder: number;
+    hasActiveKitchenCoverage: boolean;
   }>;
   categories: Array<{
     id: string;
     name: string;
+    displayOrder: number;
   }>;
 };
+
+const AVAILABILITY_OPTIONS: Array<"AVAILABLE" | "PAUSED" | "SOLD_OUT"> = ["AVAILABLE", "PAUSED", "SOLD_OUT"];
 
 const AGE_GROUPS = [
   { key: "infant", label: "0-6歳" },
@@ -72,29 +77,48 @@ export default function PosPage() {
   const [skipReasonType, setSkipReasonType] = useState<"TEST" | "DEVICE_ERROR" | "NETWORK_ERROR" | "OTHER">("TEST");
   const [skipReasonText, setSkipReasonText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [menuAvailabilityBusyId, setMenuAvailabilityBusyId] = useState<string | null>(null);
+
+  const loadMenus = async () => {
+    const data = await apiFetch<MenuPayload>("/api/admin/menus");
+    setMenus(data);
+  };
 
   useEffect(() => {
     if (!session) {
       return;
     }
-    apiFetch<MenuPayload>("/api/admin/menus")
-      .then(setMenus)
-      .catch((e) => notify({ level: "error", message: e.message }));
+
+    loadMenus().catch((e) => notify({ level: "error", message: e.message }));
   }, [session, notify]);
+
+  const categoryOrderMap = useMemo(() => {
+    if (!menus) {
+      return new Map<string, number>();
+    }
+    return new Map(menus.categories.map((cat) => [cat.id, cat.displayOrder]));
+  }, [menus]);
 
   const menuList = useMemo(() => {
     if (!menus) {
       return [] as MenuPayload["menus"];
     }
-    return menus.menus.filter((m) => m.isActive);
-  }, [menus]);
 
-  const categoryMap = useMemo(() => {
-    if (!menus) {
-      return new Map<string, string>();
-    }
-    return new Map(menus.categories.map((cat) => [cat.id, cat.name]));
-  }, [menus]);
+    return menus.menus
+      .filter((m) => m.isActive)
+      .sort((a, b) => {
+        const categoryDiff = (categoryOrderMap.get(a.categoryId) ?? 9999) - (categoryOrderMap.get(b.categoryId) ?? 9999);
+        if (categoryDiff !== 0) {
+          return categoryDiff;
+        }
+
+        if (a.displayOrder !== b.displayOrder) {
+          return a.displayOrder - b.displayOrder;
+        }
+
+        return a.name.localeCompare(b.name, "ja");
+      });
+  }, [menus, categoryOrderMap]);
 
   const selectedItems = useMemo(() => {
     return menuList
@@ -103,6 +127,7 @@ export default function PosPage() {
   }, [menuList, cart]);
 
   const total = selectedItems.reduce((sum, item) => sum + item.priceJpy * item.quantity, 0);
+  const displayTotal = paymentMethod === "PAYMENT_SKIPPED" ? 0 : total;
   const partySize = AGE_GROUPS.reduce((sum, group) => sum + (ageGroupCounts[group.key] ?? 0), 0);
 
   const ageRanges = useMemo(() => {
@@ -140,13 +165,40 @@ export default function PosPage() {
     });
   };
 
+  const updateMenuAvailability = async (menuId: string, next: "AVAILABLE" | "PAUSED" | "SOLD_OUT") => {
+    const menu = menuList.find((row) => row.id === menuId);
+    if (!menu) {
+      return;
+    }
+
+    if (next === "AVAILABLE" && !menu.hasActiveKitchenCoverage) {
+      notify({ level: "error", message: "現在対応できるキッチンがないため、販売中にできません" });
+      return;
+    }
+
+    setMenuAvailabilityBusyId(menuId);
+
+    try {
+      await apiFetch("/api/admin/menus", {
+        method: "PATCH",
+        body: JSON.stringify({ id: menuId, availability: next })
+      });
+      notify({ level: "success", message: `${menu.name} を ${labelOf(AVAILABILITY_LABEL, next)} に変更しました` });
+      await loadMenus();
+    } catch (e) {
+      notify({ level: "error", message: e instanceof Error ? e.message : "メニュー状態の更新に失敗しました" });
+    } finally {
+      setMenuAvailabilityBusyId(null);
+    }
+  };
+
   const submitOrder = async () => {
     if (selectedItems.length === 0) {
       notify({ level: "warning", message: "メニューを選択してください" });
       return;
     }
     if (partySize <= 0) {
-      notify({ level: "warning", message: "年齢構成を1名以上で入力してください" });
+      notify({ level: "warning", message: "年齢構成を入力してください" });
       return;
     }
 
@@ -199,13 +251,7 @@ export default function PosPage() {
 
   return (
     <>
-      <TerminalBanner
-        actorId={session.actor.actorId}
-        actorType={session.actor.actorType}
-        actorLabel={session.actor.label}
-        offlineActors={session.offlineActors}
-        inactiveKitchenWarnings={session.inactiveKitchenQueuedItems.map((x) => ({ kitchenName: x.kitchenName }))}
-      />
+      <TerminalBanner actorId={session.actor.actorId} actorType={session.actor.actorType} actorLabel={session.actor.label} offlineActors={session.offlineActors} />
       <main className="grid two">
         <Card>
           <SectionTitle>メニュー</SectionTitle>
@@ -215,20 +261,47 @@ export default function PosPage() {
               const unavailable = menu.availability !== "AVAILABLE";
               return (
                 <div key={menu.id} className={`menu-tile ${qty > 0 ? "selected" : ""} ${unavailable ? "unavailable" : ""}`}>
-                  <div>
+                  <div className="row between">
                     <strong>{menu.name}</strong>
-                    <div className="muted">{categoryMap.get(menu.categoryId) ?? "カテゴリ未設定"}</div>
-                    <div className="muted">{fmtJpy(menu.priceJpy)}</div>
                     <span className={`badge availability-${menu.availability.toLowerCase()}`}>{labelOf(AVAILABILITY_LABEL, menu.availability)}</span>
                   </div>
-                  <div className="row">
-                    <button className="ghost-btn" onClick={() => changeQty(menu.id, -1)}>
-                      -
-                    </button>
-                    <strong>{qty}</strong>
-                    <button className="ghost-btn" onClick={() => changeQty(menu.id, 1)} disabled={unavailable}>
-                      +
-                    </button>
+                  <div className="menu-tile-footer">
+                    <span className="menu-tile-stat">{fmtJpy(menu.priceJpy)}</span>
+                    <div className="row" style={{ justifyContent: "flex-end" }}>
+                      <button className="ghost-btn" type="button" onClick={() => changeQty(menu.id, -1)}>
+                        -
+                      </button>
+                      <strong>{qty}</strong>
+                      <button className="ghost-btn" type="button" onClick={() => changeQty(menu.id, 1)} disabled={unavailable}>
+                        +
+                      </button>
+                    </div>
+                  </div>
+                  <div className="menu-status-grid">
+                    {AVAILABILITY_OPTIONS.map((option) => {
+                      const noCoverageForAvailable = option === "AVAILABLE" && !menu.hasActiveKitchenCoverage;
+                      const pseudoDisabled = noCoverageForAvailable || menuAvailabilityBusyId === menu.id;
+
+                      return (
+                        <button
+                          key={option}
+                          type="button"
+                          className={`ghost-btn status-btn ${menu.availability === option ? `status-${option.toLowerCase()} active` : ""}`}
+                          aria-disabled={pseudoDisabled ? "true" : undefined}
+                          onClick={() => {
+                            if (pseudoDisabled) {
+                              if (noCoverageForAvailable) {
+                                notify({ level: "error", message: "現在対応できるキッチンがないため、販売中にできません" });
+                              }
+                              return;
+                            }
+                            void updateMenuAvailability(menu.id, option);
+                          }}
+                        >
+                          {labelOf(AVAILABILITY_LABEL, option)}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               );
@@ -248,11 +321,16 @@ export default function PosPage() {
                 <strong>{fmtJpy(item.priceJpy * item.quantity)}</strong>
               </div>
             ))}
+            {paymentMethod === "PAYMENT_SKIPPED" && total > 0 && (
+              <div className="list-item" style={{ borderColor: "#d18a8a", background: "#fff4f4", color: "#8f1f1f", fontWeight: 700 }}>
+                スキップ控除, - {fmtJpy(total)}
+              </div>
+            )}
           </div>
 
           <div className="row between" style={{ marginTop: 12 }}>
             <span>合計</span>
-            <strong>{fmtJpy(total)}</strong>
+            <strong className="grand-total">{fmtJpy(displayTotal)}</strong>
           </div>
 
           <div className="grid" style={{ marginTop: 12 }}>
@@ -294,7 +372,7 @@ export default function PosPage() {
             </label>
 
             <label>
-              支払方法
+              決済方法
               <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as "CASH" | "SQUARE" | "PAYMENT_SKIPPED")}>
                 <option value="CASH">{labelOf(PAYMENT_METHOD_LABEL, "CASH")}</option>
                 <option value="SQUARE">{labelOf(PAYMENT_METHOD_LABEL, "SQUARE")}</option>
@@ -314,7 +392,7 @@ export default function PosPage() {
                   </select>
                 </label>
                 <label>
-                  詳細理由
+                  詳細メモ
                   <input value={skipReasonText} onChange={(e) => setSkipReasonText(e.target.value)} />
                 </label>
               </>
@@ -325,11 +403,11 @@ export default function PosPage() {
             <ConfirmSlider
               disabled={busy || selectedItems.length === 0 || partySize <= 0}
               text="スライドして注文を確定"
-              processingText="注文を登録中..."
+              processingText="注文を送信中..."
               onConfirm={submitOrder}
             />
-            <Link href="/order-book">
-              <button className="ghost-btn">オーダーブック</button>
+            <Link href="/order-book" className="btn-link ghost-btn">
+              オーダーブック
             </Link>
           </div>
         </Card>

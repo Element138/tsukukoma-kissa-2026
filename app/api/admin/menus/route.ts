@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+﻿import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession } from "@/lib/server/auth";
 import { fail, ok } from "@/lib/response";
@@ -24,6 +24,20 @@ async function hasActiveCoverage(menuId: string) {
   return count > 0;
 }
 
+function isPosAvailabilityOnlyPatch(body: ReturnType<typeof menuUpdateSchema.parse>) {
+  const editableKeys: Array<keyof typeof body> = [
+    "name",
+    "priceJpy",
+    "workloadSeconds",
+    "displayOrder",
+    "categoryId",
+    "isActive",
+    "showLeadTime"
+  ];
+
+  return editableKeys.every((key) => body[key] === undefined) && body.availability !== undefined;
+}
+
 export async function GET(req: NextRequest) {
   return withRouteTrace(req, "admin/menus.GET", async (trace) => {
     try {
@@ -32,18 +46,39 @@ export async function GET(req: NextRequest) {
       trace("auth.ok");
 
       trace("db.read.start");
-      const [menus, categories] = await Promise.all([
+      const [menus, categories, activeAssignments] = await Promise.all([
         prisma.menu.findMany({
           orderBy: [{ displayOrder: "asc" }, { name: "asc" }]
         }),
         prisma.menuCategory.findMany({
           where: { isActive: true },
           orderBy: { displayOrder: "asc" }
+        }),
+        prisma.menuKitchenAssignment.findMany({
+          where: {
+            enabled: true,
+            kitchenActor: {
+              actorType: "KITCHEN",
+              isActive: true,
+              kitchenEnabled: true
+            }
+          },
+          select: {
+            menuId: true
+          }
         })
       ]);
       trace("db.read.ok", { menuCount: menus.length, categoryCount: categories.length });
 
-      return ok({ menus, categories });
+      const coveredMenuIds = new Set(activeAssignments.map((row) => row.menuId));
+
+      return ok({
+        menus: menus.map((menu) => ({
+          ...menu,
+          hasActiveKitchenCoverage: coveredMenuIds.has(menu.id)
+        })),
+        categories
+      });
     } catch (error) {
       traceError(trace, "error", error);
       return fail(error);
@@ -103,12 +138,16 @@ export async function PATCH(req: NextRequest) {
   return withRouteTrace(req, "admin/menus.PATCH", async (trace) => {
     try {
       trace("auth.start");
-      const actor = await requireSession(req, { actorTypes: ["ADMIN"] });
-      trace("auth.ok", { actorId: actor.actorId });
+      const actor = await requireSession(req, { actorTypes: ["ADMIN", "POS"] });
+      trace("auth.ok", { actorId: actor.actorId, actorType: actor.actorType });
 
       trace("parseJson.start");
       const body = await parseJson(req, menuUpdateSchema);
       trace("parseJson.ok", { menuId: body.id });
+
+      if (actor.actorType === "POS" && !isPosAvailabilityOnlyPatch(body)) {
+        throw new AppError(403, "FORBIDDEN", "POS can only update menu availability");
+      }
 
       const before = await prisma.menu.findUnique({ where: { id: body.id } });
       if (!before) {
@@ -146,10 +185,17 @@ export async function PATCH(req: NextRequest) {
           }
         });
 
+        const actionType =
+          body.isActive === false
+            ? "MENU_DELETED"
+            : actor.actorType === "POS"
+              ? "MENU_AVAILABILITY_UPDATED"
+              : "MENU_UPDATED";
+
         await writeAuditLog(tx, {
           actorId: actor.actorId,
           actorType: actor.actorType,
-          actionType: body.isActive === false ? "MENU_DELETED" : "MENU_UPDATED",
+          actionType,
           entityType: "menu",
           entityId: updated.id,
           beforeJson: before,

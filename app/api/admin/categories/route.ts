@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+﻿import { NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireSession } from "@/lib/server/auth";
@@ -6,6 +6,7 @@ import { fail, ok } from "@/lib/response";
 import { parseJson } from "@/lib/server/http";
 import { writeAuditLog } from "@/lib/domain/audit";
 import { withRouteTrace, traceError } from "@/lib/server/trace";
+import { AppError } from "@/lib/errors";
 import { broadcastInvalidation, CHANNEL_GROUPS } from "@/lib/server/realtime-broadcast";
 
 const createSchema = z.object({
@@ -88,7 +89,7 @@ export async function PATCH(req: NextRequest) {
 
       const before = await prisma.menuCategory.findUnique({ where: { id: body.id } });
       if (!before) {
-        return new Response("Not found", { status: 404 });
+        throw new AppError(404, "CATEGORY_NOT_FOUND", "Category not found");
       }
 
       const category = await prisma.$transaction(async (tx) => {
@@ -118,6 +119,81 @@ export async function PATCH(req: NextRequest) {
       trace("db.update.ok", { categoryId: category.id });
 
       return ok({ category });
+    } catch (error) {
+      traceError(trace, "error", error);
+      return fail(error);
+    }
+  });
+}
+
+export async function DELETE(req: NextRequest) {
+  return withRouteTrace(req, "admin/categories.DELETE", async (trace) => {
+    try {
+      trace("auth.start");
+      const actor = await requireSession(req, { actorTypes: ["ADMIN"] });
+      trace("auth.ok", { actorId: actor.actorId });
+
+      const categoryId = req.nextUrl.searchParams.get("id");
+      if (!categoryId) {
+        throw new AppError(400, "CATEGORY_ID_REQUIRED", "id query parameter is required");
+      }
+
+      const result = await prisma.$transaction(async (tx) => {
+        const existing = await tx.menuCategory.findUnique({
+          where: { id: categoryId },
+          select: {
+            id: true,
+            name: true,
+            isActive: true
+          }
+        });
+
+        if (!existing) {
+          throw new AppError(404, "CATEGORY_NOT_FOUND", "Category not found");
+        }
+
+        await tx.menuCategory.update({
+          where: { id: categoryId },
+          data: { isActive: false }
+        });
+
+        const affectedMenus = await tx.menu.updateMany({
+          where: {
+            categoryId,
+            isActive: true
+          },
+          data: {
+            isActive: false,
+            availability: "PAUSED"
+          }
+        });
+
+        await writeAuditLog(tx, {
+          actorId: actor.actorId,
+          actorType: actor.actorType,
+          actionType: "MENU_CATEGORY_DELETED",
+          entityType: "menu_category",
+          entityId: categoryId,
+          beforeJson: {
+            isActive: existing.isActive,
+            name: existing.name
+          },
+          afterJson: {
+            isActive: false,
+            deactivatedMenus: affectedMenus.count
+          },
+          result: "SUCCESS"
+        });
+
+        await broadcastInvalidation(tx, [...CHANNEL_GROUPS.CATEGORIES, ...CHANNEL_GROUPS.MENUS], "categories", "category_deleted");
+
+        return {
+          categoryId,
+          deactivatedMenus: affectedMenus.count
+        };
+      });
+
+      return ok(result);
     } catch (error) {
       traceError(trace, "error", error);
       return fail(error);

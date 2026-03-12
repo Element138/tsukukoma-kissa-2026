@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+﻿import { NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireSession } from "@/lib/server/auth";
@@ -24,7 +24,6 @@ export async function GET(req: NextRequest) {
   try {
     await requireSession(req, { actorTypes: ["POS", "KITCHEN", "WAITER", "ADMIN"] });
     await runPaymentWatchdog(prisma);
-
 
     const query = querySchema.parse(Object.fromEntries(req.nextUrl.searchParams.entries()));
 
@@ -97,16 +96,20 @@ export async function GET(req: NextRequest) {
     });
 
     const rows = filtered.map((order) => {
-      const hasInactiveKitchenQueuedItem = order.items.some(
-        (item) =>
-          item.status === "QUEUED" &&
-          (!item.kitchenActor || item.kitchenActor.actorType !== "KITCHEN" || !item.kitchenActor.isActive || !item.kitchenActor.kitchenEnabled)
-      );
+      const servedTimestamps = order.items
+        .map((item) => item.servedAt)
+        .filter((servedAt): servedAt is Date => Boolean(servedAt));
+
+      const completedAt = servedTimestamps.length > 0
+        ? new Date(Math.max(...servedTimestamps.map((servedAt) => servedAt.getTime())))
+        : null;
+
       return {
         id: order.id,
         orderNo: order.orderNo,
         createdAt: order.createdAt,
         confirmedAt: order.confirmedAt,
+        completedAt,
         fulfillmentType: order.fulfillmentType,
         tableNo: order.tableNo,
         partySize: order.partySize,
@@ -115,18 +118,12 @@ export async function GET(req: NextRequest) {
         orderStatus: order.orderStatus,
         totalPriceJpy: order.totalPriceJpy,
         specialNote: order.specialNote,
-        hasInactiveKitchenQueuedItem,
         items: order.items.map((item) => ({
           id: item.id,
           name: item.itemNameSnapshot,
           status: item.status,
           kitchenId: item.kitchenId,
-          kitchenName: item.kitchenActor?.label ?? item.kitchenActor?.id,
-          kitchenInactive:
-            !item.kitchenActor ||
-            item.kitchenActor.actorType !== "KITCHEN" ||
-            !item.kitchenActor.isActive ||
-            !item.kitchenActor.kitchenEnabled
+          kitchenName: item.kitchenActor?.label ?? item.kitchenActor?.id
         }))
       };
     });
@@ -136,5 +133,3 @@ export async function GET(req: NextRequest) {
     return fail(error);
   }
 }
-
-

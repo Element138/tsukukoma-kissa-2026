@@ -1,4 +1,4 @@
-import { ActorType, Prisma, Session } from "@prisma/client";
+﻿import { ActorType, Prisma, Session } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { AppError, assert } from "@/lib/errors";
@@ -64,7 +64,14 @@ export function setSessionCookie(response: NextResponse, token: string, actorTyp
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    expires: minutesFromNow(sessionTtlMinutes(actorType))
+    ...(actorType === "MENU_DISPLAY"
+      ? {
+          expires: minutesFromNow(sessionTtlMinutes(actorType))
+        }
+      : {
+          // Keep the browser cookie stable and let server-side session TTL drive actual auth expiry.
+          maxAge: 60 * 60 * 24 * 30
+        })
   });
 }
 
@@ -139,7 +146,7 @@ async function touchActorOnline(actorId: string) {
   });
 }
 
-function touchHeartbeatBestEffort(session: Session & { actor: SessionActor }) {
+async function touchHeartbeatBestEffort(session: Session & { actor: SessionActor }) {
   const tasks: Promise<unknown>[] = [];
 
   if (isStale(session.lastActivityAt)) {
@@ -149,10 +156,14 @@ function touchHeartbeatBestEffort(session: Session & { actor: SessionActor }) {
     tasks.push(touchActorOnline(session.actor.id));
   }
 
-  if (tasks.length > 0) {
-    void Promise.all(tasks).catch((error) => {
-      console.warn("heartbeat touch failed", error);
-    });
+  if (tasks.length === 0) {
+    return;
+  }
+
+  try {
+    await Promise.all(tasks);
+  } catch (error) {
+    console.warn("heartbeat touch failed", error);
   }
 }
 
@@ -169,7 +180,7 @@ export async function requireSession(
     throw new AppError(403, "FORBIDDEN", "Actor type is not allowed");
   }
 
-  touchHeartbeatBestEffort(loaded.session);
+  await touchHeartbeatBestEffort(loaded.session);
 
   return {
     actorId: loaded.session.actor.id,

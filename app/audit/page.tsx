@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -48,7 +48,7 @@ function diffSummary(before: Record<string, unknown> | null, after: Record<strin
   const changed = keys.filter((key) => JSON.stringify(b[key]) !== JSON.stringify(a[key]));
 
   if (changed.length === 0) {
-    return "変更情報なし";
+    return "変更なし";
   }
 
   return changed
@@ -84,7 +84,6 @@ export default function AuditPage() {
   useEffect(() => {
     if (!session) return;
     void reload();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, actionType, actorType, result, orderNo]);
 
   useRealtimeSubscription({
@@ -113,34 +112,28 @@ export default function AuditPage() {
 
   return (
     <>
-      <TerminalBanner
-        actorId={session.actor.actorId}
-        actorType={session.actor.actorType}
-        actorLabel={session.actor.label}
-        offlineActors={session.offlineActors}
-        inactiveKitchenWarnings={session.inactiveKitchenQueuedItems.map((x) => ({ kitchenName: x.kitchenName }))}
-      />
+      <TerminalBanner actorId={session.actor.actorId} actorType={session.actor.actorType} actorLabel={session.actor.label} offlineActors={session.offlineActors} />
       <main>
         <div className="row between wrap" style={{ marginBottom: 12 }}>
           <h1 style={{ margin: 0 }}>監査ログ</h1>
           <div className="row wrap">
-            <a href="/api/audit/export">
-              <button className="ghost-btn">CSV出力</button>
+            <a href="/api/audit/export" className="btn-link ghost-btn">
+              CSV出力
             </a>
-            <Link href="/admin">
-              <button className="ghost-btn">管理画面へ戻る</button>
+            <Link href="/admin" className="btn-link ghost-btn">
+              管理画面へ戻る
             </Link>
           </div>
         </div>
 
         <div className="card row wrap" style={{ marginBottom: 12 }}>
-          <input value={actionType} onChange={(e) => setActionType(e.target.value)} placeholder="操作名" style={{ maxWidth: 220 }} />
+          <input value={actionType} onChange={(e) => setActionType(e.target.value)} placeholder="アクション" style={{ maxWidth: 220 }} />
           <select value={actorType} onChange={(e) => setActorType(e.target.value)} style={{ maxWidth: 180 }}>
-            <option value="">ロール種別: すべて</option>
+            <option value="">ロール: すべて</option>
             <option value="POS">POS</option>
             <option value="KITCHEN">キッチン</option>
             <option value="WAITER">配膳</option>
-            <option value="ADMIN">管理者</option>
+            <option value="ADMIN">管理</option>
           </select>
           <select value={result} onChange={(e) => setResult(e.target.value)} style={{ maxWidth: 170 }}>
             <option value="">結果: すべて</option>
@@ -154,12 +147,12 @@ export default function AuditPage() {
           <table className="table">
             <thead>
               <tr>
-                <th>時刻</th>
-                <th>操作</th>
+                <th>日時</th>
+                <th>アクション</th>
                 <th>ロール</th>
                 <th>対象</th>
                 <th>結果</th>
-                <th>変更内容</th>
+                <th>変更要約</th>
                 <th>理由</th>
               </tr>
             </thead>
@@ -171,9 +164,7 @@ export default function AuditPage() {
                   <td>
                     {labelOf(ACTOR_TYPE_LABEL, log.actorType)} / {log.actorLabel ?? "-"}
                   </td>
-                  <td>
-                    {log.entityType === "actor" ? `actor:${log.entityLabel ?? "-"}` : `${log.entityType}:${log.entityId}`}
-                  </td>
+                  <td>{log.entityType === "actor" ? `actor:${log.entityLabel ?? "-"}` : `${log.entityType}:${log.entityId}`}</td>
                   <td>{labelOf(AUDIT_RESULT_LABEL, log.result)}</td>
                   <td>{log.diff}</td>
                   <td>{log.reasonType ?? log.reasonText ?? ""}</td>

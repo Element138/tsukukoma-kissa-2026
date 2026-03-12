@@ -84,13 +84,18 @@ export default function LoginPage() {
     <main>
       <div className="center-box card">
         <div className="row between">
-          <h1 style={{ margin: 0 }}>{"KISSa ログイン"}</h1>
+          <div>
+            <h1 style={{ margin: 0 }}>KISSa Login</h1>
+            <p className="muted" style={{ margin: "6px 0 0" }}>
+              Smart Cafe Operation Console
+            </p>
+          </div>
           <LogoPlaceholder />
         </div>
 
         <form onSubmit={onSubmit} style={{ marginTop: 16 }} className="grid">
           <label>
-            {"アカウント"}
+            アカウント
             <select value={selectedActorId} onChange={(e) => setSelectedActorId(e.target.value)}>
               {actors.map((actor) => (
                 <option key={actor.id} value={actor.id}>
@@ -101,7 +106,7 @@ export default function LoginPage() {
           </label>
 
           <label>
-            {"パスワード"}
+            パスワード
             <input
               type="password"
               value={secret}
@@ -110,7 +115,7 @@ export default function LoginPage() {
             />
           </label>
 
-          <button disabled={busy || !selectedActorId}>
+          <button type="submit" disabled={busy || !selectedActorId}>
             {busy ? "ログイン中..." : "ログイン"}
           </button>
         </form>

@@ -1,4 +1,4 @@
-import { ActorType, Prisma, PrismaClient } from "@prisma/client";
+﻿import { ActorType, Prisma, PrismaClient } from "@prisma/client";
 import { AppError, assert } from "@/lib/errors";
 import { deriveOrderStatus } from "@/lib/domain/order-status";
 import { now } from "@/lib/time";
@@ -67,7 +67,12 @@ export async function executeUndo(db: DbClient, params: { actorId: string; actor
   );
 
   const undo = await db.undoOperation.findFirst({
-    where: { actorId: params.actorId },
+    where: {
+      actorId: params.actorId,
+      actor: {
+        actorType: params.actorType
+      }
+    },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }]
   });
 
@@ -78,6 +83,7 @@ export async function executeUndo(db: DbClient, params: { actorId: string; actor
   let revertData: Prisma.OrderItemUpdateManyMutationInput;
 
   if (undo.operationType === "ITEM_READY") {
+    assert(params.actorType === "KITCHEN", 403, "UNDO_FORBIDDEN", "Kitchen undo can only target kitchen actions");
     targetItemIds = [undo.targetEntityId];
     expectedCurrentStatus = "READY";
     revertData = {
@@ -85,6 +91,7 @@ export async function executeUndo(db: DbClient, params: { actorId: string; actor
       readyAt: null
     };
   } else if (undo.operationType === "ITEM_READY_BATCH") {
+    assert(params.actorType === "KITCHEN", 403, "UNDO_FORBIDDEN", "Kitchen undo can only target kitchen actions");
     targetItemIds = asStringArray((undo.payload as Record<string, unknown>).itemIds);
     expectedCurrentStatus = "READY";
     revertData = {
@@ -92,6 +99,7 @@ export async function executeUndo(db: DbClient, params: { actorId: string; actor
       readyAt: null
     };
   } else if (undo.operationType === "ITEM_SERVED") {
+    assert(params.actorType === "WAITER", 403, "UNDO_FORBIDDEN", "Waiter undo can only target waiter actions");
     targetItemIds = [undo.targetEntityId];
     expectedCurrentStatus = "SERVED";
     revertData = {
@@ -99,6 +107,7 @@ export async function executeUndo(db: DbClient, params: { actorId: string; actor
       servedAt: null
     };
   } else if (undo.operationType === "TAKEOUT_ORDER_SERVED") {
+    assert(params.actorType === "WAITER", 403, "UNDO_FORBIDDEN", "Waiter undo can only target waiter actions");
     targetItemIds = asStringArray((undo.payload as Record<string, unknown>).itemIds);
     expectedCurrentStatus = "SERVED";
     revertData = {

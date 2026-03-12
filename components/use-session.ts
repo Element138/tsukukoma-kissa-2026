@@ -11,7 +11,6 @@ type SessionPayload = {
     label: string;
   };
   offlineActors: Array<{ actorId: string; actorType: string; label: string }>;
-  inactiveKitchenQueuedItems: Array<{ orderId: string; orderItemId: string; kitchenName: string }>;
 };
 
 function toReasonCode(error: unknown): string {
