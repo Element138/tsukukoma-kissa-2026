@@ -51,7 +51,7 @@ export function useSession(requiredTypes?: Array<SessionPayload["actor"]["actorT
           return;
         }
 
-        const msg = e instanceof Error ? e.message : "\u30bb\u30c3\u30b7\u30e7\u30f3\u30a8\u30e9\u30fc";
+        const msg = e instanceof Error ? e.message : "セッションエラー";
         setError(msg);
 
         if (isAuthError(e)) {

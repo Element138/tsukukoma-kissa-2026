@@ -38,7 +38,7 @@ export default function LoginPage() {
     notify({
       id: "login-reason",
       level: "warning",
-      message: labelOf(SESSION_FAILURE_LABEL, logoutReason, "\u30ed\u30b0\u30a2\u30a6\u30c8\u3057\u307e\u3057\u305f")
+      message: labelOf(SESSION_FAILURE_LABEL, logoutReason, "ログアウトしました")
     });
   }, [logoutReason, notify]);
 
@@ -50,7 +50,7 @@ export default function LoginPage() {
           setSelectedActorId((prev) => prev || data.actors[0]!.id);
         }
       })
-      .catch((e) => setError(e instanceof Error ? e.message : "\u30ed\u30b0\u30a4\u30f3\u7528\u30a2\u30ab\u30a6\u30f3\u30c8\u306e\u53d6\u5f97\u306b\u5931\u6557\u3057\u307e\u3057\u305f"));
+      .catch((e) => setError(e instanceof Error ? e.message : "ログイン用アカウントの取得に失敗しました"));
   }, []);
 
   const selectedActor = useMemo(() => actors.find((actor) => actor.id === selectedActorId) ?? null, [actors, selectedActorId]);
@@ -58,7 +58,7 @@ export default function LoginPage() {
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!selectedActorId) {
-      setError("\u30a2\u30ab\u30a6\u30f3\u30c8\u3092\u9078\u629e\u3057\u3066\u304f\u3060\u3055\u3044");
+      setError("アカウントを選択してください");
       return;
     }
 
@@ -72,7 +72,7 @@ export default function LoginPage() {
       });
       router.push(routeByActorType(data.actorType));
     } catch (err) {
-      const message = err instanceof Error ? err.message : "\u30ed\u30b0\u30a4\u30f3\u306b\u5931\u6557\u3057\u307e\u3057\u305f";
+      const message = err instanceof Error ? err.message : "ログインに失敗しました";
       setError(message);
       notify({ level: "error", message });
     } finally {
@@ -84,13 +84,13 @@ export default function LoginPage() {
     <main>
       <div className="center-box card">
         <div className="row between">
-          <h1 style={{ margin: 0 }}>{"KISSa \u30ed\u30b0\u30a4\u30f3"}</h1>
+          <h1 style={{ margin: 0 }}>{"KISSa ログイン"}</h1>
           <LogoPlaceholder />
         </div>
 
         <form onSubmit={onSubmit} style={{ marginTop: 16 }} className="grid">
           <label>
-            {"\u30a2\u30ab\u30a6\u30f3\u30c8"}
+            {"アカウント"}
             <select value={selectedActorId} onChange={(e) => setSelectedActorId(e.target.value)}>
               {actors.map((actor) => (
                 <option key={actor.id} value={actor.id}>
@@ -101,17 +101,17 @@ export default function LoginPage() {
           </label>
 
           <label>
-            {"\u30d1\u30b9\u30ef\u30fc\u30c9"}
+            {"パスワード"}
             <input
               type="password"
               value={secret}
               onChange={(e) => setSecret(e.target.value)}
-              placeholder={selectedActor ? `${selectedActor.label} \u306e\u30d1\u30b9\u30ef\u30fc\u30c9` : "\u30d1\u30b9\u30ef\u30fc\u30c9"}
+              placeholder={selectedActor ? `${selectedActor.label} のパスワード` : "パスワード"}
             />
           </label>
 
           <button disabled={busy || !selectedActorId}>
-            {busy ? "\u30ed\u30b0\u30a4\u30f3\u4e2d..." : "\u30ed\u30b0\u30a4\u30f3"}
+            {busy ? "ログイン中..." : "ログイン"}
           </button>
         </form>
 

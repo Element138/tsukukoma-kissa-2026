@@ -135,13 +135,13 @@ export default function OrderBookPage() {
           <h1 style={{ margin: 0 }}>オーダーブック</h1>
           <div className="row wrap">
             <Link href={routeByActorType(session.actor.actorType)}>
-              <button className="ghost-btn">\u623b\u308b</button>
+              <button className="ghost-btn">戻る</button>
             </Link>
             <button className="ghost-btn" onClick={() => void reload()}>
-              \u66f4\u65b0
+              更新
             </button>
             <a href="/api/order-book/export">
-              <button className="ghost-btn">CSV\u51fa\u529b</button>
+              <button className="ghost-btn">CSV出力</button>
             </a>
           </div>
         </div>
@@ -171,7 +171,7 @@ export default function OrderBookPage() {
             <article key={order.id} className="card">
               <div className="row between wrap">
                 <div>
-                  <strong>\u6ce8\u6587 #{order.orderNo}</strong>
+                  <strong>注文 #{order.orderNo}</strong>
                   <div className="muted">
                     {labelOf(FULFILLMENT_LABEL, order.fulfillmentType)}
                     {order.tableNo ? ` / テーブル ${order.tableNo}` : ""} / {labelOf(PAYMENT_METHOD_LABEL, order.paymentMethod)}
@@ -215,7 +215,7 @@ export default function OrderBookPage() {
                   <button
                     className="ghost-btn"
                     onClick={() => {
-                      const next = prompt("\u5099\u8003", order.specialNote ?? "");
+                      const next = prompt("備考", order.specialNote ?? "");
                       if (next !== null) {
                         void editNote(order.id, next);
                       }

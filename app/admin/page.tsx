@@ -431,7 +431,7 @@ export default function AdminPage() {
             <select value={newActorType} onChange={(e) => setNewActorType(e.target.value as Actor["actorType"])}>
               <option value="POS">POS</option>
               <option value="KITCHEN">キッチン</option>
-              <option value="WAITER">\u914d\u81b3</option>
+              <option value="WAITER">配膳</option>
             </select>
             {newActorType === "KITCHEN" && (
               <input
@@ -452,7 +452,7 @@ export default function AdminPage() {
                   <strong>{actor.label}</strong>
                   <div className="muted">
                     {labelOf(ACTOR_TYPE_LABEL, actor.actorType)}
-                    {actor.actorType === "KITCHEN" ? ` / ${actor.kitchenEnabled ? "\u6709\u52b9" : "\u505c\u6b62"} / \u9806\u5e8f:${actor.kitchenDisplayOrder}` : ""}
+                    {actor.actorType === "KITCHEN" ? ` / ${actor.kitchenEnabled ? "有効" : "停止"} / 順序:${actor.kitchenDisplayOrder}` : ""}
                   </div>
                   <div className="muted">{actor.online ? "オンライン" : "オフライン"}</div>
                 </div>
@@ -505,7 +505,7 @@ export default function AdminPage() {
                   </button>
                   {actor.id !== "admin" && (
                     <button className="ghost-btn" onClick={() => deleteActor(actor.id)} disabled={!actor.isActive}>
-                      \u524a\u9664
+                      削除
                     </button>
                   )}
                 </div>
@@ -519,7 +519,7 @@ export default function AdminPage() {
           <div className="row wrap">
             <input placeholder="新規カテゴリ名" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} style={{ maxWidth: 220 }} />
             <button className="ghost-btn" onClick={createCategory} disabled={!newCategoryName}>
-              \u8ffd\u52a0
+              追加
             </button>
           </div>
 
@@ -548,7 +548,7 @@ export default function AdminPage() {
                       }
                     }}
                   >
-                    \u4fdd\u5b58
+                    保存
                   </button>
                 </div>
                 <div className="row wrap">
@@ -572,7 +572,7 @@ export default function AdminPage() {
           <SectionTitle>メニュー管理</SectionTitle>
           <div className="row wrap">
             <input placeholder="新規メニュー名" value={newMenuName} onChange={(e) => setNewMenuName(e.target.value)} style={{ maxWidth: 220 }} />
-            <input placeholder="\u4fa1\u683c" value={newMenuPrice} onChange={(e) => setNewMenuPrice(e.target.value)} style={{ maxWidth: 120 }} />
+            <input placeholder="価格" value={newMenuPrice} onChange={(e) => setNewMenuPrice(e.target.value)} style={{ maxWidth: 120 }} />
             <input
               placeholder="作業秒数"
               value={newMenuWorkloadSeconds}
@@ -592,7 +592,7 @@ export default function AdminPage() {
               onClick={createMenu}
               disabled={!newMenuName || !newMenuCategoryId || !newMenuPrice || !newMenuWorkloadSeconds}
             >
-              \u8ffd\u52a0
+              追加
             </button>
           </div>
 
@@ -625,7 +625,7 @@ export default function AdminPage() {
                         </button>
                       ))}
                       <button className="ghost-btn" onClick={() => deleteMenu(menu)}>
-                        \u524a\u9664
+                        削除
                       </button>
                     </div>
                   </div>
@@ -710,7 +710,7 @@ export default function AdminPage() {
                           onClick={() => toggleAssignment(menu.id, kitchen.id, !enabled)}
                           style={{ borderColor: enabled ? "#111" : "#c0c0c0" }}
                         >
-                          {kitchen.label}: {enabled ? "\u6709\u52b9" : "\u7121\u52b9"}
+                          {kitchen.label}: {enabled ? "有効" : "無効"}
                         </button>
                       );
                     })}

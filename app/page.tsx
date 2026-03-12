@@ -9,7 +9,7 @@ export default function HomePage() {
           <div>
             <h1 style={{ margin: "0 0 8px" }}>KISSa</h1>
             <p className="muted" style={{ margin: 0 }}>
-              {"\u30b9\u30de\u30fc\u30c8\u30aa\u30da\u30ec\u30fc\u30b7\u30e7\u30f3\u7ba1\u7406"}
+              {"スマートオペレーション管理"}
             </p>
           </div>
           <LogoPlaceholder />
@@ -17,22 +17,22 @@ export default function HomePage() {
 
         <div style={{ marginTop: 18 }} className="row wrap">
           <Link href="/login">
-            <button>{"\u30ed\u30b0\u30a4\u30f3"}</button>
+            <button>{"ログイン"}</button>
           </Link>
           <Link href="/pos">
             <button className="ghost-btn">POS</button>
           </Link>
           <Link href="/kitchen">
-            <button className="ghost-btn">{"\u30ad\u30c3\u30c1\u30f3"}</button>
+            <button className="ghost-btn">{"キッチン"}</button>
           </Link>
           <Link href="/waiter">
-            <button className="ghost-btn">{"\u914d\u81a3"}</button>
+            <button className="ghost-btn">{"配膣"}</button>
           </Link>
           <Link href="/menu-display">
-            <button className="ghost-btn">{"\u30e1\u30cb\u30e5\u30fc\u8868\u793a"}</button>
+            <button className="ghost-btn">{"メニュー表示"}</button>
           </Link>
           <Link href="/admin">
-            <button className="ghost-btn">{"\u7ba1\u7406"}</button>
+            <button className="ghost-btn">{"管理"}</button>
           </Link>
         </div>
       </div>

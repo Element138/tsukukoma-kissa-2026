@@ -88,7 +88,7 @@ export function ToastProvider({ children }: PropsWithChildren) {
         {toasts.map((toast) => (
           <div key={toast.id} className={`toast toast-${toast.level}`}>
             <div>{toast.message}</div>
-            <button className="toast-close" onClick={() => dismiss(toast.id)} aria-label={"\u9589\u3058\u308b"}>
+            <button className="toast-close" onClick={() => dismiss(toast.id)} aria-label={"閉じる"}>
               x
             </button>
           </div>

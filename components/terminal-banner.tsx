@@ -15,15 +15,15 @@ type BannerProps = {
 };
 
 const JP = {
-  offlinePrefix: "\u30aa\u30d5\u30e9\u30a4\u30f3\u7aef\u672b: ",
-  quoteL: "\u300c",
-  quoteR: "\u300d",
-  sep: "\u3001",
-  inactivePrefix: "\u505c\u6b62\u4e2d\u30ad\u30c3\u30c1\u30f3\u306b\u6ede\u7559: ",
-  statusOffline: "\u7aef\u672b\u306e\u30aa\u30d5\u30e9\u30a4\u30f3\u3092\u691c\u77e5",
-  statusOnline: "\u7aef\u672b\u306f\u3059\u3079\u3066\u30aa\u30f3\u30e9\u30a4\u30f3",
-  statusInactiveKitchen: "\u505c\u6b62\u4e2d\u30ad\u30c3\u30c1\u30f3\u306b\u672a\u51e6\u7406\u3042\u308a",
-  logout: "\u30ed\u30b0\u30a2\u30a6\u30c8"
+  offlinePrefix: "オフライン端末: ",
+  quoteL: "「",
+  quoteR: "」",
+  sep: "、",
+  inactivePrefix: "停止中キッチンに滞留: ",
+  statusOffline: "端末のオフラインを検知",
+  statusOnline: "端末はすべてオンライン",
+  statusInactiveKitchen: "停止中キッチンに未処理あり",
+  logout: "ログアウト"
 };
 
 export function TerminalBanner(props: BannerProps) {

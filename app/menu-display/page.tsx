@@ -89,7 +89,7 @@ export default function MenuDisplayPage() {
                     <div>{fmtJpy(menu.priceJpy)}</div>
                     <div className="muted">
                       {menu.leadTimeSecondsMedian30m != null
-                        ? `\u76ee\u5b89 ${Math.ceil(menu.leadTimeSecondsMedian30m / 60)} \u5206`
+                        ? `目安 ${Math.ceil(menu.leadTimeSecondsMedian30m / 60)} 分`
                         : "目安データなし"}
                     </div>
                     <div>

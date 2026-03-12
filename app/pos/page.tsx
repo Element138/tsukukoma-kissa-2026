@@ -34,11 +34,11 @@ type MenuPayload = {
 };
 
 const AGE_GROUPS = [
-  { key: "infant", label: "0-6\u6b73" },
-  { key: "child", label: "7-12\u6b73" },
-  { key: "teen", label: "13-19\u6b73" },
-  { key: "adult", label: "20-64\u6b73" },
-  { key: "senior", label: "65\u6b73\u4ee5\u4e0a" }
+  { key: "infant", label: "0-6歳" },
+  { key: "child", label: "7-12歳" },
+  { key: "teen", label: "13-19歳" },
+  { key: "adult", label: "20-64歳" },
+  { key: "senior", label: "65歳以上" }
 ] as const;
 
 type AgeGroupKey = (typeof AGE_GROUPS)[number]["key"];
