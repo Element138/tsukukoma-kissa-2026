@@ -1,15 +1,15 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { apiFetch } from "@/lib/client";
 import { useSession } from "@/components/use-session";
-import { Card, SectionTitle } from "@/components/ui";
 import { TerminalBanner } from "@/components/terminal-banner";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
 import { AVAILABILITY_LABEL, labelOf } from "@/lib/labels";
 import { useToast } from "@/components/toast";
+import { Card } from "@/components/ui/card";
 
 type QueueMenu = {
   menuId: string;
@@ -71,6 +71,10 @@ function queueTone(seconds: number) {
 }
 
 const AVAILABILITY_OPTIONS: Array<"AVAILABLE" | "PAUSED" | "SOLD_OUT"> = ["AVAILABLE", "PAUSED", "SOLD_OUT"];
+
+function SectionTitle({ children }: { children: ReactNode }) {
+  return <h2 className="section-title text-base font-semibold tracking-tight">{children}</h2>;
+}
 
 export default function KitchenPage() {
   const { loading, session } = useSession(["KITCHEN"]);
@@ -256,7 +260,7 @@ export default function KitchenPage() {
         subtitle="キューと提供状態をリアルタイムで制御"
       >
         <div className="grid">
-        <Card>
+        <Card className="card">
           <div className="row between wrap" style={{ marginBottom: 10 }}>
             <SectionTitle>キッチンキュー</SectionTitle>
             <div className="row wrap">
@@ -326,7 +330,7 @@ export default function KitchenPage() {
           </div>
         </Card>
 
-        <Card>
+        <Card className="card">
           <SectionTitle>担当メニューの提供状態</SectionTitle>
           <div className="list">
             {controllableMenus.length === 0 && <div className="muted">担当メニューがありません</div>}

@@ -9,13 +9,19 @@ type DashboardShellProps = PropsWithChildren<{
   subtitle?: string;
   eyebrow?: string;
   actions?: ReactNode;
+  fancyHeader?: boolean;
   className?: string;
 }>;
 
 export function DashboardShell(props: DashboardShellProps) {
   return (
     <main className={cn("dashboard-shell", props.className)}>
-      <Card className="dashboard-hero border-white/70 bg-white/90 shadow-lg">
+      <Card
+        className={cn(
+          "dashboard-hero border-white/70 bg-white/90 shadow-lg",
+          props.fancyHeader ? "dashboard-hero-fancy" : "dashboard-hero-plain"
+        )}
+      >
         <CardContent className="flex items-start justify-between gap-4 p-5">
           <div>
             {props.eyebrow && <p className="dashboard-eyebrow">{props.eyebrow}</p>}

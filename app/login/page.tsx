@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/client";
-import { LogoPlaceholder } from "@/components/ui";
+import { LogoPlaceholder } from "@/components/logo-placeholder";
 import { ACTOR_TYPE_LABEL, SESSION_FAILURE_LABEL, labelOf } from "@/lib/labels";
 import { routeByActorType } from "@/lib/routes";
 import { useToast } from "@/components/toast";

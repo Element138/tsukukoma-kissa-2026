@@ -1,14 +1,14 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { apiFetch } from "@/lib/client";
 import { useSession } from "@/components/use-session";
-import { Card, SectionTitle } from "@/components/ui";
 import { TerminalBanner } from "@/components/terminal-banner";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
 import { useToast } from "@/components/toast";
+import { Card } from "@/components/ui/card";
 
 type DineInOrder = {
   id: string;
@@ -35,6 +35,10 @@ function formatMss(totalSeconds: number) {
   const mm = Math.floor(sec / 60);
   const ss = sec % 60;
   return `${mm}:${String(ss).padStart(2, "0")}`;
+}
+
+function SectionTitle({ children }: { children: ReactNode }) {
+  return <h2 className="section-title text-base font-semibold tracking-tight">{children}</h2>;
 }
 
 export default function WaiterPage() {
@@ -196,7 +200,7 @@ export default function WaiterPage() {
         subtitle="提供待ちとテーブル進行を見える化"
       >
         <div className="grid">
-        <Card>
+        <Card className="card">
           <div className="row between wrap" style={{ marginBottom: 10 }}>
             <SectionTitle>配膳ビュー</SectionTitle>
             <div className="row wrap">

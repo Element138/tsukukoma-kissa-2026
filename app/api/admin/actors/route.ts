@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
       trace("parseJson.ok", { actorType: body.actorType });
 
       if (body.actorType === "ADMIN") {
-        throw new AppError(400, "INVALID_ACTOR_TYPE", "邂｡逅・・い繧ｫ繧ｦ繝ｳ繝医・霑ｽ蜉縺ｧ縺阪∪縺帙ｓ");
+        throw new AppError(400, "INVALID_ACTOR_TYPE", "管理者アカウントは追加できません");
       }
 
       trace("tx.create.start");

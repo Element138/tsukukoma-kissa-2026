@@ -13,7 +13,7 @@ import {
   Key20Regular,
   Power20Regular,
   Save20Regular,
-  SignOut20Regular
+  SignOut20Regular,
 } from "@fluentui/react-icons";
 import { apiFetch, fmtJpy } from "@/lib/client";
 import { useSession } from "@/components/use-session";
@@ -29,7 +29,6 @@ import { Badge } from "@/components/ui/badge";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
 type Actor = {
@@ -42,13 +41,7 @@ type Actor = {
   kitchenDisplayOrder: number;
 };
 
-type Category = {
-  id: string;
-  name: string;
-  displayOrder: number;
-  isActive: boolean;
-};
-
+type Category = { id: string; name: string; displayOrder: number; isActive: boolean };
 type Menu = {
   id: string;
   name: string;
@@ -60,30 +53,17 @@ type Menu = {
   isActive: boolean;
   hasActiveKitchenCoverage: boolean;
 };
-
-type Assignment = {
-  menuId: string;
-  kitchenId: string;
-  enabled: boolean;
-};
-
-type MenuEdit = {
-  name: string;
-  priceJpy: string;
-  workloadSeconds: string;
-  categoryId: string;
-};
+type Assignment = { menuId: string; kitchenId: string; enabled: boolean };
+type MenuEdit = { name: string; priceJpy: string; workloadSeconds: string; categoryId: string };
 
 const AVAILABILITY_OPTIONS: Array<Menu["availability"]> = ["AVAILABLE", "PAUSED", "SOLD_OUT"];
-const AVAILABILITY_TONE: Record<Menu["availability"], string> = {
-  AVAILABLE: "bg-emerald-600 text-white hover:bg-emerald-700",
-  PAUSED: "bg-amber-600 text-white hover:bg-amber-700",
-  SOLD_OUT: "bg-rose-600 text-white hover:bg-rose-700"
+const STATUS_BUTTON_TONE: Record<Menu["availability"], string> = {
+  AVAILABLE: "border-emerald-700 bg-emerald-600 text-white hover:bg-emerald-700",
+  PAUSED: "border-amber-700 bg-amber-600 text-white hover:bg-amber-700",
+  SOLD_OUT: "border-rose-700 bg-rose-600 text-white hover:bg-rose-700",
 };
 
-function confirmDanger(message: string) {
-  return window.confirm(message);
-}
+const dangerConfirm = (message: string) => window.confirm(message);
 
 function SectionHeader(props: { title: string; subtitle: string; icon: ReactNode }) {
   return (
@@ -97,18 +77,20 @@ function SectionHeader(props: { title: string; subtitle: string; icon: ReactNode
   );
 }
 
-function IconActionButton(props: { label: string; icon: ReactNode; className?: string; disabled?: boolean; onClick: () => void }) {
+function InputField(props: { label: string; value: string; onChange: (value: string) => void; className?: string; placeholder?: string }) {
+  return (
+    <label className={cn("grid gap-1", props.className)}>
+      <span className="text-[11px] font-medium text-muted-foreground">{props.label}</span>
+      <Input value={props.value} placeholder={props.placeholder} onChange={(e) => props.onChange(e.target.value)} />
+    </label>
+  );
+}
+
+function IconActionButton(props: { label: string; icon: ReactNode; destructive?: boolean; disabled?: boolean; onClick: () => void }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className={cn("h-8 w-8", props.className)}
-          onClick={props.onClick}
-          disabled={props.disabled}
-        >
+        <Button type="button" variant={props.destructive ? "destructive" : "ghost"} size="icon" className="h-8 w-8" disabled={props.disabled} onClick={props.onClick}>
           {props.icon}
           <span className="sr-only">{props.label}</span>
         </Button>
@@ -142,80 +124,47 @@ export default function AdminPage() {
   const [menuEdits, setMenuEdits] = useState<Record<string, MenuEdit>>({});
   const [menuAvailabilityBusyId, setMenuAvailabilityBusyId] = useState<string | null>(null);
 
+  const reloadInFlightRef = useRef(false);
+
   const kitchenActors = useMemo(
-    () =>
-      actors
-        .filter((a) => a.actorType === "KITCHEN" && a.isActive)
-        .sort((a, b) => a.kitchenDisplayOrder - b.kitchenDisplayOrder || a.label.localeCompare(b.label, "ja")),
+    () => actors.filter((a) => a.actorType === "KITCHEN" && a.isActive).sort((a, b) => a.kitchenDisplayOrder - b.kitchenDisplayOrder || a.label.localeCompare(b.label, "ja")),
     [actors]
   );
-
-  const activeCategories = useMemo(
-    () => categories.filter((c) => c.isActive).sort((a, b) => a.displayOrder - b.displayOrder || a.name.localeCompare(b.name, "ja")),
-    [categories]
-  );
-
-  const categoryOrderMap = useMemo(() => new Map(activeCategories.map((cat) => [cat.id, cat.displayOrder])), [activeCategories]);
-
+  const activeCategories = useMemo(() => categories.filter((c) => c.isActive).sort((a, b) => a.displayOrder - b.displayOrder || a.name.localeCompare(b.name, "ja")), [categories]);
+  const categoryOrder = useMemo(() => new Map(activeCategories.map((c) => [c.id, c.displayOrder])), [activeCategories]);
   const activeMenus = useMemo(
     () =>
       menus
-        .filter((menu) => menu.isActive)
-        .sort((a, b) => {
-          const categoryDiff = (categoryOrderMap.get(a.categoryId) ?? 9999) - (categoryOrderMap.get(b.categoryId) ?? 9999);
-          if (categoryDiff !== 0) return categoryDiff;
-          if (a.displayOrder !== b.displayOrder) return a.displayOrder - b.displayOrder;
-          return a.name.localeCompare(b.name, "ja");
-        }),
-    [menus, categoryOrderMap]
+        .filter((m) => m.isActive)
+        .sort((a, b) => (categoryOrder.get(a.categoryId) ?? 9999) - (categoryOrder.get(b.categoryId) ?? 9999) || a.displayOrder - b.displayOrder || a.name.localeCompare(b.name, "ja")),
+    [menus, categoryOrder]
   );
-
-  const reloadInFlightRef = useRef(false);
 
   const reload = async () => {
     if (reloadInFlightRef.current) return;
     reloadInFlightRef.current = true;
-
     try {
-      const [actorRes, menuRes, categoryRes, assignmentRes] = await Promise.all([
+      const [a, m, c, s] = await Promise.all([
         apiFetch<{ actors: Actor[] }>("/api/admin/actors", { timeoutMs: 5000, retry: 1 }),
         apiFetch<{ menus: Menu[]; categories: Category[] }>("/api/admin/menus", { timeoutMs: 5000, retry: 1 }),
         apiFetch<{ categories: Category[] }>("/api/admin/categories", { timeoutMs: 5000, retry: 1 }),
-        apiFetch<{ assignments: Assignment[] }>("/api/admin/assignments", { timeoutMs: 5000, retry: 1 })
+        apiFetch<{ assignments: Assignment[] }>("/api/admin/assignments", { timeoutMs: 5000, retry: 1 }),
       ]);
-
-      setActors(actorRes.actors);
-      setMenus(menuRes.menus);
-      setCategories(categoryRes.categories);
-      setAssignments(assignmentRes.assignments);
-
-      setCategoryNameDrafts((prev) => {
-        const next = { ...prev };
-        for (const category of categoryRes.categories) {
-          next[category.id] = next[category.id] ?? category.name;
-        }
-        return next;
-      });
-
+      setActors(a.actors);
+      setMenus(m.menus);
+      setCategories(c.categories);
+      setAssignments(s.assignments);
+      setCategoryNameDrafts((prev) => Object.fromEntries(c.categories.map((cat) => [cat.id, prev[cat.id] ?? cat.name])));
       setMenuEdits((prev) => {
         const next = { ...prev };
-        for (const menu of menuRes.menus) {
-          next[menu.id] =
-            next[menu.id] ?? {
-              name: menu.name,
-              priceJpy: String(menu.priceJpy),
-              workloadSeconds: String(menu.workloadSeconds),
-              categoryId: menu.categoryId
-            };
+        for (const menu of m.menus) {
+          next[menu.id] = next[menu.id] ?? { name: menu.name, priceJpy: String(menu.priceJpy), workloadSeconds: String(menu.workloadSeconds), categoryId: menu.categoryId };
         }
         return next;
       });
-
-      if (!newMenuCategoryId && categoryRes.categories.length > 0) {
-        setNewMenuCategoryId(categoryRes.categories[0]!.id);
-      }
+      if (!newMenuCategoryId && c.categories.length > 0) setNewMenuCategoryId(c.categories[0]!.id);
     } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "�Ǘ��f�[�^�̍X�V�Ɏ��s���܂���" });
+      notify({ level: "error", message: e instanceof Error ? e.message : "管理データの更新に失敗しました" });
     } finally {
       reloadInFlightRef.current = false;
     }
@@ -230,7 +179,7 @@ export default function AdminPage() {
     enabled: Boolean(session),
     channels: ["actors", "menus", "categories", "assignments"],
     onEvent: () => void reload(),
-    onResync: () => void reload()
+    onResync: () => void reload(),
   });
 
   const updateActor = async (id: string, patch: Record<string, unknown>, successMessage: string) => {
@@ -239,218 +188,54 @@ export default function AdminPage() {
       notify({ level: "success", message: successMessage });
       await reload();
     } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "�A�J�E���g�X�V�Ɏ��s���܂���" });
+      notify({ level: "error", message: e instanceof Error ? e.message : "アカウント更新に失敗しました" });
     }
   };
 
   const createActor = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      await apiFetch("/api/admin/actors", {
-        method: "POST",
-        body: JSON.stringify({
-          actorType: newActorType,
-          label: newActorLabel,
-          secret: newActorSecret,
-          ...(newActorType === "KITCHEN" ? { kitchenEnabled: true, kitchenDisplayOrder: Number(newKitchenDisplayOrder) } : {})
-        })
-      });
-      notify({ level: "success", message: "�A�J�E���g��쐬���܂���" });
+      await apiFetch("/api/admin/actors", { method: "POST", body: JSON.stringify({ actorType: newActorType, label: newActorLabel, secret: newActorSecret, ...(newActorType === "KITCHEN" ? { kitchenEnabled: true, kitchenDisplayOrder: Number(newKitchenDisplayOrder) } : {}) }) });
+      notify({ level: "success", message: "アカウントを作成しました" });
       setNewActorLabel("");
       setNewActorSecret("");
       setNewKitchenDisplayOrder("0");
       await reload();
     } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "�A�J�E���g�쐬�Ɏ��s���܂���" });
+      notify({ level: "error", message: e instanceof Error ? e.message : "アカウント作成に失敗しました" });
     }
   };
 
-  const deleteActor = async (actor: Actor) => {
-    if (!confirmDanger(`�A�J�E���g�u${actor.label}�v��폜���܂��B��낵���ł����H`)) return;
-    try {
-      await apiFetch(`/api/admin/actors?id=${encodeURIComponent(actor.id)}`, { method: "DELETE" });
-      notify({ level: "success", message: "�A�J�E���g��폜���܂���" });
-      await reload();
-    } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "�A�J�E���g�폜�Ɏ��s���܂���" });
-    }
-  };
-
-  const forceLogout = async (id: string) => {
-    try {
-      await apiFetch("/api/admin/sessions/force-logout", { method: "POST", body: JSON.stringify({ actorId: id }) });
-      notify({ level: "success", message: "�������O�A�E�g���܂���" });
-      await reload();
-    } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "�������O�A�E�g�Ɏ��s���܂���" });
-    }
-  };
-
-  const toggleKitchenEnabled = async (actor: Actor) => {
-    try {
-      await apiFetch("/api/kitchen/toggle", { method: "POST", body: JSON.stringify({ kitchenId: actor.id, kitchenEnabled: !actor.kitchenEnabled }) });
-      notify({ level: "success", message: !actor.kitchenEnabled ? "�L�b�`����ғ��ɂ��܂���" : "�L�b�`�����~�ɂ��܂���" });
-      await reload();
-    } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "�L�b�`����Ԃ̍X�V�Ɏ��s���܂���" });
-    }
-  };
-
-  const patchCategory = async (id: string, patch: Partial<Category>, successMessage: string) => {
+  const patchCategory = async (id: string, patch: Partial<Category>, msg: string) => {
     await apiFetch("/api/admin/categories", { method: "PATCH", body: JSON.stringify({ id, ...patch }) });
-    notify({ level: "success", message: successMessage });
+    notify({ level: "success", message: msg });
   };
-
-  const createCategory = async () => {
-    try {
-      await apiFetch("/api/admin/categories", {
-        method: "POST",
-        body: JSON.stringify({ name: newCategoryName, displayOrder: (activeCategories.at(-1)?.displayOrder ?? 0) + 1 })
-      });
-      setNewCategoryName("");
-      notify({ level: "success", message: "�J�e�S����쐬���܂���" });
-      await reload();
-    } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "�J�e�S���쐬�Ɏ��s���܂���" });
-    }
-  };
-
-  const moveCategory = async (categoryId: string, direction: -1 | 1) => {
-    const sorted = [...activeCategories];
-    const index = sorted.findIndex((cat) => cat.id === categoryId);
-    const target = sorted[index + direction];
-    if (index < 0 || !target) return;
-    try {
-      await Promise.all([
-        patchCategory(sorted[index]!.id, { displayOrder: target.displayOrder }, "�J�e�S������X�V���܂���"),
-        patchCategory(target.id, { displayOrder: sorted[index]!.displayOrder }, "�J�e�S������X�V���܂���")
-      ]);
-      await reload();
-    } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "�J�e�S�����X�V�Ɏ��s���܂���" });
-    }
-  };
-
-  const deleteCategory = async (category: Category) => {
-    if (!confirmDanger(`�J�e�S���u${category.name}�v��폜���܂��B�z�����j���[�����������܂��B��낵���ł����H`)) return;
-    try {
-      await apiFetch(`/api/admin/categories?id=${encodeURIComponent(category.id)}`, { method: "DELETE" });
-      notify({ level: "success", message: "�J�e�S����폜���܂���" });
-      await reload();
-    } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "�J�e�S���폜�Ɏ��s���܂���" });
-    }
-  };
-
-  const createMenu = async () => {
-    try {
-      await apiFetch("/api/admin/menus", {
-        method: "POST",
-        body: JSON.stringify({
-          name: newMenuName,
-          priceJpy: Number(newMenuPrice),
-          availability: "PAUSED",
-          workloadSeconds: Number(newMenuWorkloadSeconds),
-          displayOrder: (activeMenus.at(-1)?.displayOrder ?? 0) + 1,
-          categoryId: newMenuCategoryId,
-          showLeadTime: true
-        })
-      });
-      notify({ level: "success", message: "���j���[��쐬���܂���" });
-      setNewMenuName("");
-      await reload();
-    } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "���j���[�쐬�Ɏ��s���܂���" });
-    }
-  };
-
-  const patchMenu = async (menu: Menu, patch: Partial<Menu>, successMessage: string) => {
+  const patchMenu = async (menu: Menu, patch: Partial<Menu>, msg: string) => {
     await apiFetch("/api/admin/menus", { method: "PATCH", body: JSON.stringify({ id: menu.id, ...patch }) });
-    notify({ level: "success", message: successMessage });
-  };
-
-  const changeMenuAvailability = async (menu: Menu, status: Menu["availability"]) => {
-    if (status === "AVAILABLE" && !menu.hasActiveKitchenCoverage) {
-      notify({ level: "error", message: "���ݑΉ��ł���L�b�`�����Ȃ����߁A�̔����ɂł��܂���" });
-      return;
-    }
-
-    setMenuAvailabilityBusyId(menu.id);
-    try {
-      await patchMenu(menu, { availability: status }, "�̔���Ԃ�X�V���܂���");
-      await reload();
-    } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "�̔���ԍX�V�Ɏ��s���܂���" });
-    } finally {
-      setMenuAvailabilityBusyId(null);
-    }
-  };
-
-  const saveMenuEdit = async (menu: Menu) => {
-    const edit = menuEdits[menu.id];
-    if (!edit) return;
-    try {
-      await patchMenu(menu, { name: edit.name, priceJpy: Number(edit.priceJpy), workloadSeconds: Number(edit.workloadSeconds), categoryId: edit.categoryId }, "���j���[��X�V���܂���");
-      await reload();
-    } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "���j���[�X�V�Ɏ��s���܂���" });
-    }
+    notify({ level: "success", message: msg });
   };
 
   const moveMenu = async (menu: Menu, direction: -1 | 1) => {
-    const siblings = activeMenus.filter((row) => row.categoryId === menu.categoryId);
-    const index = siblings.findIndex((row) => row.id === menu.id);
-    const target = siblings[index + direction];
-    if (index < 0 || !target) return;
+    const index = activeMenus.findIndex((row) => row.id === menu.id);
+    const target = activeMenus[index + direction];
+    if (!target) {
+      return;
+    }
+
     try {
       await Promise.all([
-        patchMenu(menu, { displayOrder: target.displayOrder }, "���j���[����X�V���܂���"),
-        patchMenu(target, { displayOrder: menu.displayOrder }, "���j���[����X�V���܂���")
+        patchMenu(menu, { displayOrder: target.displayOrder }, "メニュー順を更新しました"),
+        patchMenu(target, { displayOrder: menu.displayOrder }, "メニュー順を更新しました")
       ]);
       await reload();
     } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "���j���[���X�V�Ɏ��s���܂���" });
-    }
-  };
-
-  const deleteMenu = async (menu: Menu) => {
-    if (!confirmDanger(`���j���[�u${menu.name}�v��폜���܂��B��낵���ł����H`)) return;
-    try {
-      await patchMenu(menu, { isActive: false }, "���j���[��폜���܂���");
-      await reload();
-    } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "���j���[�폜�Ɏ��s���܂���" });
-    }
-  };
-
-  const toggleAssignment = async (menuId: string, kitchenId: string, enabled: boolean) => {
-    try {
-      await apiFetch("/api/admin/assignments", { method: "POST", body: JSON.stringify({ menuId, kitchenId, enabled }) });
-      notify({ level: "success", message: enabled ? "�S����L�������܂���" : "�S���𖳌������܂���" });
-      await reload();
-    } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "�S���X�V�Ɏ��s���܂���" });
-    }
-  };
-
-  const purge = async (target: "ORDERS" | "AUDIT_LOGS") => {
-    const label = target === "ORDERS" ? "�����f�[�^" : "�č����O";
-    if (!confirmDanger(`${label}��폜���܂��B�����ł��܂���B���s���܂����H`)) return;
-
-    try {
-      await apiFetch("/api/admin/purge", { method: "POST", body: JSON.stringify({ target, confirmationText: "DELETE" }) });
-      notify({ level: "warning", message: `${label}��폜���܂���` });
-      await reload();
-    } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "�폜�Ɏ��s���܂���" });
+      notify({ level: "error", message: e instanceof Error ? e.message : "メニュー順の更新に失敗しました" });
     }
   };
 
   const assignmentMap = new Map(assignments.map((a) => [`${a.menuId}:${a.kitchenId}`, a.enabled]));
 
-  if (loading || !session) {
-    return <main>�ǂݍ��ݒ�...</main>;
-  }
+  if (loading || !session) return <main>読み込み中...</main>;
 
   return (
     <>
@@ -458,193 +243,76 @@ export default function AdminPage() {
       <DashboardShell
         className="admin-shell"
         eyebrow="ADMIN CONTROL"
-        title="�Ǘ��_�b�V���{�[�h"
-        subtitle="�A�J�E���g�A�J�e�S���A���j���[�A�S���ݒ��܂Ƃ߂ĉ^�p"
+        title="管理ダッシュボード"
+        subtitle="アカウント、カテゴリ、メニュー、担当設定をまとめて運用"
+        fancyHeader
         actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <Button asChild variant="outline" size="sm">
-              <Link href="/order-book">
-                <Box20Regular />
-                �I�[�_�[�u�b�N
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link href="/audit">
-                <AppsList20Regular />
-                �č����O
-              </Link>
-            </Button>
+          <div className="ml-auto flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
+            <Button asChild variant="outline" size="sm"><Link href="/order-book"><Box20Regular />オーダーブック</Link></Button>
+            <Button asChild variant="outline" size="sm"><Link href="/audit"><AppsList20Regular />監査ログ</Link></Button>
           </div>
         }
       >
         <TooltipProvider delayDuration={120}>
           <div className="grid gap-3 xl:grid-cols-[1.08fr_0.92fr]">
             <Card>
-              <CardHeader className="pb-3">
-                <SectionHeader title="�A�J�E���g" subtitle="����E��ԁE��������" icon={<span>�l</span>} />
-              </CardHeader>
+              <CardHeader className="pb-3"><SectionHeader title="アカウント" subtitle="役割・状態・権限操作" icon={<span>人</span>} /></CardHeader>
               <CardContent className="space-y-3">
                 <Accordion type="single" collapsible defaultValue="new-actor" className="rounded-lg border px-3">
                   <AccordionItem value="new-actor" className="border-b-0">
-                    <AccordionTrigger className="py-2 text-sm">�V�K�A�J�E���g��ǉ�</AccordionTrigger>
+                    <AccordionTrigger className="py-2 text-sm">新規アカウントを追加</AccordionTrigger>
                     <AccordionContent>
                       <form onSubmit={createActor} className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                        <Select value={newActorType} onValueChange={(value) => setNewActorType(value as Actor["actorType"])}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="���[��" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="POS">POS</SelectItem>
-                            <SelectItem value="KITCHEN">�L�b�`��</SelectItem>
-                            <SelectItem value="WAITER">�z�V</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        {newActorType === "KITCHEN" && (
-                          <Input placeholder="�\����" value={newKitchenDisplayOrder} onChange={(e) => setNewKitchenDisplayOrder(e.target.value)} />
-                        )}
-                        <Input placeholder="�\����" value={newActorLabel} onChange={(e) => setNewActorLabel(e.target.value)} required />
-                        <Input placeholder="�p�X���[�h" value={newActorSecret} onChange={(e) => setNewActorSecret(e.target.value)} required />
-                        <Button type="submit" className="sm:col-span-2 lg:col-span-1">
-                          <Add20Regular />
-                          �쐬
-                        </Button>
+                        <label className="grid gap-1">
+                          <span className="text-[11px] font-medium text-muted-foreground">ロール</span>
+                          <Select value={newActorType} onValueChange={(v) => setNewActorType(v as Actor["actorType"])}>
+                            <SelectTrigger><SelectValue placeholder="ロール" /></SelectTrigger>
+                            <SelectContent><SelectItem value="POS">POS</SelectItem><SelectItem value="KITCHEN">キッチン</SelectItem><SelectItem value="WAITER">配膳</SelectItem></SelectContent>
+                          </Select>
+                        </label>
+                        {newActorType === "KITCHEN" && <InputField label="表示順" value={newKitchenDisplayOrder} onChange={setNewKitchenDisplayOrder} />}
+                        <InputField label="表示名" value={newActorLabel} onChange={setNewActorLabel} />
+                        <InputField label="パスワード" value={newActorSecret} onChange={setNewActorSecret} />
+                        <Button type="submit" className="sm:col-span-2 lg:col-span-1 lg:self-end"><Add20Regular />作成</Button>
                       </form>
                     </AccordionContent>
                   </AccordionItem>
                 </Accordion>
-
                 <div className="grid gap-2">
                   {actors.map((actor) => (
                     <article key={actor.id} className="rounded-lg border bg-card/70 p-3">
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div>
                           <strong className="text-sm">{actor.label}</strong>
-                          <div className="mt-1 text-xs text-muted-foreground">
-                            {labelOf(ACTOR_TYPE_LABEL, actor.actorType)}
-                            {actor.actorType === "KITCHEN" ? ` / ${actor.kitchenEnabled ? "�ғ�" : "��~"} / ���� ${actor.kitchenDisplayOrder}` : ""}
-                          </div>
+                          <div className="mt-1 text-xs text-muted-foreground">{labelOf(ACTOR_TYPE_LABEL, actor.actorType)}{actor.actorType === "KITCHEN" ? ` / ${actor.kitchenEnabled ? "稼働" : "停止"} / 順位 ${actor.kitchenDisplayOrder}` : ""}</div>
                         </div>
-                        <Badge variant={actor.online ? "secondary" : "outline"} className={actor.online ? "bg-emerald-100 text-emerald-800" : ""}>
-                          {actor.online ? "ONLINE" : "OFFLINE"}
-                        </Badge>
+                        <Badge variant={actor.online ? "secondary" : "outline"} className={actor.online ? "bg-emerald-100 text-emerald-800" : ""}>{actor.online ? "ONLINE" : "OFFLINE"}</Badge>
                       </div>
                       <div className="mt-2 flex flex-wrap gap-1">
-                        <IconActionButton
-                          label="�\�����ύX"
-                          icon={<Edit20Regular />}
-                          disabled={!actor.isActive}
-                          onClick={() => {
-                            const next = prompt("�V�����\����", actor.label);
-                            if (next && next !== actor.label) {
-                              void updateActor(actor.id, { label: next }, "�\������X�V���܂���");
-                            }
-                          }}
-                        />
-                        <IconActionButton
-                          label="�p�X���[�h�ύX"
-                          icon={<Key20Regular />}
-                          disabled={!actor.isActive}
-                          onClick={() => {
-                            const next = prompt("�V�����p�X���[�h", "");
-                            if (next) {
-                              void updateActor(actor.id, { secret: next }, "�p�X���[�h��X�V���܂���");
-                            }
-                          }}
-                        />
-                        {actor.actorType === "KITCHEN" && (
-                          <>
-                            <IconActionButton
-                              label={actor.kitchenEnabled ? "�L�b�`����~" : "�L�b�`���ғ�"}
-                              icon={<Power20Regular />}
-                              disabled={!actor.isActive}
-                              onClick={() => void toggleKitchenEnabled(actor)}
-                            />
-                            <IconActionButton
-                              label="�L�b�`���\����"
-                              icon={<ArrowUp20Regular />}
-                              disabled={!actor.isActive}
-                              onClick={() => {
-                                const next = prompt("�L�b�`���\����", String(actor.kitchenDisplayOrder));
-                                if (next != null && next.trim() !== "") {
-                                  void updateActor(actor.id, { kitchenDisplayOrder: Number(next) }, "�L�b�`���\������X�V���܂���");
-                                }
-                              }}
-                            />
-                          </>
-                        )}
-                        <IconActionButton
-                          label="�������O�A�E�g"
-                          icon={<SignOut20Regular />}
-                          disabled={!actor.isActive}
-                          onClick={() => void forceLogout(actor.id)}
-                        />
-                        {actor.id !== "admin" && actor.actorType !== "MENU_DISPLAY" && (
-                          <IconActionButton
-                            label="�폜"
-                            icon={<Delete20Regular />}
-                            className="text-destructive hover:text-destructive"
-                            disabled={!actor.isActive}
-                            onClick={() => void deleteActor(actor)}
-                          />
-                        )}
+                        <IconActionButton label="表示名変更" icon={<Edit20Regular />} disabled={!actor.isActive} onClick={() => { const next = prompt("新しい表示名", actor.label); if (next && next !== actor.label) void updateActor(actor.id, { label: next }, "表示名を更新しました"); }} />
+                        <IconActionButton label="パスワード変更" icon={<Key20Regular />} disabled={!actor.isActive} onClick={() => { const next = prompt("新しいパスワード", ""); if (next) void updateActor(actor.id, { secret: next }, "パスワードを更新しました"); }} />
+                        {actor.actorType === "KITCHEN" && (<><IconActionButton label={actor.kitchenEnabled ? "キッチン停止" : "キッチン稼働"} icon={<Power20Regular />} disabled={!actor.isActive} onClick={() => void apiFetch("/api/kitchen/toggle", { method: "POST", body: JSON.stringify({ kitchenId: actor.id, kitchenEnabled: !actor.kitchenEnabled }) }).then(() => reload())} /><IconActionButton label="キッチン表示順" icon={<ArrowUp20Regular />} disabled={!actor.isActive} onClick={() => { const next = prompt("キッチン表示順", String(actor.kitchenDisplayOrder)); if (next != null && next.trim() !== "") void updateActor(actor.id, { kitchenDisplayOrder: Number(next) }, "キッチン表示順を更新しました"); }} /></>)}
+                        <IconActionButton label="強制ログアウト" icon={<SignOut20Regular />} disabled={!actor.isActive} onClick={() => void apiFetch("/api/admin/sessions/force-logout", { method: "POST", body: JSON.stringify({ actorId: actor.id }) }).then(() => reload())} />
+                        {actor.id !== "admin" && actor.actorType !== "MENU_DISPLAY" && <IconActionButton label="削除" icon={<Delete20Regular />} destructive disabled={!actor.isActive} onClick={() => { if (dangerConfirm(`アカウント「${actor.label}」を削除します。よろしいですか？`)) void apiFetch(`/api/admin/actors?id=${encodeURIComponent(actor.id)}`, { method: "DELETE" }).then(() => reload()); }} />}
                       </div>
                     </article>
                   ))}
                 </div>
               </CardContent>
             </Card>
-
             <Card>
-              <CardHeader className="pb-3">
-                <SectionHeader title="�J�e�S��" subtitle="���O�E���я�" icon={<span>��</span>} />
-              </CardHeader>
+              <CardHeader className="pb-3"><SectionHeader title="カテゴリ" subtitle="名前・並び順" icon={<span>分</span>} /></CardHeader>
               <CardContent className="space-y-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Input placeholder="�V�����J�e�S����" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} className="max-w-xs" />
-                  <Button type="button" variant="outline" onClick={createCategory} disabled={!newCategoryName}>
-                    <Add20Regular />
-                    �ǉ�
-                  </Button>
-                </div>
-
+                <div className="flex flex-wrap items-end gap-2"><InputField label="新しいカテゴリ名" value={newCategoryName} onChange={setNewCategoryName} className="max-w-xs" /><Button type="button" variant="outline" onClick={async () => { await apiFetch("/api/admin/categories", { method: "POST", body: JSON.stringify({ name: newCategoryName, displayOrder: (activeCategories.at(-1)?.displayOrder ?? 0) + 1 }) }); setNewCategoryName(""); await reload(); }} disabled={!newCategoryName}><Add20Regular />追加</Button></div>
                 <div className="grid gap-2">
-                  {activeCategories.map((category, index) => (
-                    <article key={category.id} className="rounded-lg border bg-card/70 p-2.5">
-                      <div className="flex items-center gap-2">
-                        <Input
-                          value={categoryNameDrafts[category.id] ?? category.name}
-                          onChange={(e) => setCategoryNameDrafts((prev) => ({ ...prev, [category.id]: e.target.value }))}
-                        />
-                        <Badge variant="outline">#{category.displayOrder}</Badge>
-                      </div>
+                  {activeCategories.map((cat, index) => (
+                    <article key={cat.id} className="rounded-lg border bg-card/70 p-2.5">
+                      <div className="flex items-center gap-2"><Input value={categoryNameDrafts[cat.id] ?? cat.name} onChange={(e) => setCategoryNameDrafts((p) => ({ ...p, [cat.id]: e.target.value }))} /><Badge variant="outline">#{cat.displayOrder}</Badge></div>
                       <div className="mt-2 flex flex-wrap gap-1">
-                        <IconActionButton
-                          label="�ۑ�"
-                          icon={<Save20Regular />}
-                          onClick={() => {
-                            void (async () => {
-                              try {
-                                await patchCategory(category.id, { name: categoryNameDrafts[category.id] ?? category.name }, "�J�e�S������X�V���܂���");
-                                await reload();
-                              } catch (e) {
-                                notify({ level: "error", message: e instanceof Error ? e.message : "�J�e�S���X�V�Ɏ��s���܂���" });
-                              }
-                            })();
-                          }}
-                        />
-                        <IconActionButton label="���" icon={<ArrowUp20Regular />} disabled={index === 0} onClick={() => void moveCategory(category.id, -1)} />
-                        <IconActionButton
-                          label="����"
-                          icon={<ArrowDown20Regular />}
-                          disabled={index === activeCategories.length - 1}
-                          onClick={() => void moveCategory(category.id, 1)}
-                        />
-                        <IconActionButton
-                          label="�폜"
-                          icon={<Delete20Regular />}
-                          className="text-destructive hover:text-destructive"
-                          onClick={() => void deleteCategory(category)}
-                        />
+                        <IconActionButton label="保存" icon={<Save20Regular />} onClick={() => void patchCategory(cat.id, { name: categoryNameDrafts[cat.id] ?? cat.name }, "カテゴリ名を更新しました").then(() => reload())} />
+                        <IconActionButton label="上へ" icon={<ArrowUp20Regular />} disabled={index === 0} onClick={() => void (async () => { const sorted = [...activeCategories]; const target = sorted[index - 1]; if (!target) return; await Promise.all([patchCategory(cat.id, { displayOrder: target.displayOrder }, "カテゴリ順を更新しました"), patchCategory(target.id, { displayOrder: cat.displayOrder }, "カテゴリ順を更新しました")]); await reload(); })()} />
+                        <IconActionButton label="下へ" icon={<ArrowDown20Regular />} disabled={index === activeCategories.length - 1} onClick={() => void (async () => { const sorted = [...activeCategories]; const target = sorted[index + 1]; if (!target) return; await Promise.all([patchCategory(cat.id, { displayOrder: target.displayOrder }, "カテゴリ順を更新しました"), patchCategory(target.id, { displayOrder: cat.displayOrder }, "カテゴリ順を更新しました")]); await reload(); })()} />
+                        <IconActionButton label="削除" icon={<Delete20Regular />} destructive onClick={() => { if (dangerConfirm(`カテゴリ「${cat.name}」を削除します。よろしいですか？`)) void apiFetch(`/api/admin/categories?id=${encodeURIComponent(cat.id)}`, { method: "DELETE" }).then(() => reload()); }} />
                       </div>
                     </article>
                   ))}
@@ -654,139 +322,62 @@ export default function AdminPage() {
           </div>
 
           <Card>
-            <CardHeader className="pb-3">
-              <SectionHeader title="���j���[" subtitle="�̔���ԁE�ҏW�E�S���ݒ�" icon={<span>�i</span>} />
-            </CardHeader>
+            <CardHeader className="pb-3"><SectionHeader title="メニュー" subtitle="販売状態・編集・担当設定" icon={<span>品</span>} /></CardHeader>
             <CardContent className="space-y-3">
               <Accordion type="single" collapsible defaultValue="new-menu" className="rounded-lg border px-3">
                 <AccordionItem value="new-menu" className="border-b-0">
-                  <AccordionTrigger className="py-2 text-sm">�V�K���j���[��ǉ�</AccordionTrigger>
+                  <AccordionTrigger className="py-2 text-sm">新規メニューを追加</AccordionTrigger>
                   <AccordionContent>
                     <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-                      <Input placeholder="�V�������j���[��" value={newMenuName} onChange={(e) => setNewMenuName(e.target.value)} />
-                      <Input placeholder="���i" value={newMenuPrice} onChange={(e) => setNewMenuPrice(e.target.value)} />
-                      <Input placeholder="�����b��" value={newMenuWorkloadSeconds} onChange={(e) => setNewMenuWorkloadSeconds(e.target.value)} />
-                      <Select value={newMenuCategoryId} onValueChange={setNewMenuCategoryId}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="�J�e�S��" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {activeCategories.map((cat) => (
-                            <SelectItem key={cat.id} value={cat.id}>
-                              {cat.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Button
-                        type="button"
-                        onClick={createMenu}
-                        disabled={!newMenuName || !newMenuCategoryId || !newMenuPrice || !newMenuWorkloadSeconds}
-                      >
-                        <Add20Regular />
-                        �ǉ�
-                      </Button>
+                      <InputField label="メニュー名" value={newMenuName} onChange={setNewMenuName} />
+                      <InputField label="価格 (円)" value={newMenuPrice} onChange={setNewMenuPrice} />
+                      <InputField label="作業時間 (秒)" value={newMenuWorkloadSeconds} onChange={setNewMenuWorkloadSeconds} />
+                      <label className="grid gap-1"><span className="text-[11px] font-medium text-muted-foreground">カテゴリ</span><Select value={newMenuCategoryId} onValueChange={setNewMenuCategoryId}><SelectTrigger><SelectValue placeholder="カテゴリ" /></SelectTrigger><SelectContent>{activeCategories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></label>
+                      <Button type="button" className="self-end" onClick={async () => { await apiFetch("/api/admin/menus", { method: "POST", body: JSON.stringify({ name: newMenuName, priceJpy: Number(newMenuPrice), availability: "PAUSED", workloadSeconds: Number(newMenuWorkloadSeconds), displayOrder: (activeMenus.at(-1)?.displayOrder ?? 0) + 1, categoryId: newMenuCategoryId, showLeadTime: true }) }); setNewMenuName(""); await reload(); }} disabled={!newMenuName || !newMenuCategoryId || !newMenuPrice || !newMenuWorkloadSeconds}><Add20Regular />追加</Button>
                     </div>
                   </AccordionContent>
                 </AccordionItem>
               </Accordion>
-
               <Accordion type="single" collapsible className="space-y-2">
                 {activeMenus.map((menu) => {
-                  const edit = menuEdits[menu.id] ?? {
-                    name: menu.name,
-                    priceJpy: String(menu.priceJpy),
-                    workloadSeconds: String(menu.workloadSeconds),
-                    categoryId: menu.categoryId
-                  };
-
+                  const edit = menuEdits[menu.id] ?? { name: menu.name, priceJpy: String(menu.priceJpy), workloadSeconds: String(menu.workloadSeconds), categoryId: menu.categoryId };
                   return (
                     <AccordionItem key={menu.id} value={menu.id} className="rounded-lg border bg-card/70 px-3">
                       <AccordionTrigger className="py-3 hover:no-underline">
                         <div className="flex w-full flex-col gap-2 text-left md:flex-row md:items-center md:justify-between">
-                          <div>
-                            <strong className="text-sm">{menu.name}</strong>
-                            <div className="mt-1 text-xs text-muted-foreground">
-                              {fmtJpy(menu.priceJpy)} / {menu.workloadSeconds}�b
-                            </div>
-                          </div>
+                          <div><strong className="text-sm">{menu.name}</strong><div className="mt-1 text-xs text-muted-foreground">{fmtJpy(menu.priceJpy)} / {menu.workloadSeconds}秒</div></div>
                           <div className="grid grid-cols-3 gap-1 md:min-w-72" onClick={(e) => e.stopPropagation()}>
                             {AVAILABILITY_OPTIONS.map((status) => {
-                              const noCoverageForAvailable = status === "AVAILABLE" && !menu.hasActiveKitchenCoverage;
-                              const pseudoDisabled = noCoverageForAvailable || menuAvailabilityBusyId === menu.id;
+                              const noCoverage = status === "AVAILABLE" && !menu.hasActiveKitchenCoverage;
+                              const disabled = noCoverage || menuAvailabilityBusyId === menu.id;
+                              const active = menu.availability === status;
                               return (
-                                <Button
-                                  key={status}
-                                  type="button"
-                                  size="sm"
-                                  variant={menu.availability === status ? "default" : "outline"}
-                                  className={cn("h-7 px-2 text-[11px]", menu.availability === status && AVAILABILITY_TONE[status])}
-                                  disabled={pseudoDisabled}
-                                  onClick={() => void changeMenuAvailability(menu, status)}
-                                >
+                                <button key={status} type="button" disabled={disabled} className={cn("h-7 rounded-md border px-2 text-[11px] font-semibold transition disabled:opacity-45", STATUS_BUTTON_TONE[status], !active && "opacity-55", active && "ring-2 ring-offset-1 ring-offset-background")} onClick={() => void (async () => { setMenuAvailabilityBusyId(menu.id); try { await patchMenu(menu, { availability: status }, "販売状態を更新しました"); await reload(); } finally { setMenuAvailabilityBusyId(null); } })()}>
                                   {labelOf(AVAILABILITY_LABEL, status)}
-                                </Button>
+                                </button>
                               );
                             })}
                           </div>
                         </div>
                       </AccordionTrigger>
                       <AccordionContent className="space-y-3">
-                        <Separator />
                         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                          <Input value={edit.name} onChange={(e) => setMenuEdits((prev) => ({ ...prev, [menu.id]: { ...edit, name: e.target.value } }))} />
-                          <Input
-                            value={edit.priceJpy}
-                            onChange={(e) => setMenuEdits((prev) => ({ ...prev, [menu.id]: { ...edit, priceJpy: e.target.value } }))}
-                          />
-                          <Input
-                            value={edit.workloadSeconds}
-                            onChange={(e) => setMenuEdits((prev) => ({ ...prev, [menu.id]: { ...edit, workloadSeconds: e.target.value } }))}
-                          />
-                          <Select
-                            value={edit.categoryId}
-                            onValueChange={(value) => setMenuEdits((prev) => ({ ...prev, [menu.id]: { ...edit, categoryId: value } }))}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="�J�e�S��" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {activeCategories.map((cat) => (
-                                <SelectItem key={cat.id} value={cat.id}>
-                                  {cat.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <InputField label="メニュー名" value={edit.name} onChange={(v) => setMenuEdits((p) => ({ ...p, [menu.id]: { ...edit, name: v } }))} />
+                          <InputField label="価格 (円)" value={edit.priceJpy} onChange={(v) => setMenuEdits((p) => ({ ...p, [menu.id]: { ...edit, priceJpy: v } }))} />
+                          <InputField label="作業時間 (秒)" value={edit.workloadSeconds} onChange={(v) => setMenuEdits((p) => ({ ...p, [menu.id]: { ...edit, workloadSeconds: v } }))} />
+                          <label className="grid gap-1"><span className="text-[11px] font-medium text-muted-foreground">カテゴリ</span><Select value={edit.categoryId} onValueChange={(v) => setMenuEdits((p) => ({ ...p, [menu.id]: { ...edit, categoryId: v } }))}><SelectTrigger><SelectValue placeholder="カテゴリ" /></SelectTrigger><SelectContent>{activeCategories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></label>
                         </div>
-
                         <div className="flex flex-wrap gap-1">
-                          <IconActionButton label="�ۑ�" icon={<Save20Regular />} onClick={() => void saveMenuEdit(menu)} />
-                          <IconActionButton label="���" icon={<ArrowUp20Regular />} onClick={() => void moveMenu(menu, -1)} />
-                          <IconActionButton label="����" icon={<ArrowDown20Regular />} onClick={() => void moveMenu(menu, 1)} />
-                          <IconActionButton
-                            label="�폜"
-                            icon={<Delete20Regular />}
-                            className="text-destructive hover:text-destructive"
-                            onClick={() => void deleteMenu(menu)}
-                          />
+                          <IconActionButton label="保存" icon={<Save20Regular />} onClick={() => void patchMenu(menu, { name: edit.name, priceJpy: Number(edit.priceJpy), workloadSeconds: Number(edit.workloadSeconds), categoryId: edit.categoryId }, "メニューを更新しました").then(() => reload())} />
+                          <IconActionButton label="上へ" icon={<ArrowUp20Regular />} onClick={() => void moveMenu(menu, -1)} />
+                          <IconActionButton label="下へ" icon={<ArrowDown20Regular />} onClick={() => void moveMenu(menu, 1)} />
+                          <IconActionButton label="削除" icon={<Delete20Regular />} destructive onClick={() => { if (dangerConfirm(`メニュー「${menu.name}」を削除します。よろしいですか？`)) void patchMenu(menu, { isActive: false }, "メニューを削除しました").then(() => reload()); }} />
                         </div>
-
                         <div className="flex flex-wrap gap-2">
                           {kitchenActors.map((kitchen) => {
                             const key = `${menu.id}:${kitchen.id}`;
                             const enabled = assignmentMap.get(key) ?? false;
-                            return (
-                              <Button
-                                key={key}
-                                type="button"
-                                size="sm"
-                                variant={enabled ? "secondary" : "outline"}
-                                onClick={() => void toggleAssignment(menu.id, kitchen.id, !enabled)}
-                              >
-                                {kitchen.label}: {enabled ? "�L��" : "����"}
-                              </Button>
-                            );
+                            return <Button key={key} type="button" size="sm" variant={enabled ? "secondary" : "outline"} onClick={() => void apiFetch("/api/admin/assignments", { method: "POST", body: JSON.stringify({ menuId: menu.id, kitchenId: kitchen.id, enabled: !enabled }) }).then(() => reload())}>{kitchen.label}: {enabled ? "有効" : "無効"}</Button>;
                           })}
                         </div>
                       </AccordionContent>
@@ -796,21 +387,11 @@ export default function AdminPage() {
               </Accordion>
             </CardContent>
           </Card>
-
           <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm">�f�[�^�폜</CardTitle>
-              <CardDescription>�����s�̑���</CardDescription>
-            </CardHeader>
+            <CardHeader className="pb-3"><CardTitle className="text-sm">データ削除</CardTitle><CardDescription>復元不可の操作</CardDescription></CardHeader>
             <CardContent className="flex flex-wrap gap-2">
-              <Button type="button" variant="destructive" onClick={() => void purge("ORDERS")}>
-                <Delete20Regular />
-                �����f�[�^��폜
-              </Button>
-              <Button type="button" variant="destructive" onClick={() => void purge("AUDIT_LOGS")}>
-                <Delete20Regular />
-                �č����O��폜
-              </Button>
+              <Button type="button" variant="destructive" onClick={() => { if (dangerConfirm("注文データを削除します。復元できません。実行しますか？")) void apiFetch("/api/admin/purge", { method: "POST", body: JSON.stringify({ target: "ORDERS", confirmationText: "DELETE" }) }).then(() => reload()); }}><Delete20Regular />注文データを削除</Button>
+              <Button type="button" variant="destructive" onClick={() => { if (dangerConfirm("監査ログを削除します。復元できません。実行しますか？")) void apiFetch("/api/admin/purge", { method: "POST", body: JSON.stringify({ target: "AUDIT_LOGS", confirmationText: "DELETE" }) }).then(() => reload()); }}><Delete20Regular />監査ログを削除</Button>
             </CardContent>
           </Card>
         </TooltipProvider>
@@ -818,6 +399,3 @@ export default function AdminPage() {
     </>
   );
 }
-
-
-

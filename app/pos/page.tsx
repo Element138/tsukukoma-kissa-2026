@@ -1,10 +1,9 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { ReactNode, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { apiFetch, fmtJpy } from "@/lib/client";
 import { useSession } from "@/components/use-session";
-import { Card, SectionTitle } from "@/components/ui";
 import { TerminalBanner } from "@/components/terminal-banner";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { ConfirmSlider } from "@/components/confirm-slider";
@@ -18,6 +17,7 @@ import {
   labelOf
 } from "@/lib/labels";
 import { useToast } from "@/components/toast";
+import { Card } from "@/components/ui/card";
 
 type MenuPayload = {
   menus: Array<{
@@ -48,6 +48,10 @@ const AGE_GROUPS = [
 ] as const;
 
 type AgeGroupKey = (typeof AGE_GROUPS)[number]["key"];
+
+function SectionTitle({ children }: { children: ReactNode }) {
+  return <h2 className="section-title text-base font-semibold tracking-tight">{children}</h2>;
+}
 
 function newIdempotencyKey() {
   try {
@@ -259,7 +263,7 @@ export default function PosPage() {
         subtitle="受注、会計、販売状態を一画面で管理"
       >
         <div className="grid two">
-        <Card>
+        <Card className="card">
           <SectionTitle>メニュー</SectionTitle>
           <div className="menu-tile-grid">
             {menuList.map((menu) => {
@@ -314,7 +318,7 @@ export default function PosPage() {
           </div>
         </Card>
 
-        <Card>
+        <Card className="card">
           <SectionTitle>注文内容</SectionTitle>
           <div className="list">
             {selectedItems.length === 0 && <div className="muted">選択中のメニューはありません</div>}
