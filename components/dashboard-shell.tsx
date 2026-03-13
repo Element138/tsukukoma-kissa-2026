@@ -23,12 +23,12 @@ export function DashboardShell(props: DashboardShellProps) {
         )}
       >
         <CardContent className="flex items-start justify-between gap-4 p-5">
-          <div>
+          <div className="min-w-0 flex-1">
             {props.eyebrow && <p className="dashboard-eyebrow">{props.eyebrow}</p>}
             <h1 className="dashboard-title">{props.title}</h1>
             {props.subtitle && <p className="dashboard-subtitle">{props.subtitle}</p>}
           </div>
-          {props.actions && <div className="dashboard-actions">{props.actions}</div>}
+          {props.actions && <div className="dashboard-actions ml-auto">{props.actions}</div>}
         </CardContent>
       </Card>
       <div className="dashboard-body">{props.children}</div>

@@ -17,6 +17,8 @@ import {
 } from "@/lib/labels";
 import { routeByActorType } from "@/lib/routes";
 import { useToast } from "@/components/toast";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type OrderRow = {
   id: string;
@@ -105,6 +107,8 @@ export default function OrderBookPage() {
   const [qOrderNo, setQOrderNo] = useState("");
   const [tickNow, setTickNow] = useState(Date.now());
   const reloadInFlightRef = useRef(false);
+  const statusSelectValue = status || "__ALL_STATUS__";
+  const paymentMethodSelectValue = paymentMethod || "__ALL_PAYMENT__";
 
   const reload = async () => {
     if (reloadInFlightRef.current) {
@@ -225,21 +229,35 @@ export default function OrderBookPage() {
 
         <div className="card" style={{ marginBottom: 14 }}>
           <div className="row wrap">
-            <input placeholder="注文番号" value={qOrderNo} onChange={(e) => setQOrderNo(e.target.value)} style={{ maxWidth: 120 }} />
-            <select value={status} onChange={(e) => setStatus(e.target.value)} style={{ maxWidth: 220 }}>
-              <option value="">状態: すべて</option>
-              <option value="PENDING">{labelOf(ORDER_STATUS_LABEL, "PENDING")}</option>
-              <option value="PREPARING">{labelOf(ORDER_STATUS_LABEL, "PREPARING")}</option>
-              <option value="AWAITING_SERVING">{labelOf(ORDER_STATUS_LABEL, "AWAITING_SERVING")}</option>
-              <option value="COMPLETED">{labelOf(ORDER_STATUS_LABEL, "COMPLETED")}</option>
-              <option value="CANCELED">{labelOf(ORDER_STATUS_LABEL, "CANCELED")}</option>
-            </select>
-            <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} style={{ maxWidth: 220 }}>
-              <option value="">決済: すべて</option>
-              <option value="CASH">{labelOf(PAYMENT_METHOD_LABEL, "CASH")}</option>
-              <option value="SQUARE">{labelOf(PAYMENT_METHOD_LABEL, "SQUARE")}</option>
-              <option value="PAYMENT_SKIPPED">{labelOf(PAYMENT_METHOD_LABEL, "PAYMENT_SKIPPED")}</option>
-            </select>
+            <Input placeholder="注文番号" value={qOrderNo} onChange={(e) => setQOrderNo(e.target.value)} style={{ maxWidth: 120 }} />
+            <div style={{ maxWidth: 220, width: "100%" }}>
+              <Select value={statusSelectValue} onValueChange={(v) => setStatus(v === "__ALL_STATUS__" ? "" : v)}>
+                <SelectTrigger className="bg-background text-foreground">
+                  <SelectValue placeholder="状態: すべて" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__ALL_STATUS__">状態: すべて</SelectItem>
+                  <SelectItem value="PENDING">{labelOf(ORDER_STATUS_LABEL, "PENDING")}</SelectItem>
+                  <SelectItem value="PREPARING">{labelOf(ORDER_STATUS_LABEL, "PREPARING")}</SelectItem>
+                  <SelectItem value="AWAITING_SERVING">{labelOf(ORDER_STATUS_LABEL, "AWAITING_SERVING")}</SelectItem>
+                  <SelectItem value="COMPLETED">{labelOf(ORDER_STATUS_LABEL, "COMPLETED")}</SelectItem>
+                  <SelectItem value="CANCELED">{labelOf(ORDER_STATUS_LABEL, "CANCELED")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div style={{ maxWidth: 220, width: "100%" }}>
+              <Select value={paymentMethodSelectValue} onValueChange={(v) => setPaymentMethod(v === "__ALL_PAYMENT__" ? "" : v)}>
+                <SelectTrigger className="bg-background text-foreground">
+                  <SelectValue placeholder="決済: すべて" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__ALL_PAYMENT__">決済: すべて</SelectItem>
+                  <SelectItem value="CASH">{labelOf(PAYMENT_METHOD_LABEL, "CASH")}</SelectItem>
+                  <SelectItem value="SQUARE">{labelOf(PAYMENT_METHOD_LABEL, "SQUARE")}</SelectItem>
+                  <SelectItem value="PAYMENT_SKIPPED">{labelOf(PAYMENT_METHOD_LABEL, "PAYMENT_SKIPPED")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
 

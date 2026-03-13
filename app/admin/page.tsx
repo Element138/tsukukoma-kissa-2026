@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -11,7 +11,6 @@ import {
   Delete20Regular,
   Edit20Regular,
   Key20Regular,
-  Power20Regular,
   Save20Regular,
   SignOut20Regular,
 } from "@fluentui/react-icons";
@@ -28,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
@@ -57,9 +57,9 @@ type Assignment = { menuId: string; kitchenId: string; enabled: boolean };
 type MenuEdit = { name: string; priceJpy: string; workloadSeconds: string; categoryId: string };
 
 const AVAILABILITY_OPTIONS: Array<Menu["availability"]> = ["AVAILABLE", "PAUSED", "SOLD_OUT"];
-const STATUS_BUTTON_TONE: Record<Menu["availability"], string> = {
+const STATUS_BUTTON_ACTIVE_TONE: Record<Menu["availability"], string> = {
   AVAILABLE: "border-emerald-700 bg-emerald-600 text-white hover:bg-emerald-700",
-  PAUSED: "border-amber-700 bg-amber-600 text-white hover:bg-amber-700",
+  PAUSED: "border-amber-700 bg-amber-500 text-white hover:bg-amber-600",
   SOLD_OUT: "border-rose-700 bg-rose-600 text-white hover:bg-rose-700",
 };
 
@@ -90,7 +90,14 @@ function IconActionButton(props: { label: string; icon: ReactNode; destructive?:
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button type="button" variant={props.destructive ? "destructive" : "ghost"} size="icon" className="h-8 w-8" disabled={props.disabled} onClick={props.onClick}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className={cn("h-8 w-8", props.destructive && "text-destructive hover:bg-destructive/10 hover:text-destructive")}
+          disabled={props.disabled}
+          onClick={props.onClick}
+        >
           {props.icon}
           <span className="sr-only">{props.label}</span>
         </Button>
@@ -112,7 +119,6 @@ export default function AdminPage() {
   const [newActorType, setNewActorType] = useState<Actor["actorType"]>("POS");
   const [newActorLabel, setNewActorLabel] = useState("");
   const [newActorSecret, setNewActorSecret] = useState("");
-  const [newKitchenDisplayOrder, setNewKitchenDisplayOrder] = useState("0");
 
   const [newCategoryName, setNewCategoryName] = useState("");
   const [categoryNameDrafts, setCategoryNameDrafts] = useState<Record<string, string>>({});
@@ -195,11 +201,10 @@ export default function AdminPage() {
   const createActor = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      await apiFetch("/api/admin/actors", { method: "POST", body: JSON.stringify({ actorType: newActorType, label: newActorLabel, secret: newActorSecret, ...(newActorType === "KITCHEN" ? { kitchenEnabled: true, kitchenDisplayOrder: Number(newKitchenDisplayOrder) } : {}) }) });
+      await apiFetch("/api/admin/actors", { method: "POST", body: JSON.stringify({ actorType: newActorType, label: newActorLabel, secret: newActorSecret, ...(newActorType === "KITCHEN" ? { kitchenEnabled: true } : {}) }) });
       notify({ level: "success", message: "アカウントを作成しました" });
       setNewActorLabel("");
       setNewActorSecret("");
-      setNewKitchenDisplayOrder("0");
       await reload();
     } catch (e) {
       notify({ level: "error", message: e instanceof Error ? e.message : "アカウント作成に失敗しました" });
@@ -247,7 +252,7 @@ export default function AdminPage() {
         subtitle="アカウント、カテゴリ、メニュー、担当設定をまとめて運用"
         fancyHeader
         actions={
-          <div className="ml-auto flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
+          <div className="flex items-center justify-end gap-2">
             <Button asChild variant="outline" size="sm"><Link href="/order-book"><Box20Regular />オーダーブック</Link></Button>
             <Button asChild variant="outline" size="sm"><Link href="/audit"><AppsList20Regular />監査ログ</Link></Button>
           </div>
@@ -258,19 +263,23 @@ export default function AdminPage() {
             <Card>
               <CardHeader className="pb-3"><SectionHeader title="アカウント" subtitle="役割・状態・権限操作" icon={<span>人</span>} /></CardHeader>
               <CardContent className="space-y-3">
-                <Accordion type="single" collapsible defaultValue="new-actor" className="rounded-lg border px-3">
+                <Accordion type="single" collapsible defaultValue="new-actor" className="rounded-lg border border-emerald-200 bg-emerald-50/70 px-3">
                   <AccordionItem value="new-actor" className="border-b-0">
-                    <AccordionTrigger className="py-2 text-sm">新規アカウントを追加</AccordionTrigger>
+                    <AccordionTrigger className="rounded-md bg-emerald-700 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 hover:no-underline">新規アカウントを追加</AccordionTrigger>
                     <AccordionContent>
                       <form onSubmit={createActor} className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                         <label className="grid gap-1">
                           <span className="text-[11px] font-medium text-muted-foreground">ロール</span>
                           <Select value={newActorType} onValueChange={(v) => setNewActorType(v as Actor["actorType"])}>
-                            <SelectTrigger><SelectValue placeholder="ロール" /></SelectTrigger>
-                            <SelectContent><SelectItem value="POS">POS</SelectItem><SelectItem value="KITCHEN">キッチン</SelectItem><SelectItem value="WAITER">配膳</SelectItem></SelectContent>
+                            <SelectTrigger className="bg-background text-foreground"><SelectValue placeholder="ロール" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="POS">POS</SelectItem>
+                              <SelectItem value="KITCHEN">キッチン</SelectItem>
+                              <SelectItem value="WAITER">配膳</SelectItem>
+                              <SelectItem value="MENU_DISPLAY">メニュー表示</SelectItem>
+                            </SelectContent>
                           </Select>
                         </label>
-                        {newActorType === "KITCHEN" && <InputField label="表示順" value={newKitchenDisplayOrder} onChange={setNewKitchenDisplayOrder} />}
                         <InputField label="表示名" value={newActorLabel} onChange={setNewActorLabel} />
                         <InputField label="パスワード" value={newActorSecret} onChange={setNewActorSecret} />
                         <Button type="submit" className="sm:col-span-2 lg:col-span-1 lg:self-end"><Add20Regular />作成</Button>
@@ -284,16 +293,29 @@ export default function AdminPage() {
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div>
                           <strong className="text-sm">{actor.label}</strong>
-                          <div className="mt-1 text-xs text-muted-foreground">{labelOf(ACTOR_TYPE_LABEL, actor.actorType)}{actor.actorType === "KITCHEN" ? ` / ${actor.kitchenEnabled ? "稼働" : "停止"} / 順位 ${actor.kitchenDisplayOrder}` : ""}</div>
+                          <div className="mt-1 text-xs text-muted-foreground">{labelOf(ACTOR_TYPE_LABEL, actor.actorType)}{actor.actorType === "KITCHEN" ? ` / 表示順 ${actor.kitchenDisplayOrder}` : ""}</div>
                         </div>
                         <Badge variant={actor.online ? "secondary" : "outline"} className={actor.online ? "bg-emerald-100 text-emerald-800" : ""}>{actor.online ? "ONLINE" : "OFFLINE"}</Badge>
                       </div>
-                      <div className="mt-2 flex flex-wrap gap-1">
+                      <div className="mt-2 flex flex-wrap items-center gap-1">
                         <IconActionButton label="表示名変更" icon={<Edit20Regular />} disabled={!actor.isActive} onClick={() => { const next = prompt("新しい表示名", actor.label); if (next && next !== actor.label) void updateActor(actor.id, { label: next }, "表示名を更新しました"); }} />
                         <IconActionButton label="パスワード変更" icon={<Key20Regular />} disabled={!actor.isActive} onClick={() => { const next = prompt("新しいパスワード", ""); if (next) void updateActor(actor.id, { secret: next }, "パスワードを更新しました"); }} />
-                        {actor.actorType === "KITCHEN" && (<><IconActionButton label={actor.kitchenEnabled ? "キッチン停止" : "キッチン稼働"} icon={<Power20Regular />} disabled={!actor.isActive} onClick={() => void apiFetch("/api/kitchen/toggle", { method: "POST", body: JSON.stringify({ kitchenId: actor.id, kitchenEnabled: !actor.kitchenEnabled }) }).then(() => reload())} /><IconActionButton label="キッチン表示順" icon={<ArrowUp20Regular />} disabled={!actor.isActive} onClick={() => { const next = prompt("キッチン表示順", String(actor.kitchenDisplayOrder)); if (next != null && next.trim() !== "") void updateActor(actor.id, { kitchenDisplayOrder: Number(next) }, "キッチン表示順を更新しました"); }} /></>)}
                         <IconActionButton label="強制ログアウト" icon={<SignOut20Regular />} disabled={!actor.isActive} onClick={() => void apiFetch("/api/admin/sessions/force-logout", { method: "POST", body: JSON.stringify({ actorId: actor.id }) }).then(() => reload())} />
-                        {actor.id !== "admin" && actor.actorType !== "MENU_DISPLAY" && <IconActionButton label="削除" icon={<Delete20Regular />} destructive disabled={!actor.isActive} onClick={() => { if (dangerConfirm(`アカウント「${actor.label}」を削除します。よろしいですか？`)) void apiFetch(`/api/admin/actors?id=${encodeURIComponent(actor.id)}`, { method: "DELETE" }).then(() => reload()); }} />}
+                        {actor.actorType === "KITCHEN" && (
+                          <label className="ml-1 inline-flex items-center gap-2 rounded-md border px-2 py-1 text-xs">
+                            <span className="text-muted-foreground">キッチン稼働</span>
+                            <Switch
+                              checked={actor.kitchenEnabled}
+                              disabled={!actor.isActive}
+                              onCheckedChange={(checked) => void apiFetch("/api/kitchen/toggle", { method: "POST", body: JSON.stringify({ kitchenId: actor.id, kitchenEnabled: checked }) }).then(() => reload())}
+                            />
+                          </label>
+                        )}
+                        {actor.id !== "admin" && actor.actorType !== "MENU_DISPLAY" && (
+                          <div className="ml-auto">
+                            <IconActionButton label="削除" icon={<Delete20Regular />} destructive disabled={!actor.isActive} onClick={() => { if (dangerConfirm(`アカウント「${actor.label}」を削除します。よろしいですか？`)) void apiFetch(`/api/admin/actors?id=${encodeURIComponent(actor.id)}`, { method: "DELETE" }).then(() => reload()); }} />
+                          </div>
+                        )}
                       </div>
                     </article>
                   ))}
@@ -308,11 +330,13 @@ export default function AdminPage() {
                   {activeCategories.map((cat, index) => (
                     <article key={cat.id} className="rounded-lg border bg-card/70 p-2.5">
                       <div className="flex items-center gap-2"><Input value={categoryNameDrafts[cat.id] ?? cat.name} onChange={(e) => setCategoryNameDrafts((p) => ({ ...p, [cat.id]: e.target.value }))} /><Badge variant="outline">#{cat.displayOrder}</Badge></div>
-                      <div className="mt-2 flex flex-wrap gap-1">
+                      <div className="mt-2 flex flex-wrap items-center gap-1">
                         <IconActionButton label="保存" icon={<Save20Regular />} onClick={() => void patchCategory(cat.id, { name: categoryNameDrafts[cat.id] ?? cat.name }, "カテゴリ名を更新しました").then(() => reload())} />
                         <IconActionButton label="上へ" icon={<ArrowUp20Regular />} disabled={index === 0} onClick={() => void (async () => { const sorted = [...activeCategories]; const target = sorted[index - 1]; if (!target) return; await Promise.all([patchCategory(cat.id, { displayOrder: target.displayOrder }, "カテゴリ順を更新しました"), patchCategory(target.id, { displayOrder: cat.displayOrder }, "カテゴリ順を更新しました")]); await reload(); })()} />
                         <IconActionButton label="下へ" icon={<ArrowDown20Regular />} disabled={index === activeCategories.length - 1} onClick={() => void (async () => { const sorted = [...activeCategories]; const target = sorted[index + 1]; if (!target) return; await Promise.all([patchCategory(cat.id, { displayOrder: target.displayOrder }, "カテゴリ順を更新しました"), patchCategory(target.id, { displayOrder: cat.displayOrder }, "カテゴリ順を更新しました")]); await reload(); })()} />
-                        <IconActionButton label="削除" icon={<Delete20Regular />} destructive onClick={() => { if (dangerConfirm(`カテゴリ「${cat.name}」を削除します。よろしいですか？`)) void apiFetch(`/api/admin/categories?id=${encodeURIComponent(cat.id)}`, { method: "DELETE" }).then(() => reload()); }} />
+                        <div className="ml-auto">
+                          <IconActionButton label="削除" icon={<Delete20Regular />} destructive onClick={() => { if (dangerConfirm(`カテゴリ「${cat.name}」を削除します。よろしいですか？`)) void apiFetch(`/api/admin/categories?id=${encodeURIComponent(cat.id)}`, { method: "DELETE" }).then(() => reload()); }} />
+                        </div>
                       </div>
                     </article>
                   ))}
@@ -324,15 +348,15 @@ export default function AdminPage() {
           <Card>
             <CardHeader className="pb-3"><SectionHeader title="メニュー" subtitle="販売状態・編集・担当設定" icon={<span>品</span>} /></CardHeader>
             <CardContent className="space-y-3">
-              <Accordion type="single" collapsible defaultValue="new-menu" className="rounded-lg border px-3">
+              <Accordion type="single" collapsible defaultValue="new-menu" className="rounded-lg border border-emerald-200 bg-emerald-50/70 px-3">
                 <AccordionItem value="new-menu" className="border-b-0">
-                  <AccordionTrigger className="py-2 text-sm">新規メニューを追加</AccordionTrigger>
+                  <AccordionTrigger className="rounded-md bg-emerald-700 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 hover:no-underline">新規メニューを追加</AccordionTrigger>
                   <AccordionContent>
                     <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
                       <InputField label="メニュー名" value={newMenuName} onChange={setNewMenuName} />
                       <InputField label="価格 (円)" value={newMenuPrice} onChange={setNewMenuPrice} />
                       <InputField label="作業時間 (秒)" value={newMenuWorkloadSeconds} onChange={setNewMenuWorkloadSeconds} />
-                      <label className="grid gap-1"><span className="text-[11px] font-medium text-muted-foreground">カテゴリ</span><Select value={newMenuCategoryId} onValueChange={setNewMenuCategoryId}><SelectTrigger><SelectValue placeholder="カテゴリ" /></SelectTrigger><SelectContent>{activeCategories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></label>
+                      <label className="grid gap-1"><span className="text-[11px] font-medium text-muted-foreground">カテゴリ</span><Select value={newMenuCategoryId} onValueChange={setNewMenuCategoryId}><SelectTrigger className="bg-background text-foreground"><SelectValue placeholder="カテゴリ" /></SelectTrigger><SelectContent>{activeCategories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></label>
                       <Button type="button" className="self-end" onClick={async () => { await apiFetch("/api/admin/menus", { method: "POST", body: JSON.stringify({ name: newMenuName, priceJpy: Number(newMenuPrice), availability: "PAUSED", workloadSeconds: Number(newMenuWorkloadSeconds), displayOrder: (activeMenus.at(-1)?.displayOrder ?? 0) + 1, categoryId: newMenuCategoryId, showLeadTime: true }) }); setNewMenuName(""); await reload(); }} disabled={!newMenuName || !newMenuCategoryId || !newMenuPrice || !newMenuWorkloadSeconds}><Add20Regular />追加</Button>
                     </div>
                   </AccordionContent>
@@ -342,8 +366,8 @@ export default function AdminPage() {
                 {activeMenus.map((menu) => {
                   const edit = menuEdits[menu.id] ?? { name: menu.name, priceJpy: String(menu.priceJpy), workloadSeconds: String(menu.workloadSeconds), categoryId: menu.categoryId };
                   return (
-                    <AccordionItem key={menu.id} value={menu.id} className="rounded-lg border bg-card/70 px-3">
-                      <AccordionTrigger className="py-3 hover:no-underline">
+                    <AccordionItem key={menu.id} value={menu.id} className="rounded-lg border bg-muted/25 px-3">
+                      <AccordionTrigger className="rounded-md bg-muted/30 px-2 py-3 text-foreground hover:bg-muted/45 hover:no-underline">
                         <div className="flex w-full flex-col gap-2 text-left md:flex-row md:items-center md:justify-between">
                           <div><strong className="text-sm">{menu.name}</strong><div className="mt-1 text-xs text-muted-foreground">{fmtJpy(menu.priceJpy)} / {menu.workloadSeconds}秒</div></div>
                           <div className="grid grid-cols-3 gap-1 md:min-w-72" onClick={(e) => e.stopPropagation()}>
@@ -352,9 +376,16 @@ export default function AdminPage() {
                               const disabled = noCoverage || menuAvailabilityBusyId === menu.id;
                               const active = menu.availability === status;
                               return (
-                                <button key={status} type="button" disabled={disabled} className={cn("h-7 rounded-md border px-2 text-[11px] font-semibold transition disabled:opacity-45", STATUS_BUTTON_TONE[status], !active && "opacity-55", active && "ring-2 ring-offset-1 ring-offset-background")} onClick={() => void (async () => { setMenuAvailabilityBusyId(menu.id); try { await patchMenu(menu, { availability: status }, "販売状態を更新しました"); await reload(); } finally { setMenuAvailabilityBusyId(null); } })()}>
+                                <Button
+                                  key={status}
+                                  type="button"
+                                  variant={active ? "default" : "outline"}
+                                  disabled={disabled}
+                                  className={cn("h-8 px-2 text-[11px] font-semibold leading-none", active ? STATUS_BUTTON_ACTIVE_TONE[status] : "bg-background text-foreground hover:bg-muted")}
+                                  onClick={() => void (async () => { setMenuAvailabilityBusyId(menu.id); try { await patchMenu(menu, { availability: status }, "販売状態を更新しました"); await reload(); } finally { setMenuAvailabilityBusyId(null); } })()}
+                                >
                                   {labelOf(AVAILABILITY_LABEL, status)}
-                                </button>
+                                </Button>
                               );
                             })}
                           </div>
@@ -365,19 +396,30 @@ export default function AdminPage() {
                           <InputField label="メニュー名" value={edit.name} onChange={(v) => setMenuEdits((p) => ({ ...p, [menu.id]: { ...edit, name: v } }))} />
                           <InputField label="価格 (円)" value={edit.priceJpy} onChange={(v) => setMenuEdits((p) => ({ ...p, [menu.id]: { ...edit, priceJpy: v } }))} />
                           <InputField label="作業時間 (秒)" value={edit.workloadSeconds} onChange={(v) => setMenuEdits((p) => ({ ...p, [menu.id]: { ...edit, workloadSeconds: v } }))} />
-                          <label className="grid gap-1"><span className="text-[11px] font-medium text-muted-foreground">カテゴリ</span><Select value={edit.categoryId} onValueChange={(v) => setMenuEdits((p) => ({ ...p, [menu.id]: { ...edit, categoryId: v } }))}><SelectTrigger><SelectValue placeholder="カテゴリ" /></SelectTrigger><SelectContent>{activeCategories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></label>
+                          <label className="grid gap-1"><span className="text-[11px] font-medium text-muted-foreground">カテゴリ</span><Select value={edit.categoryId} onValueChange={(v) => setMenuEdits((p) => ({ ...p, [menu.id]: { ...edit, categoryId: v } }))}><SelectTrigger className="bg-background text-foreground"><SelectValue placeholder="カテゴリ" /></SelectTrigger><SelectContent>{activeCategories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></label>
                         </div>
-                        <div className="flex flex-wrap gap-1">
+                        <div className="flex flex-wrap items-center gap-1">
                           <IconActionButton label="保存" icon={<Save20Regular />} onClick={() => void patchMenu(menu, { name: edit.name, priceJpy: Number(edit.priceJpy), workloadSeconds: Number(edit.workloadSeconds), categoryId: edit.categoryId }, "メニューを更新しました").then(() => reload())} />
                           <IconActionButton label="上へ" icon={<ArrowUp20Regular />} onClick={() => void moveMenu(menu, -1)} />
                           <IconActionButton label="下へ" icon={<ArrowDown20Regular />} onClick={() => void moveMenu(menu, 1)} />
-                          <IconActionButton label="削除" icon={<Delete20Regular />} destructive onClick={() => { if (dangerConfirm(`メニュー「${menu.name}」を削除します。よろしいですか？`)) void patchMenu(menu, { isActive: false }, "メニューを削除しました").then(() => reload()); }} />
+                          <div className="ml-auto">
+                            <IconActionButton label="削除" icon={<Delete20Regular />} destructive onClick={() => { if (dangerConfirm(`メニュー「${menu.name}」を削除します。よろしいですか？`)) void patchMenu(menu, { isActive: false }, "メニューを削除しました").then(() => reload()); }} />
+                          </div>
                         </div>
-                        <div className="flex flex-wrap gap-2">
+                        <div className="grid gap-2 rounded-md border bg-card/60 p-3">
+                          <div className="text-xs font-semibold text-muted-foreground">キッチン割り当て</div>
                           {kitchenActors.map((kitchen) => {
                             const key = `${menu.id}:${kitchen.id}`;
                             const enabled = assignmentMap.get(key) ?? false;
-                            return <Button key={key} type="button" size="sm" variant={enabled ? "secondary" : "outline"} onClick={() => void apiFetch("/api/admin/assignments", { method: "POST", body: JSON.stringify({ menuId: menu.id, kitchenId: kitchen.id, enabled: !enabled }) }).then(() => reload())}>{kitchen.label}: {enabled ? "有効" : "無効"}</Button>;
+                            return (
+                              <label key={key} className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
+                                <span className="font-medium">{kitchen.label}</span>
+                                <Switch
+                                  checked={enabled}
+                                  onCheckedChange={(checked) => void apiFetch("/api/admin/assignments", { method: "POST", body: JSON.stringify({ menuId: menu.id, kitchenId: kitchen.id, enabled: checked }) }).then(() => reload())}
+                                />
+                              </label>
+                            );
                           })}
                         </div>
                       </AccordionContent>

@@ -18,6 +18,8 @@ import {
 } from "@/lib/labels";
 import { useToast } from "@/components/toast";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type MenuPayload = {
   menus: Array<{
@@ -345,16 +347,21 @@ export default function PosPage() {
           <div className="grid" style={{ marginTop: 12 }}>
             <label>
               受け渡し
-              <select value={fulfillmentType} onChange={(e) => setFulfillmentType(e.target.value as "DINE_IN" | "TAKEOUT")}>
-                <option value="DINE_IN">{labelOf(FULFILLMENT_LABEL, "DINE_IN")}</option>
-                <option value="TAKEOUT">{labelOf(FULFILLMENT_LABEL, "TAKEOUT")}</option>
-              </select>
+              <Select value={fulfillmentType} onValueChange={(v) => setFulfillmentType(v as "DINE_IN" | "TAKEOUT")}>
+                <SelectTrigger className="bg-background text-foreground">
+                  <SelectValue placeholder="受け渡し" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="DINE_IN">{labelOf(FULFILLMENT_LABEL, "DINE_IN")}</SelectItem>
+                  <SelectItem value="TAKEOUT">{labelOf(FULFILLMENT_LABEL, "TAKEOUT")}</SelectItem>
+                </SelectContent>
+              </Select>
             </label>
 
             {fulfillmentType === "DINE_IN" && (
               <label>
                 テーブル番号
-                <input value={tableNo} onChange={(e) => setTableNo(e.target.value)} />
+                <Input value={tableNo} onChange={(e) => setTableNo(e.target.value)} />
               </label>
             )}
 
@@ -382,27 +389,37 @@ export default function PosPage() {
 
             <label>
               決済方法
-              <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as "CASH" | "SQUARE" | "PAYMENT_SKIPPED")}>
-                <option value="CASH">{labelOf(PAYMENT_METHOD_LABEL, "CASH")}</option>
-                <option value="SQUARE">{labelOf(PAYMENT_METHOD_LABEL, "SQUARE")}</option>
-                <option value="PAYMENT_SKIPPED">{labelOf(PAYMENT_METHOD_LABEL, "PAYMENT_SKIPPED")}</option>
-              </select>
+              <Select value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as "CASH" | "SQUARE" | "PAYMENT_SKIPPED")}>
+                <SelectTrigger className="bg-background text-foreground">
+                  <SelectValue placeholder="決済方法" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="CASH">{labelOf(PAYMENT_METHOD_LABEL, "CASH")}</SelectItem>
+                  <SelectItem value="SQUARE">{labelOf(PAYMENT_METHOD_LABEL, "SQUARE")}</SelectItem>
+                  <SelectItem value="PAYMENT_SKIPPED">{labelOf(PAYMENT_METHOD_LABEL, "PAYMENT_SKIPPED")}</SelectItem>
+                </SelectContent>
+              </Select>
             </label>
 
             {paymentMethod === "PAYMENT_SKIPPED" && (
               <>
                 <label>
                   スキップ理由
-                  <select value={skipReasonType} onChange={(e) => setSkipReasonType(e.target.value as "TEST" | "DEVICE_ERROR" | "NETWORK_ERROR" | "OTHER")}>
-                    <option value="TEST">{labelOf(PAYMENT_SKIP_REASON_LABEL, "TEST")}</option>
-                    <option value="DEVICE_ERROR">{labelOf(PAYMENT_SKIP_REASON_LABEL, "DEVICE_ERROR")}</option>
-                    <option value="NETWORK_ERROR">{labelOf(PAYMENT_SKIP_REASON_LABEL, "NETWORK_ERROR")}</option>
-                    <option value="OTHER">{labelOf(PAYMENT_SKIP_REASON_LABEL, "OTHER")}</option>
-                  </select>
+                  <Select value={skipReasonType} onValueChange={(v) => setSkipReasonType(v as "TEST" | "DEVICE_ERROR" | "NETWORK_ERROR" | "OTHER")}>
+                    <SelectTrigger className="bg-background text-foreground">
+                      <SelectValue placeholder="スキップ理由" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="TEST">{labelOf(PAYMENT_SKIP_REASON_LABEL, "TEST")}</SelectItem>
+                      <SelectItem value="DEVICE_ERROR">{labelOf(PAYMENT_SKIP_REASON_LABEL, "DEVICE_ERROR")}</SelectItem>
+                      <SelectItem value="NETWORK_ERROR">{labelOf(PAYMENT_SKIP_REASON_LABEL, "NETWORK_ERROR")}</SelectItem>
+                      <SelectItem value="OTHER">{labelOf(PAYMENT_SKIP_REASON_LABEL, "OTHER")}</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </label>
                 <label>
                   詳細メモ
-                  <input value={skipReasonText} onChange={(e) => setSkipReasonText(e.target.value)} />
+                  <Input value={skipReasonText} onChange={(e) => setSkipReasonText(e.target.value)} />
                 </label>
               </>
             )}

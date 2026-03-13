@@ -10,6 +10,7 @@ import { useRealtimeSubscription } from "@/components/use-realtime-subscription"
 import { AVAILABILITY_LABEL, labelOf } from "@/lib/labels";
 import { useToast } from "@/components/toast";
 import { Card } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
 
 type QueueMenu = {
   menuId: string;
@@ -201,7 +202,7 @@ export default function KitchenPage() {
     }
   };
 
-  const toggleKitchen = async () => {
+  const setKitchenEnabled = async (nextEnabled: boolean) => {
     if (!session || !myKitchen) {
       return;
     }
@@ -209,9 +210,9 @@ export default function KitchenPage() {
     try {
       await apiFetch("/api/kitchen/toggle", {
         method: "POST",
-        body: JSON.stringify({ kitchenId: session.actor.actorId, kitchenEnabled: !myKitchen.kitchenEnabled })
+        body: JSON.stringify({ kitchenId: session.actor.actorId, kitchenEnabled: nextEnabled })
       });
-      notify({ level: "success", message: myKitchen.kitchenEnabled ? "キッチン停止に変更しました" : "キッチン稼働に変更しました" });
+      notify({ level: "success", message: nextEnabled ? "キッチン稼働に変更しました" : "キッチン停止に変更しました" });
       await reload();
     } catch (e) {
       notify({ level: "error", message: e instanceof Error ? e.message : "キッチン状態の更新に失敗しました" });
@@ -267,9 +268,10 @@ export default function KitchenPage() {
               <button type="button" className="ghost-btn" onClick={undo}>
                 取り消し
               </button>
-              <button type="button" className="ghost-btn" onClick={toggleKitchen}>
-                {myKitchen?.kitchenEnabled ? "キッチン停止" : "キッチン稼働"}
-              </button>
+              <label className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs">
+                <span className="text-muted-foreground">キッチン稼働</span>
+                <Switch checked={Boolean(myKitchen?.kitchenEnabled)} onCheckedChange={(checked) => void setKitchenEnabled(checked)} />
+              </label>
               <Link href="/order-book" className="btn-link ghost-btn">
                 オーダーブック
               </Link>

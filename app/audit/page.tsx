@@ -9,6 +9,8 @@ import { DashboardShell } from "@/components/dashboard-shell";
 import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
 import { ACTOR_TYPE_LABEL, AUDIT_RESULT_LABEL, labelOf } from "@/lib/labels";
 import { useToast } from "@/components/toast";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type AuditLog = {
   id: string;
@@ -67,6 +69,8 @@ export default function AuditPage() {
   const [actorType, setActorType] = useState("");
   const [result, setResult] = useState("");
   const [orderNo, setOrderNo] = useState("");
+  const actorTypeSelectValue = actorType || "__ALL_ACTOR_TYPE__";
+  const resultSelectValue = result || "__ALL_RESULT__";
 
   const reload = async () => {
     try {
@@ -133,20 +137,34 @@ export default function AuditPage() {
         </div>
 
         <div className="card row wrap" style={{ marginBottom: 12 }}>
-          <input value={actionType} onChange={(e) => setActionType(e.target.value)} placeholder="アクション" style={{ maxWidth: 220 }} />
-          <select value={actorType} onChange={(e) => setActorType(e.target.value)} style={{ maxWidth: 180 }}>
-            <option value="">ロール: すべて</option>
-            <option value="POS">POS</option>
-            <option value="KITCHEN">キッチン</option>
-            <option value="WAITER">配膳</option>
-            <option value="ADMIN">管理</option>
-          </select>
-          <select value={result} onChange={(e) => setResult(e.target.value)} style={{ maxWidth: 170 }}>
-            <option value="">結果: すべて</option>
-            <option value="SUCCESS">成功</option>
-            <option value="FAILURE">失敗</option>
-          </select>
-          <input value={orderNo} onChange={(e) => setOrderNo(e.target.value)} placeholder="注文番号" style={{ maxWidth: 120 }} />
+          <Input value={actionType} onChange={(e) => setActionType(e.target.value)} placeholder="アクション" style={{ maxWidth: 220 }} />
+          <div style={{ maxWidth: 180, width: "100%" }}>
+            <Select value={actorTypeSelectValue} onValueChange={(v) => setActorType(v === "__ALL_ACTOR_TYPE__" ? "" : v)}>
+              <SelectTrigger className="bg-background text-foreground">
+                <SelectValue placeholder="ロール: すべて" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__ALL_ACTOR_TYPE__">ロール: すべて</SelectItem>
+                <SelectItem value="POS">POS</SelectItem>
+                <SelectItem value="KITCHEN">キッチン</SelectItem>
+                <SelectItem value="WAITER">配膳</SelectItem>
+                <SelectItem value="ADMIN">管理</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div style={{ maxWidth: 170, width: "100%" }}>
+            <Select value={resultSelectValue} onValueChange={(v) => setResult(v === "__ALL_RESULT__" ? "" : v)}>
+              <SelectTrigger className="bg-background text-foreground">
+                <SelectValue placeholder="結果: すべて" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__ALL_RESULT__">結果: すべて</SelectItem>
+                <SelectItem value="SUCCESS">成功</SelectItem>
+                <SelectItem value="FAILURE">失敗</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Input value={orderNo} onChange={(e) => setOrderNo(e.target.value)} placeholder="注文番号" style={{ maxWidth: 120 }} />
         </div>
 
         <div className="card" style={{ overflowX: "auto" }}>

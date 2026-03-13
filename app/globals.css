@@ -23,7 +23,6 @@
   --tw-input: 214 22% 82%;
   --tw-ring: 175 77% 26%;
 
-
   --bg-base: #edf2f8;
   --bg-soft: #f8fbff;
   --ink: #122033;
@@ -64,9 +63,21 @@ body {
   color: var(--ink);
   font-family: var(--font-zen-kaku), "Zen Kaku Gothic New", sans-serif;
   background:
-    radial-gradient(860px 500px at -6% -10%, rgba(89, 161, 219, 0.24) 0%, transparent 70%),
-    radial-gradient(900px 420px at 104% -8%, rgba(34, 197, 165, 0.22) 0%, transparent 70%),
-    radial-gradient(1000px 450px at 60% 120%, rgba(249, 149, 21, 0.14) 0%, transparent 72%),
+    radial-gradient(
+      860px 500px at -6% -10%,
+      rgba(89, 161, 219, 0.24) 0%,
+      transparent 70%
+    ),
+    radial-gradient(
+      900px 420px at 104% -8%,
+      rgba(34, 197, 165, 0.22) 0%,
+      transparent 70%
+    ),
+    radial-gradient(
+      1000px 450px at 60% 120%,
+      rgba(249, 149, 21, 0.14) 0%,
+      transparent 72%
+    ),
     linear-gradient(150deg, var(--bg-soft) 0%, var(--bg-base) 100%);
 }
 
@@ -143,13 +154,29 @@ main {
 
 .dashboard-hero-fancy {
   background:
-    radial-gradient(140% 130% at 100% 0%, rgba(34, 197, 165, 0.24) 0%, transparent 58%),
-    radial-gradient(95% 120% at 0% 0%, rgba(59, 130, 246, 0.2) 0%, transparent 62%),
-    linear-gradient(140deg, rgba(255, 255, 255, 0.9) 0%, rgba(246, 250, 255, 0.92) 100%);
+    radial-gradient(
+      140% 130% at 100% 0%,
+      rgba(34, 197, 165, 0.24) 0%,
+      transparent 58%
+    ),
+    radial-gradient(
+      95% 120% at 0% 0%,
+      rgba(59, 130, 246, 0.2) 0%,
+      transparent 62%
+    ),
+    linear-gradient(
+      140deg,
+      rgba(255, 255, 255, 0.9) 0%,
+      rgba(246, 250, 255, 0.92) 100%
+    );
 }
 
 .dashboard-hero-plain {
-  background: linear-gradient(140deg, rgba(255, 255, 255, 0.93) 0%, rgba(248, 251, 255, 0.95) 100%);
+  background: linear-gradient(
+    140deg,
+    rgba(255, 255, 255, 0.93) 0%,
+    rgba(248, 251, 255, 0.95) 100%
+  );
 }
 
 .dashboard-hero-plain::after {
@@ -164,7 +191,11 @@ main {
   right: -48px;
   bottom: -62px;
   border-radius: 999px;
-  background: radial-gradient(circle, rgba(220, 104, 3, 0.18) 0%, rgba(220, 104, 3, 0) 72%);
+  background: radial-gradient(
+    circle,
+    rgba(220, 104, 3, 0.18) 0%,
+    rgba(220, 104, 3, 0) 72%
+  );
   pointer-events: none;
 }
 
@@ -291,26 +322,34 @@ textarea:focus {
   box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.16);
 }
 
-button,
+button:not(.inline-flex):not([data-state]),
 .btn-link {
   border: 1px solid transparent;
   border-radius: 12px;
   padding: 9px 14px;
-  background: linear-gradient(140deg, var(--accent) 0%, var(--accent-strong) 100%);
+  background: linear-gradient(
+    140deg,
+    var(--accent) 0%,
+    var(--accent-strong) 100%
+  );
   color: #fff;
   cursor: pointer;
-  transition: transform 0.14s ease, box-shadow 0.14s ease, opacity 0.14s ease, background 0.2s ease;
+  transition:
+    transform 0.14s ease,
+    box-shadow 0.14s ease,
+    opacity 0.14s ease,
+    background 0.2s ease;
   font-weight: 700;
   letter-spacing: 0.01em;
 }
 
-button:hover,
+button:not(.inline-flex):not([data-state]):hover,
 .btn-link:hover {
   transform: translateY(-1px);
   box-shadow: 0 10px 16px rgba(17, 94, 89, 0.25);
 }
 
-button:disabled,
+button:not(.inline-flex):not([data-state]):disabled,
 .btn-link[aria-disabled="true"] {
   opacity: 0.46;
   cursor: not-allowed;
@@ -351,21 +390,21 @@ button:disabled,
 }
 
 .badge.ready {
-  color: #0a745d;
-  border-color: #59bca2;
-  background: #edfff9;
+  color: #922424;
+  border-color: #d88f8f;
+  background: #fff0f0;
 }
 
 .badge.queued {
-  color: #4e5a6a;
-  border-color: #a7b2c0;
-  background: #f7f9fc;
-}
-
-.badge.served {
   color: #245f9b;
   border-color: #7ca7cf;
   background: #f0f8ff;
+}
+
+.badge.served {
+  color: #0a745d;
+  border-color: #59bca2;
+  background: #edfff9;
 }
 
 .badge.availability-available {
@@ -502,7 +541,10 @@ button:disabled,
   display: grid;
   gap: 10px;
   min-height: 136px;
-  transition: transform 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease;
+  transition:
+    transform 0.14s ease,
+    box-shadow 0.14s ease,
+    border-color 0.14s ease;
 }
 
 .menu-tile:hover {
@@ -926,7 +968,7 @@ button:disabled,
 
   .dashboard-actions {
     width: 100%;
-    justify-content: flex-start;
+    justify-content: flex-end;
   }
 
   .terminal-banner {
@@ -948,6 +990,3 @@ button:disabled,
     grid-template-columns: 1fr;
   }
 }
-
-
-

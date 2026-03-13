@@ -7,6 +7,10 @@ import { LogoPlaceholder } from "@/components/logo-placeholder";
 import { ACTOR_TYPE_LABEL, SESSION_FAILURE_LABEL, labelOf } from "@/lib/labels";
 import { routeByActorType } from "@/lib/routes";
 import { useToast } from "@/components/toast";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type LoginActor = {
   id: string;
@@ -82,7 +86,7 @@ export default function LoginPage() {
 
   return (
     <main>
-      <div className="center-box card">
+      <Card className="center-box card">
         <div className="row between">
           <div>
             <h1 style={{ margin: 0 }}>KISSa Login</h1>
@@ -96,18 +100,23 @@ export default function LoginPage() {
         <form onSubmit={onSubmit} style={{ marginTop: 16 }} className="grid">
           <label>
             アカウント
-            <select value={selectedActorId} onChange={(e) => setSelectedActorId(e.target.value)}>
+            <Select value={selectedActorId} onValueChange={setSelectedActorId}>
+              <SelectTrigger className="bg-background text-foreground">
+                <SelectValue placeholder="アカウントを選択" />
+              </SelectTrigger>
+              <SelectContent>
               {actors.map((actor) => (
-                <option key={actor.id} value={actor.id}>
+                <SelectItem key={actor.id} value={actor.id}>
                   {`${actor.label} (${labelOf(ACTOR_TYPE_LABEL, actor.actorType)})`}
-                </option>
+                </SelectItem>
               ))}
-            </select>
+              </SelectContent>
+            </Select>
           </label>
 
           <label>
             パスワード
-            <input
+            <Input
               type="password"
               value={secret}
               onChange={(e) => setSecret(e.target.value)}
@@ -115,13 +124,13 @@ export default function LoginPage() {
             />
           </label>
 
-          <button type="submit" disabled={busy || !selectedActorId}>
+          <Button type="submit" disabled={busy || !selectedActorId}>
             {busy ? "ログイン中..." : "ログイン"}
-          </button>
+          </Button>
         </form>
 
         {error && <div className="notice error">{error}</div>}
-      </div>
+      </Card>
     </main>
   );
 }
