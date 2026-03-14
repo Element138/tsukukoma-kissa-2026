@@ -140,7 +140,7 @@ function InputField(props: {
   placeholder?: string;
 }) {
   return (
-    <label className={cn("grid gap-1", props.className)}>
+    <label className={cn("grid gap-0.5", props.className)}>
       <span className="text-[11px] font-medium text-muted-foreground">
         {props.label}
       </span>
@@ -479,7 +479,7 @@ export default function AdminPage() {
                         onSubmit={createActor}
                         className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4"
                       >
-                        <label className="grid gap-1">
+                        <label className="grid gap-0.5">
                           <span className="text-[11px] font-medium text-muted-foreground">
                             ロール
                           </span>
@@ -817,7 +817,7 @@ export default function AdminPage() {
                         value={newMenuWorkloadSeconds}
                         onChange={setNewMenuWorkloadSeconds}
                       />
-                      <label className="grid gap-1">
+                      <label className="grid gap-0.5">
                         <span className="text-[11px] font-medium text-muted-foreground">
                           カテゴリ
                         </span>
@@ -902,7 +902,6 @@ export default function AdminPage() {
                                 status === "AVAILABLE" &&
                                 !menu.hasActiveKitchenCoverage;
                               const disabled =
-                                noCoverage ||
                                 menuAvailabilityBusyId === menu.id;
                               const active = menu.availability === status;
                               return (
@@ -913,12 +912,21 @@ export default function AdminPage() {
                                   disabled={disabled}
                                   className={cn(
                                     "h-8 px-2 text-[11px] font-semibold leading-none",
+                                    noCoverage && !active && "opacity-50",
                                     active
                                       ? STATUS_BUTTON_ACTIVE_TONE[status]
                                       : "bg-background text-foreground hover:bg-muted",
                                   )}
                                   onClick={() =>
                                     void (async () => {
+                                      if (noCoverage) {
+                                        notify({
+                                          level: "error",
+                                          message:
+                                            "現在対応できるキッチンがないため、販売中にできません",
+                                        });
+                                        return;
+                                      }
                                       setMenuAvailabilityBusyId(menu.id);
                                       try {
                                         await patchMenu(
@@ -972,7 +980,7 @@ export default function AdminPage() {
                               }))
                             }
                           />
-                          <label className="grid gap-1">
+                          <label className="grid gap-0.5">
                             <span className="text-[11px] font-medium text-muted-foreground">
                               カテゴリ
                             </span>

@@ -251,7 +251,7 @@ export default function AuditPage() {
                     <td className="audit-entity-cell">{formatEntity(log)}</td>
                     <td>{labelOf(AUDIT_RESULT_LABEL, log.result)}</td>
                     <td className="audit-wrap-cell">{log.diff}</td>
-                    <td className="audit-wrap-cell">
+                    <td className="audit-reason-cell">
                       {log.reasonType ?? log.reasonText ?? ""}
                     </td>
                   </tr>

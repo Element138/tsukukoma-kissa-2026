@@ -10,7 +10,9 @@ import { useRealtimeSubscription } from "@/components/use-realtime-subscription"
 import { AVAILABILITY_LABEL, labelOf } from "@/lib/labels";
 import { useToast } from "@/components/toast";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
 
 type QueueMenu = {
   menuId: string;
@@ -72,6 +74,12 @@ function queueTone(seconds: number) {
 }
 
 const AVAILABILITY_OPTIONS: Array<"AVAILABLE" | "PAUSED" | "SOLD_OUT"> = ["AVAILABLE", "PAUSED", "SOLD_OUT"];
+const STATUS_BUTTON_ACTIVE_TONE: Record<"AVAILABLE" | "PAUSED" | "SOLD_OUT", string> = {
+  AVAILABLE:
+    "border-emerald-700 bg-emerald-600 text-white hover:bg-emerald-700",
+  PAUSED: "border-amber-700 bg-amber-500 text-white hover:bg-amber-600",
+  SOLD_OUT: "border-rose-700 bg-rose-600 text-white hover:bg-rose-700"
+};
 
 function SectionTitle({ children }: { children: ReactNode }) {
   return <h2 className="section-title text-base font-semibold tracking-tight">{children}</h2>;
@@ -344,26 +352,32 @@ export default function KitchenPage() {
                 <div className="menu-status-grid" style={{ marginTop: 8 }}>
                   {AVAILABILITY_OPTIONS.map((status) => {
                     const noCoverageForAvailable = status === "AVAILABLE" && !menu.hasActiveKitchenCoverage;
-                    const pseudoDisabled = noCoverageForAvailable || availabilityBusyMenuId === menu.id;
+                    const disabled = availabilityBusyMenuId === menu.id;
+                    const active = menu.availability === status;
 
                     return (
-                      <button
+                      <Button
                         key={status}
                         type="button"
-                        className={`ghost-btn status-btn ${menu.availability === status ? `status-${status.toLowerCase()} active` : ""}`}
-                        aria-disabled={pseudoDisabled ? "true" : undefined}
+                        variant={active ? "default" : "outline"}
+                        disabled={disabled}
+                        className={cn(
+                          "h-8 px-2 text-[11px] font-semibold leading-none",
+                          noCoverageForAvailable && !active && "opacity-50",
+                          active
+                            ? STATUS_BUTTON_ACTIVE_TONE[status]
+                            : "bg-background text-foreground hover:bg-muted"
+                        )}
                         onClick={() => {
-                          if (pseudoDisabled) {
-                            if (noCoverageForAvailable) {
-                              notify({ level: "error", message: "現在対応できるキッチンがないため、販売中にできません" });
-                            }
+                          if (noCoverageForAvailable) {
+                            notify({ level: "error", message: "現在対応できるキッチンがないため、販売中にできません" });
                             return;
                           }
                           void changeAvailability(menu.id, status);
                         }}
                       >
                         {labelOf(AVAILABILITY_LABEL, status)}
-                      </button>
+                      </Button>
                     );
                   })}
                 </div>

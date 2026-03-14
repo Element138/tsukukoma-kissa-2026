@@ -18,8 +18,10 @@ import {
 } from "@/lib/labels";
 import { useToast } from "@/components/toast";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 
 type MenuPayload = {
   menus: Array<{
@@ -40,6 +42,12 @@ type MenuPayload = {
 };
 
 const AVAILABILITY_OPTIONS: Array<"AVAILABLE" | "PAUSED" | "SOLD_OUT"> = ["AVAILABLE", "PAUSED", "SOLD_OUT"];
+const STATUS_BUTTON_ACTIVE_TONE: Record<"AVAILABLE" | "PAUSED" | "SOLD_OUT", string> = {
+  AVAILABLE:
+    "border-emerald-700 bg-emerald-600 text-white hover:bg-emerald-700",
+  PAUSED: "border-amber-700 bg-amber-500 text-white hover:bg-amber-600",
+  SOLD_OUT: "border-rose-700 bg-rose-600 text-white hover:bg-rose-700"
+};
 
 const AGE_GROUPS = [
   { key: "infant", label: "0-6歳" },
@@ -296,26 +304,32 @@ export default function PosPage() {
                   <div className="menu-status-grid">
                     {AVAILABILITY_OPTIONS.map((option) => {
                       const noCoverageForAvailable = option === "AVAILABLE" && !menu.hasActiveKitchenCoverage;
-                      const pseudoDisabled = noCoverageForAvailable || menuAvailabilityBusyId === menu.id;
+                      const disabled = menuAvailabilityBusyId === menu.id;
+                      const active = menu.availability === option;
 
                       return (
-                        <button
+                        <Button
                           key={option}
                           type="button"
-                          className={`ghost-btn status-btn ${menu.availability === option ? `status-${option.toLowerCase()} active` : ""}`}
-                          aria-disabled={pseudoDisabled ? "true" : undefined}
+                          variant={active ? "default" : "outline"}
+                          disabled={disabled}
+                          className={cn(
+                            "h-8 px-2 text-[11px] font-semibold leading-none",
+                            noCoverageForAvailable && !active && "opacity-50",
+                            active
+                              ? STATUS_BUTTON_ACTIVE_TONE[option]
+                              : "bg-background text-foreground hover:bg-muted"
+                          )}
                           onClick={() => {
-                            if (pseudoDisabled) {
-                              if (noCoverageForAvailable) {
-                                notify({ level: "error", message: "現在対応できるキッチンがないため、販売中にできません" });
-                              }
+                            if (noCoverageForAvailable) {
+                              notify({ level: "error", message: "現在対応できるキッチンがないため、販売中にできません" });
                               return;
                             }
                             void updateMenuAvailability(menu.id, option);
                           }}
                         >
                           {labelOf(AVAILABILITY_LABEL, option)}
-                        </button>
+                        </Button>
                       );
                     })}
                   </div>
