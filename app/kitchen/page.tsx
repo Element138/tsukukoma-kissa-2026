@@ -264,9 +264,7 @@ export default function KitchenPage() {
     <>
       <TerminalBanner actorId={session.actor.actorId} actorType={session.actor.actorType} actorLabel={session.actor.label} offlineActors={session.offlineActors} />
       <DashboardShell
-        eyebrow="KITCHEN OPS"
         title="キッチンダッシュボード"
-        subtitle="キューと提供状態をリアルタイムで制御"
       >
         <div className="grid">
         <Card className="card">

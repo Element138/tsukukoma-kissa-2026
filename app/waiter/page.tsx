@@ -237,116 +237,114 @@ export default function WaiterPage() {
         actorLabel={session.actor.label}
         offlineActors={session.offlineActors}
       />
-      {/* <DashboardShell
-        eyebrow="SERVICE FLOW"
+      <DashboardShell
         title="配膳ダッシュボード"
-        subtitle="提供待ちとテーブル進行を見える化"
-      > */}
-      <div className="grid">
-        <Card className="card">
-          <div className="row between wrap" style={{ marginBottom: 10 }}>
-            <SectionTitle>配膳ビュー</SectionTitle>
-            <div className="row wrap">
-              <button type="button" className="ghost-btn" onClick={undo}>
-                取り消し
-              </button>
-              <Link href="/order-book" className="btn-link ghost-btn">
-                オーダーブック
-              </Link>
+      >
+        <div className="grid">
+          <Card className="card">
+            <div className="row between wrap" style={{ marginBottom: 10 }}>
+              <SectionTitle>配膳ビュー</SectionTitle>
+              <div className="row wrap">
+                <button type="button" className="ghost-btn" onClick={undo}>
+                  取り消し
+                </button>
+                <Link href="/order-book" className="btn-link ghost-btn">
+                  オーダーブック
+                </Link>
+              </div>
             </div>
-          </div>
 
-          <h3 style={{ margin: "6px 0 10px" }}>店内</h3>
-          <div className="waiter-tile-grid">
-            {dineInTiles.length === 0 && (
-              <div className="muted">配膳待ちはありません</div>
-            )}
-            {dineInTiles.map((order) => {
-              const tableReadyCount =
-                order.tableNo != null
-                  ? (dineInTableReadySummary.get(order.tableNo)?.readyCount ??
-                    order.readyItems.length)
-                  : order.readyItems.length;
+            <h3 style={{ margin: "6px 0 10px" }}>店内</h3>
+            <div className="waiter-tile-grid">
+              {dineInTiles.length === 0 && (
+                <div className="muted">配膳待ちはありません</div>
+              )}
+              {dineInTiles.map((order) => {
+                const tableReadyCount =
+                  order.tableNo != null
+                    ? (dineInTableReadySummary.get(order.tableNo)?.readyCount ??
+                      order.readyItems.length)
+                    : order.readyItems.length;
 
-              return (
+                return (
+                  <article key={order.id} className="waiter-tile">
+                    <div className="row between wrap">
+                      <strong>Table #{order.tableNo ?? "-"}</strong>
+                      <span className="badge">注文 #{order.orderNo}</span>
+                    </div>
+                    <div className="muted">
+                      注文から {order.elapsedSinceOrdered}
+                    </div>
+
+                    <div className="list" style={{ marginTop: 8 }}>
+                      {order.readyItems.map((item) => (
+                        <div
+                          key={item.id}
+                          className="list-item row between wrap"
+                          style={{ padding: "8px 10px" }}
+                        >
+                          <span>{item.name}</span>
+                          <button
+                            type="button"
+                            className="ghost-btn"
+                            onClick={() => serveItem(item.id)}
+                          >
+                            提供
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    {tableReadyCount > 1 && (
+                      <button
+                        type="button"
+                        style={{ marginTop: 8 }}
+                        onClick={() => serveTable(order)}
+                      >
+                        テーブル分をまとめて提供済みにする
+                      </button>
+                    )}
+
+                    {order.specialNote && (
+                      <div className="notice" style={{ marginTop: 8 }}>
+                        {order.specialNote}
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+
+            <h3 style={{ margin: "14px 0 10px" }}>持ち帰り</h3>
+            <div className="waiter-tile-grid">
+              {takeoutTiles.length === 0 && (
+                <div className="muted">配膳待ちの持ち帰り注文はありません</div>
+              )}
+              {takeoutTiles.map((order) => (
                 <article key={order.id} className="waiter-tile">
                   <div className="row between wrap">
-                    <strong>Table #{order.tableNo ?? "-"}</strong>
-                    <span className="badge">注文 #{order.orderNo}</span>
+                    <strong>Order #{order.orderNo}</strong>
+                    <span className="badge">{order.itemCount} 品</span>
                   </div>
                   <div className="muted">
                     注文から {order.elapsedSinceOrdered}
                   </div>
-
-                  <div className="list" style={{ marginTop: 8 }}>
-                    {order.readyItems.map((item) => (
-                      <div
-                        key={item.id}
-                        className="list-item row between wrap"
-                        style={{ padding: "8px 10px" }}
-                      >
-                        <span>{item.name}</span>
-                        <button
-                          type="button"
-                          className="ghost-btn"
-                          onClick={() => serveItem(item.id)}
-                        >
-                          提供
-                        </button>
-                      </div>
-                    ))}
+                  <div className="muted" style={{ marginTop: 8 }}>
+                    {order.itemNames.join(" / ")}
                   </div>
-
-                  {tableReadyCount > 1 && (
-                    <button
-                      type="button"
-                      style={{ marginTop: 8 }}
-                      onClick={() => serveTable(order)}
-                    >
-                      テーブル分をまとめて提供済みにする
-                    </button>
-                  )}
-
-                  {order.specialNote && (
-                    <div className="notice" style={{ marginTop: 8 }}>
-                      {order.specialNote}
-                    </div>
-                  )}
+                  <button
+                    type="button"
+                    style={{ marginTop: 10 }}
+                    onClick={() => serveOrder(order.id)}
+                  >
+                    まとめて提供済みにする
+                  </button>
                 </article>
-              );
-            })}
-          </div>
-
-          <h3 style={{ margin: "14px 0 10px" }}>持ち帰り</h3>
-          <div className="waiter-tile-grid">
-            {takeoutTiles.length === 0 && (
-              <div className="muted">配膳待ちの持ち帰り注文はありません</div>
-            )}
-            {takeoutTiles.map((order) => (
-              <article key={order.id} className="waiter-tile">
-                <div className="row between wrap">
-                  <strong>Order #{order.orderNo}</strong>
-                  <span className="badge">{order.itemCount} 品</span>
-                </div>
-                <div className="muted">
-                  注文から {order.elapsedSinceOrdered}
-                </div>
-                <div className="muted" style={{ marginTop: 8 }}>
-                  {order.itemNames.join(" / ")}
-                </div>
-                <button
-                  type="button"
-                  style={{ marginTop: 10 }}
-                  onClick={() => serveOrder(order.id)}
-                >
-                  まとめて提供済みにする
-                </button>
-              </article>
-            ))}
-          </div>
-        </Card>
-      </div>
-      {/* </DashboardShell> */}
+              ))}
+            </div>
+          </Card>
+        </div>
+      </DashboardShell>
     </>
   );
 }

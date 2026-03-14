@@ -268,9 +268,7 @@ export default function PosPage() {
     <>
       <TerminalBanner actorId={session.actor.actorId} actorType={session.actor.actorType} actorLabel={session.actor.label} offlineActors={session.offlineActors} />
       <DashboardShell
-        eyebrow="POINT OF SALE"
         title="POSダッシュボード"
-        subtitle="受注、会計、販売状態を一画面で管理"
       >
         <div className="grid two">
         <Card className="card">

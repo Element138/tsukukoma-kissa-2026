@@ -364,14 +364,32 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(.ghost
 
 .ghost-btn,
 .btn-link.ghost-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 10px;
   background: var(--surface-strong);
   color: var(--ink);
   border: 1px solid var(--line);
   box-shadow: none;
+  cursor: pointer;
+  font-weight: 600;
+  line-height: 1.2;
+  transition:
+    background 0.14s ease,
+    box-shadow 0.14s ease,
+    border-color 0.14s ease,
+    transform 0.14s ease,
+    opacity 0.14s ease;
 }
 
 .ghost-btn:hover,
 .btn-link.ghost-btn:hover {
+  background: #f7fbff;
+  border-color: var(--line-strong);
+  transform: translateY(-1px);
   box-shadow: var(--shadow-sm);
 }
 
