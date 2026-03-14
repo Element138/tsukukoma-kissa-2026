@@ -118,7 +118,7 @@ model Session {
 model MenuCategory {
   id           String   @id @default(uuid())
   name         String   @db.VarChar(120)
-  displayOrder Int      @default(0)
+  displayOrder Int?     @default(0)
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -130,8 +130,8 @@ model Menu {
   name            String                  @db.VarChar(120)
   priceJpy        Int
   availability    Availability            @default(AVAILABLE)
-  workloadSeconds Int
-  displayOrder    Int                     @default(0)
+  workloadSeconds Float
+  displayOrder    Int?                    @default(0)
   coverImageDataUrl String?
   categoryId      String
   isActive        Boolean                 @default(true)
@@ -199,7 +199,7 @@ model OrderItem {
   menuId                  String
   itemNameSnapshot        String
   unitPriceJpy            Int
-  workloadSecondsSnapshot Int
+  workloadSecondsSnapshot Float
   kitchenId               String?         @db.VarChar(64)
   kitchenAssignedAt       DateTime?
   status                  OrderItemStatus

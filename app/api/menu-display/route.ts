@@ -21,11 +21,17 @@ export async function GET(req: NextRequest) {
     const [categories, menus, setting] = await Promise.all([
       prisma.menuCategory.findMany({
         where: { isActive: true },
-        orderBy: [{ displayOrder: "asc" }, { name: "asc" }],
+        orderBy: [
+          { displayOrder: "asc" },
+          { name: "asc" },
+        ],
       }),
       prisma.menu.findMany({
         where: { isActive: true },
-        orderBy: [{ displayOrder: "asc" }, { name: "asc" }],
+        orderBy: [
+          { displayOrder: "asc" },
+          { name: "asc" },
+        ],
       }),
       prisma.appSetting.upsert({
         where: { id: 1 },

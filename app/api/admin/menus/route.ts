@@ -49,7 +49,10 @@ export async function GET(req: NextRequest) {
       trace("db.read.start");
       const [menus, categories, activeAssignments] = await Promise.all([
         prisma.menu.findMany({
-          orderBy: [{ displayOrder: "asc" }, { name: "asc" }]
+          orderBy: [
+            { displayOrder: "asc" },
+            { name: "asc" },
+          ]
         }),
         prisma.menuCategory.findMany({
           where: { isActive: true },
@@ -173,14 +176,33 @@ export async function PATCH(req: NextRequest) {
 
       trace("tx.update.start");
       const menu = await prisma.$transaction(async (tx) => {
+        let shiftedMenuCount = 0;
+        if (body.isActive === false && before.displayOrder != null) {
+          const shifted = await tx.menu.updateMany({
+            where: {
+              isActive: true,
+              categoryId: before.categoryId,
+              displayOrder: {
+                gt: before.displayOrder,
+              },
+            },
+            data: {
+              displayOrder: {
+                decrement: 1,
+              },
+            },
+          });
+          shiftedMenuCount = shifted.count;
+        }
+
         const updated = await tx.menu.update({
           where: { id: body.id },
           data: {
             name: body.name,
             priceJpy: body.priceJpy,
-            availability: body.availability,
+            availability: body.isActive === false ? "PAUSED" : body.availability,
             workloadSeconds: body.workloadSeconds,
-            displayOrder: body.displayOrder,
+            displayOrder: body.isActive === false ? null : body.displayOrder,
             categoryId: body.categoryId,
             isActive: body.isActive,
             showLeadTime: body.showLeadTime,
@@ -202,7 +224,13 @@ export async function PATCH(req: NextRequest) {
           entityType: "menu",
           entityId: updated.id,
           beforeJson: before,
-          afterJson: updated,
+          afterJson:
+            body.isActive === false
+              ? {
+                  ...updated,
+                  shiftedMenuCount,
+                }
+              : updated,
           result: "SUCCESS"
         });
 

@@ -2,6 +2,8 @@
 
 import {
   FormEvent,
+  KeyboardEvent as ReactKeyboardEvent,
+  type InputHTMLAttributes,
   ReactNode,
   useEffect,
   useMemo,
@@ -77,7 +79,7 @@ type Actor = {
 type Category = {
   id: string;
   name: string;
-  displayOrder: number;
+  displayOrder: number | null;
   isActive: boolean;
 };
 type Menu = {
@@ -86,7 +88,7 @@ type Menu = {
   priceJpy: number;
   availability: "AVAILABLE" | "PAUSED" | "SOLD_OUT";
   workloadSeconds: number;
-  displayOrder: number;
+  displayOrder: number | null;
   categoryId: string;
   isActive: boolean;
   hasActiveKitchenCoverage: boolean;
@@ -96,7 +98,7 @@ type Assignment = { menuId: string; kitchenId: string; enabled: boolean };
 type MenuEdit = {
   name: string;
   priceJpy: string;
-  workloadSeconds: string;
+  workloadPerMinute: string;
   categoryId: string;
   coverImageDataUrl: string;
 };
@@ -117,8 +119,102 @@ const STATUS_BUTTON_ACTIVE_TONE: Record<Menu["availability"], string> = {
   PAUSED: "border-amber-700 bg-amber-500 text-white hover:bg-amber-600",
   SOLD_OUT: "border-rose-700 bg-rose-600 text-white hover:bg-rose-700",
 };
+const NUMERIC_BLOCK_KEYS = new Set(["e", "E", "+", "-"]);
+const WORKLOAD_COMPARISON_TOLERANCE = 0.0001;
 
 const dangerConfirm = (message: string) => window.confirm(message);
+
+const blockScientificNotationInput = (
+  event: ReactKeyboardEvent<HTMLInputElement>,
+) => {
+  if (NUMERIC_BLOCK_KEYS.has(event.key)) {
+    event.preventDefault();
+  }
+};
+
+function sanitizeIntegerInput(value: string) {
+  return value.replace(/[^\d]/g, "");
+}
+
+function sanitizeDecimalInput(value: string) {
+  const normalized = value.replace(/[^\d.]/g, "");
+  const [whole, ...fractionParts] = normalized.split(".");
+  if (fractionParts.length === 0) {
+    return whole;
+  }
+  return `${whole}.${fractionParts.join("")}`;
+}
+
+function toPositiveFiniteNumber(
+  raw: string,
+  fieldLabel: string,
+  options: { min?: number; max?: number; integer?: boolean } = {},
+) {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    throw new Error(`${fieldLabel}を入力してください`);
+  }
+
+  const value = Number(trimmed);
+  if (!Number.isFinite(value)) {
+    throw new Error(`${fieldLabel}は数値で入力してください`);
+  }
+  if (options.integer && !Number.isInteger(value)) {
+    throw new Error(`${fieldLabel}は整数で入力してください`);
+  }
+  if (options.min != null && value < options.min) {
+    throw new Error(`${fieldLabel}は ${options.min} 以上で入力してください`);
+  }
+  if (options.max != null && value > options.max) {
+    throw new Error(`${fieldLabel}は ${options.max} 以下で入力してください`);
+  }
+  return value;
+}
+
+function efficiencyToWorkloadSeconds(efficiencyPerMinute: number) {
+  return 60 / efficiencyPerMinute;
+}
+
+function workloadSecondsToEfficiency(workloadSeconds: number) {
+  if (!Number.isFinite(workloadSeconds) || workloadSeconds <= 0) {
+    return 0;
+  }
+  return 60 / workloadSeconds;
+}
+
+function formatEfficiencyInput(workloadSeconds: number) {
+  const efficiency = workloadSecondsToEfficiency(workloadSeconds);
+  if (!Number.isFinite(efficiency) || efficiency <= 0) {
+    return "";
+  }
+  return efficiency.toFixed(2).replace(/\.?0+$/, "");
+}
+
+function hasWorkloadDifference(
+  nextWorkloadSeconds: number,
+  currentWorkloadSeconds: number,
+) {
+  if (
+    !Number.isFinite(nextWorkloadSeconds) ||
+    !Number.isFinite(currentWorkloadSeconds)
+  ) {
+    return true;
+  }
+  return (
+    Math.abs(nextWorkloadSeconds - currentWorkloadSeconds) >
+    WORKLOAD_COMPARISON_TOLERANCE
+  );
+}
+
+function toMenuEdit(menu: Menu): MenuEdit {
+  return {
+    name: menu.name,
+    priceJpy: String(menu.priceJpy),
+    workloadPerMinute: formatEfficiencyInput(menu.workloadSeconds),
+    categoryId: menu.categoryId,
+    coverImageDataUrl: menu.coverImageDataUrl ?? "",
+  };
+}
 
 function SectionHeader(props: { title: string; icon: ReactNode }) {
   return (
@@ -141,6 +237,12 @@ function InputField(props: {
   onChange: (value: string) => void;
   className?: string;
   placeholder?: string;
+  type?: InputHTMLAttributes<HTMLInputElement>["type"];
+  inputMode?: InputHTMLAttributes<HTMLInputElement>["inputMode"];
+  min?: number;
+  max?: number;
+  step?: number;
+  onKeyDown?: (event: ReactKeyboardEvent<HTMLInputElement>) => void;
 }) {
   return (
     <label className={cn("grid gap-0", props.className)}>
@@ -150,6 +252,12 @@ function InputField(props: {
       <Input
         value={props.value}
         placeholder={props.placeholder}
+        type={props.type}
+        inputMode={props.inputMode}
+        min={props.min}
+        max={props.max}
+        step={props.step}
+        onKeyDown={props.onKeyDown}
         onChange={(e) => props.onChange(e.target.value)}
       />
     </label>
@@ -160,6 +268,7 @@ function IconActionButton(props: {
   label: string;
   icon: ReactNode;
   destructive?: boolean;
+  saveTone?: boolean;
   disabled?: boolean;
   onClick: () => void;
 }) {
@@ -172,6 +281,7 @@ function IconActionButton(props: {
           size="icon"
           className={cn(
             "h-8 w-8",
+            props.saveTone && "admin-save-button",
             props.destructive &&
               "text-destructive hover:bg-destructive/10 hover:text-destructive",
           )}
@@ -208,7 +318,8 @@ export default function AdminPage() {
   const [newMenuName, setNewMenuName] = useState("");
   const [newMenuPrice, setNewMenuPrice] = useState("500");
   const [newMenuCategoryId, setNewMenuCategoryId] = useState("");
-  const [newMenuWorkloadSeconds, setNewMenuWorkloadSeconds] = useState("300");
+  const [newMenuWorkloadPerMinute, setNewMenuWorkloadPerMinute] =
+    useState("0.2");
   const [menuEdits, setMenuEdits] = useState<Record<string, MenuEdit>>({});
   const [menuDisplaySettings, setMenuDisplaySettings] =
     useState<MenuDisplaySettings | null>(null);
@@ -236,13 +347,16 @@ export default function AdminPage() {
         .filter((c) => c.isActive)
         .sort(
           (a, b) =>
-            a.displayOrder - b.displayOrder ||
+            (a.displayOrder ?? 9999) - (b.displayOrder ?? 9999) ||
             a.name.localeCompare(b.name, "ja"),
         ),
     [categories],
   );
   const categoryOrder = useMemo(
-    () => new Map(activeCategories.map((c) => [c.id, c.displayOrder])),
+    () =>
+      new Map(
+        activeCategories.map((c) => [c.id, c.displayOrder ?? Number.MAX_SAFE_INTEGER]),
+      ),
     [activeCategories],
   );
   const activeMenus = useMemo(
@@ -253,14 +367,15 @@ export default function AdminPage() {
           (a, b) =>
             (categoryOrder.get(a.categoryId) ?? 9999) -
               (categoryOrder.get(b.categoryId) ?? 9999) ||
-            a.displayOrder - b.displayOrder ||
+            (a.displayOrder ?? 9999) - (b.displayOrder ?? 9999) ||
             a.name.localeCompare(b.name, "ja"),
         ),
     [menus, categoryOrder],
   );
   const hasUnsavedChanges = useMemo(() => {
     const categoryDirty = activeCategories.some(
-      (category) => (categoryNameDrafts[category.id] ?? category.name) !== category.name,
+      (category) =>
+        (categoryNameDrafts[category.id] ?? category.name) !== category.name,
     );
 
     const menuDirty = activeMenus.some((menu) => {
@@ -270,10 +385,14 @@ export default function AdminPage() {
       }
       const normalizedCover = edit.coverImageDataUrl.trim();
       const menuCover = menu.coverImageDataUrl ?? "";
+      const parsedEfficiency = Number(edit.workloadPerMinute);
+      const parsedWorkloadSeconds = Number.isFinite(parsedEfficiency)
+        ? efficiencyToWorkloadSeconds(parsedEfficiency)
+        : Number.NaN;
       return (
         edit.name !== menu.name ||
         Number(edit.priceJpy) !== menu.priceJpy ||
-        Number(edit.workloadSeconds) !== menu.workloadSeconds ||
+        hasWorkloadDifference(parsedWorkloadSeconds, menu.workloadSeconds) ||
         edit.categoryId !== menu.categoryId ||
         normalizedCover !== menuCover
       );
@@ -348,18 +467,14 @@ export default function AdminPage() {
       setMenuEdits((prev) => {
         const next = { ...prev };
         for (const menu of m.menus) {
-          next[menu.id] = next[menu.id] ?? {
-            name: menu.name,
-            priceJpy: String(menu.priceJpy),
-            workloadSeconds: String(menu.workloadSeconds),
-            categoryId: menu.categoryId,
-            coverImageDataUrl: menu.coverImageDataUrl ?? "",
-          };
+          next[menu.id] = next[menu.id] ?? toMenuEdit(menu);
         }
         return next;
       });
-      if (!newMenuCategoryId && c.categories.length > 0)
-        setNewMenuCategoryId(c.categories[0]!.id);
+      const firstActiveCategory = c.categories.find((category) => category.isActive);
+      if (!newMenuCategoryId && firstActiveCategory) {
+        setNewMenuCategoryId(firstActiveCategory.id);
+      }
     } catch (e) {
       notify({
         level: "error",
@@ -447,77 +562,154 @@ export default function AdminPage() {
     patch: Record<string, unknown>,
     successMessage: string,
   ) => {
-    try {
-      await apiFetch("/api/admin/actors", {
-        method: "PATCH",
-        body: JSON.stringify({ id, ...patch }),
-      });
-      notify({ level: "success", message: successMessage });
-      await reload();
-    } catch (e) {
-      notify({
-        level: "error",
-        message:
-          e instanceof Error ? e.message : "アカウント更新に失敗しました",
-      });
-    }
+    await runMutation({
+      action: async () => {
+        await apiFetch("/api/admin/actors", {
+          method: "PATCH",
+          body: JSON.stringify({ id, ...patch }),
+        });
+      },
+      successMessage,
+      errorMessage: "アカウント更新に失敗しました",
+    });
   };
 
   const createActor = async (e: FormEvent) => {
     e.preventDefault();
-    try {
-      await apiFetch("/api/admin/actors", {
-        method: "POST",
-        body: JSON.stringify({
-          actorType: newActorType,
-          label: newActorLabel,
-          secret: newActorSecret,
-          ...(newActorType === "KITCHEN" ? { kitchenEnabled: true } : {}),
-        }),
-      });
-      notify({ level: "success", message: "アカウントを作成しました" });
-      setNewActorLabel("");
-      setNewActorSecret("");
-      await reload();
-    } catch (e) {
+    const trimmedLabel = newActorLabel.trim();
+    const trimmedSecret = newActorSecret.trim();
+    if (!trimmedLabel) {
+      notify({ level: "error", message: "アカウント名を入力してください" });
+      return;
+    }
+    if (trimmedSecret.length < 4) {
       notify({
         level: "error",
-        message:
-          e instanceof Error ? e.message : "アカウント作成に失敗しました",
+        message: "パスワードは 4 文字以上で入力してください",
       });
+      return;
+    }
+
+    const saved = await runMutation({
+      action: async () => {
+        await apiFetch("/api/admin/actors", {
+          method: "POST",
+          body: JSON.stringify({
+            actorType: newActorType,
+            label: trimmedLabel,
+            secret: trimmedSecret,
+            ...(newActorType === "KITCHEN" ? { kitchenEnabled: true } : {}),
+          }),
+        });
+      },
+      successMessage: "アカウントを作成しました",
+      errorMessage: "アカウント作成に失敗しました",
+    });
+
+    if (saved) {
+      setNewActorLabel("");
+      setNewActorSecret("");
+    }
+  };
+
+  const notifyError = (error: unknown, fallbackMessage: string) => {
+    notify({
+      level: "error",
+      message: error instanceof Error ? error.message : fallbackMessage,
+    });
+  };
+
+  const runMutation = async (params: {
+    action: () => Promise<void>;
+    successMessage: string;
+    errorMessage: string;
+    reloadAfter?: boolean;
+  }) => {
+    try {
+      await params.action();
+      notify({ level: "success", message: params.successMessage });
+      if (params.reloadAfter ?? true) {
+        await reload();
+      }
+      return true;
+    } catch (error) {
+      notifyError(error, params.errorMessage);
+      return false;
     }
   };
 
   const patchCategory = async (
     id: string,
     patch: Partial<Category>,
-    msg: string,
   ) => {
     await apiFetch("/api/admin/categories", {
       method: "PATCH",
       body: JSON.stringify({ id, ...patch }),
     });
-    notify({ level: "success", message: msg });
   };
-  const patchMenu = async (menu: Menu, patch: Partial<Menu>, msg: string) => {
+  const patchMenu = async (menuId: string, patch: Partial<Menu>) => {
     await apiFetch("/api/admin/menus", {
       method: "PATCH",
-      body: JSON.stringify({ id: menu.id, ...patch }),
+      body: JSON.stringify({ id: menuId, ...patch }),
     });
-    notify({ level: "success", message: msg });
+  };
+
+  const parseMenuInput = (params: {
+    name: string;
+    priceJpy: string;
+    workloadPerMinute: string;
+    categoryId: string;
+    coverImageDataUrl: string;
+  }) => {
+    const trimmedName = params.name.trim();
+    if (!trimmedName) {
+      throw new Error("メニュー名を入力してください");
+    }
+    if (trimmedName.length > 120) {
+      throw new Error("メニュー名は 120 文字以内で入力してください");
+    }
+
+    const priceJpy = toPositiveFiniteNumber(params.priceJpy, "価格 (円)", {
+      integer: true,
+      min: 0,
+      max: 100000,
+    });
+    const efficiencyPerMinute = toPositiveFiniteNumber(
+      params.workloadPerMinute,
+      "調理効率 (個/分)",
+      {
+        min: 0.01,
+        max: 120,
+      },
+    );
+    const workloadSeconds = efficiencyToWorkloadSeconds(efficiencyPerMinute);
+    if (!params.categoryId) {
+      throw new Error("カテゴリを選択してください");
+    }
+
+    return {
+      name: trimmedName,
+      priceJpy,
+      workloadSeconds,
+      categoryId: params.categoryId,
+      coverImageDataUrl: params.coverImageDataUrl.trim() || null,
+    };
   };
 
   const saveMenuDisplaySettings = async () => {
-    const pageDisplaySeconds = Number(pageDisplaySecondsDraft);
-    if (
-      !Number.isFinite(pageDisplaySeconds) ||
-      pageDisplaySeconds < 6 ||
-      pageDisplaySeconds > 120
-    ) {
-      notify({
-        level: "error",
-        message: "表示時間は 6〜120 秒で入力してください",
-      });
+    let pageDisplaySeconds: number;
+    try {
+      pageDisplaySeconds = toPositiveFiniteNumber(
+        pageDisplaySecondsDraft,
+        "表示時間",
+        {
+          integer: true,
+          min: 6,
+          max: 120,
+        },
+      );
+    } catch (error) {
+      notifyError(error, "表示時間は 6〜120 秒で入力してください");
       return;
     }
 
@@ -543,33 +735,25 @@ export default function AdminPage() {
   };
 
   const moveMenu = async (menu: Menu, direction: -1 | 1) => {
-    const index = activeMenus.findIndex((row) => row.id === menu.id);
-    const target = activeMenus[index + direction];
-    if (!target) {
+    const siblingMenus = activeMenus.filter(
+      (row) => row.categoryId === menu.categoryId,
+    );
+    const index = siblingMenus.findIndex((row) => row.id === menu.id);
+    const target = siblingMenus[index + direction];
+    if (!target || menu.displayOrder == null || target.displayOrder == null) {
       return;
     }
 
-    try {
-      await Promise.all([
-        patchMenu(
-          menu,
-          { displayOrder: target.displayOrder },
-          "メニュー順を更新しました",
-        ),
-        patchMenu(
-          target,
-          { displayOrder: menu.displayOrder },
-          "メニュー順を更新しました",
-        ),
-      ]);
-      await reload();
-    } catch (e) {
-      notify({
-        level: "error",
-        message:
-          e instanceof Error ? e.message : "メニュー順の更新に失敗しました",
-      });
-    }
+    await runMutation({
+      action: async () => {
+        await Promise.all([
+          patchMenu(menu.id, { displayOrder: target.displayOrder }),
+          patchMenu(target.id, { displayOrder: menu.displayOrder }),
+        ]);
+      },
+      successMessage: "メニュー順を更新しました",
+      errorMessage: "メニュー順の更新に失敗しました",
+    });
   };
 
   const readFileAsDataUrl = (file: File) =>
@@ -598,24 +782,15 @@ export default function AdminPage() {
 
     try {
       const dataUrl = await readFileAsDataUrl(file);
-      await patchMenu(
-        menu,
-        { coverImageDataUrl: dataUrl },
-        "メニュー画像を更新しました",
-      );
+      await patchMenu(menu.id, { coverImageDataUrl: dataUrl });
       setMenuEdits((prev) => ({
         ...prev,
         [menu.id]: {
-          ...(prev[menu.id] ?? {
-            name: menu.name,
-            priceJpy: String(menu.priceJpy),
-            workloadSeconds: String(menu.workloadSeconds),
-            categoryId: menu.categoryId,
-            coverImageDataUrl: "",
-          }),
+          ...(prev[menu.id] ?? toMenuEdit(menu)),
           coverImageDataUrl: dataUrl,
         },
       }));
+      notify({ level: "success", message: "メニュー画像を更新しました" });
       await reload();
     } catch (e) {
       notify({
@@ -761,10 +936,14 @@ export default function AdminPage() {
                           disabled={!actor.isActive}
                           onClick={() => {
                             const next = prompt("新しい表示名", actor.label);
-                            if (next && next !== actor.label)
+                            const trimmed = next?.trim();
+                            if (!trimmed) {
+                              return;
+                            }
+                            if (trimmed !== actor.label)
                               void updateActor(
                                 actor.id,
-                                { label: next },
+                                { label: trimmed },
                                 "表示名を更新しました",
                               );
                           }}
@@ -775,10 +954,22 @@ export default function AdminPage() {
                           disabled={!actor.isActive}
                           onClick={() => {
                             const next = prompt("新しいパスワード", "");
-                            if (next)
+                            const trimmed = next?.trim();
+                            if (!trimmed) {
+                              return;
+                            }
+                            if (trimmed.length < 4) {
+                              notify({
+                                level: "error",
+                                message:
+                                  "パスワードは 4 文字以上で入力してください",
+                              });
+                              return;
+                            }
+                            if (trimmed)
                               void updateActor(
                                 actor.id,
-                                { secret: next },
+                                { secret: trimmed },
                                 "パスワードを更新しました",
                               );
                           }}
@@ -788,10 +979,17 @@ export default function AdminPage() {
                           icon={<SignOut20Regular />}
                           disabled={!actor.isActive}
                           onClick={() =>
-                            void apiFetch("/api/admin/sessions/force-logout", {
-                              method: "POST",
-                              body: JSON.stringify({ actorId: actor.id }),
-                            }).then(() => reload())
+                            void runMutation({
+                              action: async () => {
+                                await apiFetch("/api/admin/sessions/force-logout", {
+                                  method: "POST",
+                                  body: JSON.stringify({ actorId: actor.id }),
+                                });
+                              },
+                              successMessage:
+                                "セッションを強制ログアウトしました",
+                              errorMessage: "強制ログアウトに失敗しました",
+                            })
                           }
                         />
                         {actor.actorType === "KITCHEN" && (
@@ -803,13 +1001,22 @@ export default function AdminPage() {
                               checked={actor.kitchenEnabled}
                               disabled={!actor.isActive}
                               onCheckedChange={(checked) =>
-                                void apiFetch("/api/kitchen/toggle", {
-                                  method: "POST",
-                                  body: JSON.stringify({
-                                    kitchenId: actor.id,
-                                    kitchenEnabled: checked,
-                                  }),
-                                }).then(() => reload())
+                                void runMutation({
+                                  action: async () => {
+                                    await apiFetch("/api/kitchen/toggle", {
+                                      method: "POST",
+                                      body: JSON.stringify({
+                                        kitchenId: actor.id,
+                                        kitchenEnabled: checked,
+                                      }),
+                                    });
+                                  },
+                                  successMessage: checked
+                                    ? "キッチンを稼働状態にしました"
+                                    : "キッチンを停止しました",
+                                  errorMessage:
+                                    "キッチン状態の更新に失敗しました",
+                                })
                               }
                             />
                           </label>
@@ -828,10 +1035,17 @@ export default function AdminPage() {
                                       `アカウント「${actor.label}」を削除します。よろしいですか？`,
                                     )
                                   )
-                                    void apiFetch(
-                                      `/api/admin/actors?id=${encodeURIComponent(actor.id)}`,
-                                      { method: "DELETE" },
-                                    ).then(() => reload());
+                                    void runMutation({
+                                      action: async () => {
+                                        await apiFetch(
+                                          `/api/admin/actors?id=${encodeURIComponent(actor.id)}`,
+                                          { method: "DELETE" },
+                                        );
+                                      },
+                                      successMessage: "アカウントを削除しました",
+                                      errorMessage:
+                                        "アカウント削除に失敗しました",
+                                    });
                                 }}
                               />
                             </div>
@@ -861,16 +1075,39 @@ export default function AdminPage() {
                     type="button"
                     variant="outline"
                     onClick={async () => {
-                      await apiFetch("/api/admin/categories", {
-                        method: "POST",
-                        body: JSON.stringify({
-                          name: newCategoryName,
-                          displayOrder:
-                            (activeCategories.at(-1)?.displayOrder ?? 0) + 1,
-                        }),
+                      const trimmedName = newCategoryName.trim();
+                      if (!trimmedName) {
+                        notify({
+                          level: "error",
+                          message: "カテゴリ名を入力してください",
+                        });
+                        return;
+                      }
+
+                      const nextDisplayOrder =
+                        activeCategories.reduce(
+                          (max, category) =>
+                            Math.max(max, category.displayOrder ?? 0),
+                          0,
+                        ) + 1;
+
+                      const saved = await runMutation({
+                        action: async () => {
+                          await apiFetch("/api/admin/categories", {
+                            method: "POST",
+                            body: JSON.stringify({
+                              name: trimmedName,
+                              displayOrder: nextDisplayOrder,
+                            }),
+                          });
+                        },
+                        successMessage: "カテゴリを追加しました",
+                        errorMessage: "カテゴリ追加に失敗しました",
                       });
-                      setNewCategoryName("");
-                      await reload();
+
+                      if (saved) {
+                        setNewCategoryName("");
+                      }
                     }}
                     disabled={!newCategoryName}
                   >
@@ -894,18 +1131,39 @@ export default function AdminPage() {
                             }))
                           }
                         />
-                        <Badge variant="outline">#{cat.displayOrder}</Badge>
+                        <Badge variant="outline">#{cat.displayOrder ?? "-"}</Badge>
                       </div>
                       <div className="mt-2 flex flex-wrap items-center gap-1">
                         <IconActionButton
                           label="保存"
                           icon={<Save20Regular />}
+                          saveTone
                           onClick={() =>
-                            void patchCategory(
-                              cat.id,
-                              { name: categoryNameDrafts[cat.id] ?? cat.name },
-                              "カテゴリ名を更新しました",
-                            ).then(() => reload())
+                            void (async () => {
+                              const nextName = (
+                                categoryNameDrafts[cat.id] ?? cat.name
+                              ).trim();
+                              if (!nextName) {
+                                notify({
+                                  level: "error",
+                                  message: "カテゴリ名を入力してください",
+                                });
+                                return;
+                              }
+                              const saved = await runMutation({
+                                action: async () => {
+                                  await patchCategory(cat.id, { name: nextName });
+                                },
+                                successMessage: "カテゴリ名を更新しました",
+                                errorMessage: "カテゴリ名の更新に失敗しました",
+                              });
+                              if (saved) {
+                                setCategoryNameDrafts((prev) => ({
+                                  ...prev,
+                                  [cat.id]: nextName,
+                                }));
+                              }
+                            })()
                           }
                         />
                         <IconActionButton
@@ -916,20 +1174,27 @@ export default function AdminPage() {
                             void (async () => {
                               const sorted = [...activeCategories];
                               const target = sorted[index - 1];
-                              if (!target) return;
-                              await Promise.all([
-                                patchCategory(
-                                  cat.id,
-                                  { displayOrder: target.displayOrder },
-                                  "カテゴリ順を更新しました",
-                                ),
-                                patchCategory(
-                                  target.id,
-                                  { displayOrder: cat.displayOrder },
-                                  "カテゴリ順を更新しました",
-                                ),
-                              ]);
-                              await reload();
+                              if (
+                                !target ||
+                                cat.displayOrder == null ||
+                                target.displayOrder == null
+                              ) {
+                                return;
+                              }
+                              await runMutation({
+                                action: async () => {
+                                  await Promise.all([
+                                    patchCategory(cat.id, {
+                                      displayOrder: target.displayOrder,
+                                    }),
+                                    patchCategory(target.id, {
+                                      displayOrder: cat.displayOrder,
+                                    }),
+                                  ]);
+                                },
+                                successMessage: "カテゴリ順を更新しました",
+                                errorMessage: "カテゴリ順の更新に失敗しました",
+                              });
                             })()
                           }
                         />
@@ -941,20 +1206,27 @@ export default function AdminPage() {
                             void (async () => {
                               const sorted = [...activeCategories];
                               const target = sorted[index + 1];
-                              if (!target) return;
-                              await Promise.all([
-                                patchCategory(
-                                  cat.id,
-                                  { displayOrder: target.displayOrder },
-                                  "カテゴリ順を更新しました",
-                                ),
-                                patchCategory(
-                                  target.id,
-                                  { displayOrder: cat.displayOrder },
-                                  "カテゴリ順を更新しました",
-                                ),
-                              ]);
-                              await reload();
+                              if (
+                                !target ||
+                                cat.displayOrder == null ||
+                                target.displayOrder == null
+                              ) {
+                                return;
+                              }
+                              await runMutation({
+                                action: async () => {
+                                  await Promise.all([
+                                    patchCategory(cat.id, {
+                                      displayOrder: target.displayOrder,
+                                    }),
+                                    patchCategory(target.id, {
+                                      displayOrder: cat.displayOrder,
+                                    }),
+                                  ]);
+                                },
+                                successMessage: "カテゴリ順を更新しました",
+                                errorMessage: "カテゴリ順の更新に失敗しました",
+                              });
                             })()
                           }
                         />
@@ -969,10 +1241,16 @@ export default function AdminPage() {
                                   `カテゴリ「${cat.name}」を削除します。よろしいですか？`,
                                 )
                               )
-                                void apiFetch(
-                                  `/api/admin/categories?id=${encodeURIComponent(cat.id)}`,
-                                  { method: "DELETE" },
-                                ).then(() => reload());
+                                void runMutation({
+                                  action: async () => {
+                                    await apiFetch(
+                                      `/api/admin/categories?id=${encodeURIComponent(cat.id)}`,
+                                      { method: "DELETE" },
+                                    );
+                                  },
+                                  successMessage: "カテゴリを削除しました",
+                                  errorMessage: "カテゴリ削除に失敗しました",
+                                });
                             }}
                           />
                         </div>
@@ -1012,12 +1290,21 @@ export default function AdminPage() {
                       <InputField
                         label="価格 (円)"
                         value={newMenuPrice}
-                        onChange={setNewMenuPrice}
+                        onChange={(value) =>
+                          setNewMenuPrice(sanitizeIntegerInput(value))
+                        }
+                        inputMode="numeric"
                       />
                       <InputField
-                        label="作業時間 (秒)"
-                        value={newMenuWorkloadSeconds}
-                        onChange={setNewMenuWorkloadSeconds}
+                        label="調理効率 (個/分)"
+                        value={newMenuWorkloadPerMinute}
+                        onChange={(value) =>
+                          setNewMenuWorkloadPerMinute(
+                            sanitizeDecimalInput(value),
+                          )
+                        }
+                        inputMode="decimal"
+                        onKeyDown={blockScientificNotationInput}
                       />
                       <label className="grid gap-0">
                         <span className="text-[11px] font-medium leading-none text-muted-foreground">
@@ -1043,28 +1330,56 @@ export default function AdminPage() {
                         type="button"
                         className="self-end"
                         onClick={async () => {
-                          await apiFetch("/api/admin/menus", {
-                            method: "POST",
-                            body: JSON.stringify({
+                          let parsedInput: ReturnType<typeof parseMenuInput>;
+                          try {
+                            parsedInput = parseMenuInput({
                               name: newMenuName,
-                              priceJpy: Number(newMenuPrice),
-                              availability: "PAUSED",
-                              workloadSeconds: Number(newMenuWorkloadSeconds),
-                              displayOrder:
-                                (activeMenus.at(-1)?.displayOrder ?? 0) + 1,
+                              priceJpy: newMenuPrice,
+                              workloadPerMinute: newMenuWorkloadPerMinute,
                               categoryId: newMenuCategoryId,
-                              showLeadTime: true,
-                              coverImageDataUrl: null,
-                            }),
+                              coverImageDataUrl: "",
+                            });
+                          } catch (error) {
+                            notifyError(error, "入力内容を確認してください");
+                            return;
+                          }
+
+                          const nextDisplayOrder =
+                            activeMenus
+                              .filter(
+                                (row) => row.categoryId === parsedInput.categoryId,
+                              )
+                              .reduce(
+                                (max, row) =>
+                                  Math.max(max, row.displayOrder ?? 0),
+                                0,
+                              ) + 1;
+
+                          const saved = await runMutation({
+                            action: async () => {
+                              await apiFetch("/api/admin/menus", {
+                                method: "POST",
+                                body: JSON.stringify({
+                                  ...parsedInput,
+                                  availability: "PAUSED",
+                                  displayOrder: nextDisplayOrder,
+                                  showLeadTime: true,
+                                }),
+                              });
+                            },
+                            successMessage: "メニューを追加しました",
+                            errorMessage: "メニュー追加に失敗しました",
                           });
-                          setNewMenuName("");
-                          await reload();
+
+                          if (saved) {
+                            setNewMenuName("");
+                          }
                         }}
                         disabled={
                           !newMenuName ||
                           !newMenuCategoryId ||
                           !newMenuPrice ||
-                          !newMenuWorkloadSeconds
+                          !newMenuWorkloadPerMinute
                         }
                       >
                         <Add20Regular />
@@ -1075,14 +1390,17 @@ export default function AdminPage() {
                 </AccordionItem>
               </Accordion>
               <Accordion type="single" collapsible className="space-y-2">
-                {activeMenus.map((menu, index) => {
-                  const edit = menuEdits[menu.id] ?? {
-                    name: menu.name,
-                    priceJpy: String(menu.priceJpy),
-                    workloadSeconds: String(menu.workloadSeconds),
-                    categoryId: menu.categoryId,
-                    coverImageDataUrl: menu.coverImageDataUrl ?? "",
-                  };
+                {activeMenus.map((menu) => {
+                  const edit = menuEdits[menu.id] ?? toMenuEdit(menu);
+                  const sameCategoryMenus = activeMenus.filter(
+                    (row) => row.categoryId === menu.categoryId,
+                  );
+                  const sameCategoryIndex = sameCategoryMenus.findIndex(
+                    (row) => row.id === menu.id,
+                  );
+                  const isFirstInCategory = sameCategoryIndex <= 0;
+                  const isLastInCategory =
+                    sameCategoryIndex === sameCategoryMenus.length - 1;
                   return (
                     <AccordionItem
                       key={menu.id}
@@ -1094,7 +1412,8 @@ export default function AdminPage() {
                           <div>
                             <strong className="text-sm">{menu.name}</strong>
                             <div className="mt-1 text-xs text-muted-foreground">
-                              {fmtJpy(menu.priceJpy)} / {menu.workloadSeconds}秒
+                              {fmtJpy(menu.priceJpy)} /{" "}
+                              {formatEfficiencyInput(menu.workloadSeconds)}個/分
                             </div>
                           </div>
                           <div
@@ -1133,12 +1452,16 @@ export default function AdminPage() {
                                       }
                                       setMenuAvailabilityBusyId(menu.id);
                                       try {
-                                        await patchMenu(
-                                          menu,
-                                          { availability: status },
-                                          "販売状態を更新しました",
-                                        );
-                                        await reload();
+                                        await runMutation({
+                                          action: async () => {
+                                            await patchMenu(menu.id, {
+                                              availability: status,
+                                            });
+                                          },
+                                          successMessage: "販売状態を更新しました",
+                                          errorMessage:
+                                            "販売状態の更新に失敗しました",
+                                        });
                                       } finally {
                                         setMenuAvailabilityBusyId(null);
                                       }
@@ -1170,19 +1493,28 @@ export default function AdminPage() {
                             onChange={(v) =>
                               setMenuEdits((p) => ({
                                 ...p,
-                                [menu.id]: { ...edit, priceJpy: v },
+                                [menu.id]: {
+                                  ...edit,
+                                  priceJpy: sanitizeIntegerInput(v),
+                                },
                               }))
                             }
+                            inputMode="numeric"
                           />
                           <InputField
-                            label="作業時間 (秒)"
-                            value={edit.workloadSeconds}
+                            label="調理効率 (個/分)"
+                            value={edit.workloadPerMinute}
                             onChange={(v) =>
                               setMenuEdits((p) => ({
                                 ...p,
-                                [menu.id]: { ...edit, workloadSeconds: v },
+                                [menu.id]: {
+                                  ...edit,
+                                  workloadPerMinute: sanitizeDecimalInput(v),
+                                },
                               }))
                             }
+                            inputMode="decimal"
+                            onKeyDown={blockScientificNotationInput}
                           />
                           <label className="grid gap-0">
                             <span className="text-[11px] font-medium leading-none text-muted-foreground">
@@ -1231,19 +1563,21 @@ export default function AdminPage() {
                             size="sm"
                             variant="outline"
                             onClick={() =>
-                              void patchMenu(
-                                menu,
-                                { coverImageDataUrl: null },
-                                "メニュー画像を削除しました",
-                              ).then(async () => {
-                                setMenuEdits((prev) => ({
-                                  ...prev,
-                                  [menu.id]: {
-                                    ...edit,
-                                    coverImageDataUrl: "",
-                                  },
-                                }));
-                                await reload();
+                              void runMutation({
+                                action: async () => {
+                                  await patchMenu(menu.id, {
+                                    coverImageDataUrl: null,
+                                  });
+                                  setMenuEdits((prev) => ({
+                                    ...prev,
+                                    [menu.id]: {
+                                      ...edit,
+                                      coverImageDataUrl: "",
+                                    },
+                                  }));
+                                },
+                                successMessage: "メニュー画像を削除しました",
+                                errorMessage: "メニュー画像の削除に失敗しました",
                               })
                             }
                           >
@@ -1257,31 +1591,59 @@ export default function AdminPage() {
                           <IconActionButton
                             label="保存"
                             icon={<Save20Regular />}
+                            saveTone
                             onClick={() =>
-                              void patchMenu(
-                                menu,
-                                {
-                                  name: edit.name,
-                                  priceJpy: Number(edit.priceJpy),
-                                  workloadSeconds: Number(edit.workloadSeconds),
-                                  categoryId: edit.categoryId,
-                                  coverImageDataUrl:
-                                    edit.coverImageDataUrl.trim() || null,
-                                },
-                                "メニューを更新しました",
-                              ).then(() => reload())
+                              void (async () => {
+                                let parsedInput: ReturnType<typeof parseMenuInput>;
+                                try {
+                                  parsedInput = parseMenuInput({
+                                    name: edit.name,
+                                    priceJpy: edit.priceJpy,
+                                    workloadPerMinute: edit.workloadPerMinute,
+                                    categoryId: edit.categoryId,
+                                    coverImageDataUrl: edit.coverImageDataUrl,
+                                  });
+                                } catch (error) {
+                                  notifyError(error, "入力内容を確認してください");
+                                  return;
+                                }
+
+                                const saved = await runMutation({
+                                  action: async () => {
+                                    await patchMenu(menu.id, parsedInput);
+                                  },
+                                  successMessage: "メニューを更新しました",
+                                  errorMessage: "メニュー更新に失敗しました",
+                                });
+                                if (saved) {
+                                  setMenuEdits((prev) => ({
+                                    ...prev,
+                                    [menu.id]: {
+                                      ...prev[menu.id],
+                                      name: parsedInput.name,
+                                      priceJpy: String(parsedInput.priceJpy),
+                                      workloadPerMinute: formatEfficiencyInput(
+                                        parsedInput.workloadSeconds,
+                                      ),
+                                      categoryId: parsedInput.categoryId,
+                                      coverImageDataUrl:
+                                        parsedInput.coverImageDataUrl ?? "",
+                                    },
+                                  }));
+                                }
+                              })()
                             }
                           />
                           <IconActionButton
                             label="上へ"
                             icon={<ArrowUp20Regular />}
-                            disabled={index === 0}
+                            disabled={isFirstInCategory}
                             onClick={() => void moveMenu(menu, -1)}
                           />
                           <IconActionButton
                             label="下へ"
                             icon={<ArrowDown20Regular />}
-                            disabled={index === activeMenus.length - 1}
+                            disabled={isLastInCategory}
                             onClick={() => void moveMenu(menu, 1)}
                           />
                           <div className="ml-auto">
@@ -1295,11 +1657,15 @@ export default function AdminPage() {
                                     `メニュー「${menu.name}」を削除します。よろしいですか？`,
                                   )
                                 )
-                                  void patchMenu(
-                                    menu,
-                                    { isActive: false },
-                                    "メニューを削除しました",
-                                  ).then(() => reload());
+                                  void runMutation({
+                                    action: async () => {
+                                      await patchMenu(menu.id, {
+                                        isActive: false,
+                                      });
+                                    },
+                                    successMessage: "メニューを削除しました",
+                                    errorMessage: "メニュー削除に失敗しました",
+                                  });
                               }}
                             />
                           </div>
@@ -1322,14 +1688,23 @@ export default function AdminPage() {
                                 <Switch
                                   checked={enabled}
                                   onCheckedChange={(checked) =>
-                                    void apiFetch("/api/admin/assignments", {
-                                      method: "POST",
-                                      body: JSON.stringify({
-                                        menuId: menu.id,
-                                        kitchenId: kitchen.id,
-                                        enabled: checked,
-                                      }),
-                                    }).then(() => reload())
+                                    void runMutation({
+                                      action: async () => {
+                                        await apiFetch("/api/admin/assignments", {
+                                          method: "POST",
+                                          body: JSON.stringify({
+                                            menuId: menu.id,
+                                            kitchenId: kitchen.id,
+                                            enabled: checked,
+                                          }),
+                                        });
+                                      },
+                                      successMessage: checked
+                                        ? "キッチン割り当てを有効化しました"
+                                        : "キッチン割り当てを無効化しました",
+                                      errorMessage:
+                                        "キッチン割り当ての更新に失敗しました",
+                                    })
                                   }
                                 />
                               </label>
@@ -1354,11 +1729,15 @@ export default function AdminPage() {
               <InputField
                 label="1ページ表示時間 (秒)"
                 value={pageDisplaySecondsDraft}
-                onChange={setPageDisplaySecondsDraft}
+                onChange={(value) =>
+                  setPageDisplaySecondsDraft(sanitizeIntegerInput(value))
+                }
                 className="max-w-xs"
+                inputMode="numeric"
               />
               <Button
                 type="button"
+                className="admin-save-button"
                 onClick={() => void saveMenuDisplaySettings()}
                 disabled={
                   menuDisplaySettings == null ||
@@ -1387,13 +1766,19 @@ export default function AdminPage() {
                       "注文データを削除します。復元できません。実行しますか？",
                     )
                   )
-                    void apiFetch("/api/admin/purge", {
-                      method: "POST",
-                      body: JSON.stringify({
-                        target: "ORDERS",
-                        confirmationText: "DELETE",
-                      }),
-                    }).then(() => reload());
+                    void runMutation({
+                      action: async () => {
+                        await apiFetch("/api/admin/purge", {
+                          method: "POST",
+                          body: JSON.stringify({
+                            target: "ORDERS",
+                            confirmationText: "DELETE",
+                          }),
+                        });
+                      },
+                      successMessage: "注文データを削除しました",
+                      errorMessage: "注文データ削除に失敗しました",
+                    });
                 }}
               >
                 <Delete20Regular />
@@ -1408,13 +1793,19 @@ export default function AdminPage() {
                       "監査ログを削除します。復元できません。実行しますか？",
                     )
                   )
-                    void apiFetch("/api/admin/purge", {
-                      method: "POST",
-                      body: JSON.stringify({
-                        target: "AUDIT_LOGS",
-                        confirmationText: "DELETE",
-                      }),
-                    }).then(() => reload());
+                    void runMutation({
+                      action: async () => {
+                        await apiFetch("/api/admin/purge", {
+                          method: "POST",
+                          body: JSON.stringify({
+                            target: "AUDIT_LOGS",
+                            confirmationText: "DELETE",
+                          }),
+                        });
+                      },
+                      successMessage: "監査ログを削除しました",
+                      errorMessage: "監査ログ削除に失敗しました",
+                    });
                 }}
               >
                 <Delete20Regular />

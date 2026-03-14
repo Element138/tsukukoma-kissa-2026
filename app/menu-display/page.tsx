@@ -1,6 +1,14 @@
 "use client";
 
-import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  type CSSProperties,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { loadDefaultJapaneseParser } from "budoux";
 import { apiFetch, fmtJpy } from "@/lib/client";
 import { useSession } from "@/components/use-session";
 import { TerminalBanner } from "@/components/terminal-banner";
@@ -37,9 +45,17 @@ const DEFAULT_SETTINGS: MenuDisplaySettings = {
 };
 const PAGE_FADE_MS = 750;
 
-function formatEta(seconds: number | null) {
+function resolvePageDisplayMs(pageDisplaySeconds: number | undefined) {
+  const safeSeconds =
+    Number.isFinite(pageDisplaySeconds) && (pageDisplaySeconds ?? 0) > 0
+      ? (pageDisplaySeconds as number)
+      : DEFAULT_SETTINGS.pageDisplaySeconds;
+  return Math.max(6000, Math.floor(safeSeconds * 1000));
+}
+
+function formatEta(seconds: number | null, forcePlaceholder: boolean) {
   if (seconds == null) {
-    return "-- 分";
+    return forcePlaceholder ? "-- 分" : null;
   }
   return `${Math.max(1, Math.ceil(seconds / 60))} 分`;
 }
@@ -83,6 +99,7 @@ function mergeMenusIntoCurrentLayout(
 export default function MenuDisplayPage() {
   const { loading, session } = useSession(["MENU_DISPLAY"]);
   const { notify } = useToast();
+  const parser = useMemo(() => loadDefaultJapaneseParser(), []);
 
   const [categories, setCategories] = useState<DisplayCategory[]>([]);
   const [settings, setSettings] = useState<MenuDisplaySettings>(DEFAULT_SETTINGS);
@@ -90,21 +107,46 @@ export default function MenuDisplayPage() {
   const [pageIndex, setPageIndex] = useState(0);
   const [isPageFading, setIsPageFading] = useState(false);
   const [cycleTick, setCycleTick] = useState(0);
+  const [forceShowEtaDebug, setForceShowEtaDebug] = useState(false);
 
   const categoriesRef = useRef<DisplayCategory[]>([]);
   const pendingCategorySnapshotRef = useRef<DisplayCategory[] | null>(null);
   const reloadInFlightRef = useRef(false);
   const queuedReloadRef = useRef(false);
+  const activeCycleDurationMsRef = useRef(
+    resolvePageDisplayMs(DEFAULT_SETTINGS.pageDisplaySeconds),
+  );
+  const pendingCycleDurationMsRef = useRef(
+    resolvePageDisplayMs(DEFAULT_SETTINGS.pageDisplaySeconds),
+  );
+  const activePageRef = useRef<DisplayCategory[]>([]);
   const viewportRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const trackRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const categoryPages = useMemo(() => splitCategoryPages(categories), [categories]);
   const activePage = categoryPages[pageIndex] ?? [];
   const shouldFadeBetweenPages = categories.length > 3;
+  const pageStructureSignature = useMemo(
+    () =>
+      categoryPages
+        .map((page) => page.map((category) => category.id).join(","))
+        .join("|"),
+    [categoryPages],
+  );
 
   useEffect(() => {
     categoriesRef.current = categories;
   }, [categories]);
+
+  useEffect(() => {
+    activePageRef.current = activePage;
+  }, [activePage]);
+
+  useEffect(() => {
+    pendingCycleDurationMsRef.current = resolvePageDisplayMs(
+      settings.pageDisplaySeconds,
+    );
+  }, [settings.pageDisplaySeconds]);
 
   const fetchDisplayData = async () => {
     return apiFetch<MenuDisplayPayload>("/api/menu-display");
@@ -114,10 +156,14 @@ export default function MenuDisplayPage() {
     const currentCategories = categoriesRef.current;
     const currentLayout = categoryLayoutSignature(currentCategories);
     const nextLayout = categoryLayoutSignature(payload.categories);
+    const nextSettings = payload.settings ?? DEFAULT_SETTINGS;
+    const nextPageDisplayMs = resolvePageDisplayMs(nextSettings.pageDisplaySeconds);
 
-    setSettings(payload.settings ?? DEFAULT_SETTINGS);
+    setSettings(nextSettings);
+    pendingCycleDurationMsRef.current = nextPageDisplayMs;
 
     if (currentCategories.length === 0) {
+      activeCycleDurationMsRef.current = nextPageDisplayMs;
       categoriesRef.current = payload.categories;
       setCategories(payload.categories);
       setPageIndex(0);
@@ -182,6 +228,7 @@ export default function MenuDisplayPage() {
   useEffect(() => {
     if (categoryPages.length === 0) {
       setPageIndex(0);
+      setIsPageFading(false);
       return;
     }
     if (pageIndex >= categoryPages.length) {
@@ -190,18 +237,17 @@ export default function MenuDisplayPage() {
   }, [categoryPages.length, pageIndex]);
 
   useEffect(() => {
-    if (activePage.length === 0) {
+    setIsPageFading(false);
+    const currentActivePage = activePageRef.current;
+    if (currentActivePage.length === 0) {
       return;
     }
 
     const animations: Animation[] = [];
-    const pageDisplayMs = Math.max(
-      6000,
-      Math.floor((settings.pageDisplaySeconds || DEFAULT_SETTINGS.pageDisplaySeconds) * 1000),
-    );
+    const pageDisplayMs = activeCycleDurationMsRef.current;
 
     const raf = window.requestAnimationFrame(() => {
-      for (const category of activePage) {
+      for (const category of currentActivePage) {
         const viewport = viewportRefs.current[category.id];
         const track = trackRefs.current[category.id];
         if (!viewport || !track) {
@@ -215,7 +261,7 @@ export default function MenuDisplayPage() {
         }
 
         const waitMs = Math.floor(pageDisplayMs * 0.2);
-        const moveEachMs = Math.floor((pageDisplayMs - waitMs * 2) / 2);
+        const moveEachMs = Math.max(1, Math.floor((pageDisplayMs - waitMs * 2) / 2));
         const animation = track.animate(
           [
             { transform: "translateY(0px)", offset: 0 },
@@ -246,6 +292,9 @@ export default function MenuDisplayPage() {
     const moveToNext = () => {
       const hasMultiplePages = categoryPages.length > 1;
       const isLastPage = pageIndex >= categoryPages.length - 1;
+      const applyCycleDurationForNextPage = () => {
+        activeCycleDurationMsRef.current = pendingCycleDurationMsRef.current;
+      };
 
       const commitPendingCategoriesIfNeeded = () => {
         const pending = pendingCategorySnapshotRef.current;
@@ -260,6 +309,7 @@ export default function MenuDisplayPage() {
       };
 
       if (!hasMultiplePages) {
+        applyCycleDurationForNextPage();
         const committed = commitPendingCategoriesIfNeeded();
         if (!committed) {
           setCycleTick((prev) => prev + 1);
@@ -268,15 +318,20 @@ export default function MenuDisplayPage() {
       }
 
       if (!isLastPage) {
+        const goNextPage = () => {
+          applyCycleDurationForNextPage();
+          setPageIndex((prev) => Math.min(prev + 1, categoryPages.length - 1));
+          setIsPageFading(false);
+          setCycleTick((prev) => prev + 1);
+        };
         if (shouldFadeBetweenPages) {
           setIsPageFading(true);
           fadeTimer = window.setTimeout(() => {
-            setPageIndex((prev) => Math.min(prev + 1, categoryPages.length - 1));
-            setIsPageFading(false);
+            goNextPage();
           }, PAGE_FADE_MS);
           return;
         }
-        setPageIndex((prev) => Math.min(prev + 1, categoryPages.length - 1));
+        goNextPage();
         return;
       }
 
@@ -284,11 +339,13 @@ export default function MenuDisplayPage() {
         setIsPageFading(true);
       }
       const onWrapped = () => {
+        applyCycleDurationForNextPage();
         const committed = commitPendingCategoriesIfNeeded();
         if (!committed) {
           setPageIndex(0);
         }
         setIsPageFading(false);
+        setCycleTick((prev) => prev + 1);
       };
 
       if (shouldFadeBetweenPages) {
@@ -311,13 +368,34 @@ export default function MenuDisplayPage() {
       }
     };
   }, [
-    activePage,
-    categoryPages.length,
     cycleTick,
     pageIndex,
-    settings.pageDisplaySeconds,
+    pageStructureSignature,
     shouldFadeBetweenPages,
   ]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.repeat || event.key.toLowerCase() !== "s") {
+        return;
+      }
+      setForceShowEtaDebug((prev) => {
+        const next = !prev;
+        notify({
+          level: "info",
+          message: next
+            ? "提供目安のデバッグ表示を有効化しました"
+            : "提供目安のデバッグ表示を解除しました",
+        });
+        return next;
+      });
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [notify]);
 
   useRealtimeSubscription({
     enabled: Boolean(session),
@@ -350,6 +428,15 @@ export default function MenuDisplayPage() {
   };
 
   const columnCount = Math.min(3, Math.max(1, activePage.length));
+  const renderBudouX = (text: string) => {
+    const chunks = parser.parse(text);
+    return chunks.map((chunk, index) => (
+      <Fragment key={index}>
+        {chunk}
+        {index < chunks.length - 1 ? <wbr /> : null}
+      </Fragment>
+    ));
+  };
 
   return (
     <>
@@ -389,7 +476,7 @@ export default function MenuDisplayPage() {
           {activePage.map((category) => (
             <section key={category.id} className="menu-display-category">
               <header className="menu-display-category-header">
-                <h2>{category.name}</h2>
+                <h2>{renderBudouX(category.name)}</h2>
               </header>
               <div
                 className="menu-display-scroll-viewport"
@@ -405,35 +492,50 @@ export default function MenuDisplayPage() {
                 >
                   {category.menus.map((menu) => {
                     const unavailable = menu.availability !== "AVAILABLE";
+                    const imageSrc = menu.coverImageDataUrl;
+                    const hasImage = Boolean(imageSrc);
+                    const etaText = formatEta(
+                      menu.leadTimeSecondsP75_30m,
+                      forceShowEtaDebug,
+                    );
                     return (
                       <article
                         key={menu.id}
-                        className={`menu-display-row ${unavailable ? "unavailable" : ""}`}
+                        className={`menu-display-row ${hasImage ? "has-image" : "no-image"} ${unavailable ? "unavailable" : ""}`}
                       >
                         <div className="menu-display-row-text">
-                          <strong>{menu.name}</strong>
+                          <strong>{renderBudouX(menu.name)}</strong>
                           {unavailable ? (
                             <div className="menu-display-row-status">
                               {labelOf(AVAILABILITY_LABEL, menu.availability)}
                             </div>
                           ) : (
                             <div className="menu-display-row-meta">
-                              <span>{fmtJpy(menu.priceJpy)}</span>
-                              <span>
-                                提供目安 {formatEta(menu.leadTimeSecondsP75_30m)}
+                              <span className="menu-display-row-price">
+                                {fmtJpy(menu.priceJpy)}
                               </span>
+                              {etaText ? (
+                                <span className="menu-display-row-eta">
+                                  <span className="menu-display-row-eta-label">
+                                    提供目安
+                                  </span>
+                                  <span className="menu-display-row-eta-value">
+                                    {etaText}
+                                  </span>
+                                </span>
+                              ) : null}
                             </div>
                           )}
                         </div>
-                        <div className="menu-display-row-image-wrap">
-                          {menu.coverImageDataUrl && (
+                        {hasImage ? (
+                          <div className="menu-display-row-image-wrap">
                             <img
-                              src={menu.coverImageDataUrl}
+                              src={imageSrc ?? undefined}
                               alt={`${menu.name} の画像`}
                               className="menu-display-row-image"
                             />
-                          )}
-                        </div>
+                          </div>
+                        ) : null}
                       </article>
                     );
                   })}

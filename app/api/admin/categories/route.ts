@@ -29,7 +29,10 @@ export async function GET(req: NextRequest) {
       trace("auth.ok");
 
       const categories = await prisma.menuCategory.findMany({
-        orderBy: [{ displayOrder: "asc" }, { name: "asc" }]
+        orderBy: [
+          { displayOrder: "asc" },
+          { name: "asc" },
+        ]
       });
       trace("db.findMany.ok", { count: categories.length });
 
@@ -144,7 +147,8 @@ export async function DELETE(req: NextRequest) {
           select: {
             id: true,
             name: true,
-            isActive: true
+            isActive: true,
+            displayOrder: true,
           }
         });
 
@@ -152,20 +156,42 @@ export async function DELETE(req: NextRequest) {
           throw new AppError(404, "CATEGORY_NOT_FOUND", "Category not found");
         }
 
-        await tx.menuCategory.update({
-          where: { id: categoryId },
-          data: { isActive: false }
-        });
-
-        const affectedMenus = await tx.menu.updateMany({
+        const activeMenuCount = await tx.menu.count({
           where: {
             categoryId,
-            isActive: true
+            isActive: true,
           },
+        });
+        if (activeMenuCount > 0) {
+          throw new AppError(
+            409,
+            "CATEGORY_HAS_ACTIVE_MENUS",
+            "カテゴリ内にメニューが残っているため削除できません",
+          );
+        }
+
+        let shiftedCategoryCount = 0;
+        if (existing.displayOrder != null) {
+          const shifted = await tx.menuCategory.updateMany({
+            where: {
+              isActive: true,
+              displayOrder: { gt: existing.displayOrder },
+            },
+            data: {
+              displayOrder: {
+                decrement: 1,
+              },
+            },
+          });
+          shiftedCategoryCount = shifted.count;
+        }
+
+        await tx.menuCategory.update({
+          where: { id: categoryId },
           data: {
             isActive: false,
-            availability: "PAUSED"
-          }
+            displayOrder: null,
+          },
         });
 
         await writeAuditLog(tx, {
@@ -176,20 +202,22 @@ export async function DELETE(req: NextRequest) {
           entityId: categoryId,
           beforeJson: {
             isActive: existing.isActive,
-            name: existing.name
+            name: existing.name,
+            displayOrder: existing.displayOrder,
           },
           afterJson: {
             isActive: false,
-            deactivatedMenus: affectedMenus.count
+            displayOrder: null,
+            shiftedCategoryCount,
           },
           result: "SUCCESS"
         });
 
-        await broadcastInvalidation(tx, [...CHANNEL_GROUPS.CATEGORIES, ...CHANNEL_GROUPS.MENUS], "categories", "category_deleted");
+        await broadcastInvalidation(tx, CHANNEL_GROUPS.CATEGORIES, "categories", "category_deleted");
 
         return {
           categoryId,
-          deactivatedMenus: affectedMenus.count
+          shiftedCategoryCount,
         };
       });
 

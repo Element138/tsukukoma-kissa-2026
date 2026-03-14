@@ -1,7 +1,14 @@
 ﻿"use client";
 
-import { createContext, PropsWithChildren, useCallback, useContext, useMemo, useState } from "react";
-import { Dismiss20Regular } from "@fluentui/react-icons";
+import {
+  createContext,
+  PropsWithChildren,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+} from "react";
+import { DismissFilled } from "@fluentui/react-icons";
 
 export type ToastLevel = "info" | "success" | "warning" | "error";
 
@@ -51,7 +58,7 @@ export function ToastProvider({ children }: PropsWithChildren) {
       message: input.message,
       level: input.level ?? "info",
       sticky: input.sticky ?? false,
-      durationMs: input.durationMs ?? 3500
+      durationMs: input.durationMs ?? 3500,
     };
 
     setToasts((prev) => {
@@ -77,9 +84,9 @@ export function ToastProvider({ children }: PropsWithChildren) {
       toasts,
       notify,
       dismiss,
-      clearByPrefix
+      clearByPrefix,
     }),
-    [toasts, notify, dismiss, clearByPrefix]
+    [toasts, notify, dismiss, clearByPrefix],
   );
 
   return (
@@ -89,8 +96,12 @@ export function ToastProvider({ children }: PropsWithChildren) {
         {toasts.map((toast) => (
           <div key={toast.id} className={`toast toast-${toast.level}`}>
             <div>{toast.message}</div>
-            <button className="toast-close" onClick={() => dismiss(toast.id)} aria-label={"閉じる"}>
-              <Dismiss20Regular />
+            <button
+              className="toast-close"
+              onClick={() => dismiss(toast.id)}
+              aria-label={"閉じる"}
+            >
+              <DismissFilled />
             </button>
           </div>
         ))}
