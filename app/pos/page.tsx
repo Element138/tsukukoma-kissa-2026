@@ -8,6 +8,7 @@ import { TerminalBanner } from "@/components/terminal-banner";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { ConfirmSlider } from "@/components/confirm-slider";
 import {
+  ACTOR_TYPE_LABEL,
   AVAILABILITY_LABEL,
   FULFILLMENT_LABEL,
   PAYMENT_METHOD_LABEL,
@@ -279,7 +280,9 @@ export default function PosPage() {
     <>
       <TerminalBanner actorId={session.actor.actorId} actorType={session.actor.actorType} actorLabel={session.actor.label} offlineActors={session.offlineActors} />
       <DashboardShell
-        title="POSダッシュボード"
+        eyebrow="LIVE TERMINAL"
+        title={`${labelOf(ACTOR_TYPE_LABEL, session.actor.actorType)} · ${session.actor.label}`}
+        subtitle="注文登録と会計をリアルタイム運用"
       >
         <div className="grid two">
         <Card className="card">
@@ -361,8 +364,9 @@ export default function PosPage() {
               </div>
             ))}
             {paymentMethod === "PAYMENT_SKIPPED" && total > 0 && (
-              <div className="list-item" style={{ borderColor: "#d18a8a", background: "#fff4f4", color: "#8f1f1f", fontWeight: 700 }}>
-                スキップ控除, - {fmtJpy(total)}
+              <div className="list-item row between">
+                <div>決済スキップ</div>
+                <strong>- {fmtJpy(total)}</strong>
               </div>
             )}
           </div>
@@ -460,7 +464,12 @@ export default function PosPage() {
 
           <div className="row wrap" style={{ marginTop: 14 }}>
             <ConfirmSlider
-              disabled={busy || selectedItems.length === 0 || partySize <= 0}
+              disabled={
+                busy ||
+                selectedItems.length === 0 ||
+                partySize <= 0 ||
+                (fulfillmentType === "DINE_IN" && !tableNo.trim())
+              }
               text="スライドして注文を確定"
               processingText="注文を送信中..."
               onConfirm={submitOrder}

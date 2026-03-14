@@ -62,10 +62,7 @@ body {
   min-height: 100%;
   color: var(--ink);
   font-family:
-    var(--font-inter),
-    var(--font-zen-kaku),
-    "Inter",
-    "Zen Kaku Gothic New",
+    var(--font-inter), var(--font-zen-kaku), "Inter", "Zen Kaku Gothic New",
     sans-serif;
   background:
     radial-gradient(
@@ -94,10 +91,7 @@ h4,
 .dashboard-title,
 .terminal-banner strong {
   font-family:
-    var(--font-inter),
-    var(--font-zen-kaku),
-    "Inter",
-    "Zen Kaku Gothic New",
+    var(--font-inter), var(--font-zen-kaku), "Inter", "Zen Kaku Gothic New",
     sans-serif;
   letter-spacing: 0.01em;
 }
@@ -338,7 +332,9 @@ textarea:focus {
   box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.16);
 }
 
-button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(.ghost-btn),
+button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
+    .ghost-btn
+  ),
 .btn-link {
   border: 1px solid transparent;
   border-radius: 12px;
@@ -359,13 +355,17 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(.ghost
   letter-spacing: 0.01em;
 }
 
-button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(.ghost-btn):hover,
+button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
+    .ghost-btn
+  ):hover,
 .btn-link:hover {
   transform: translateY(-1px);
   box-shadow: 0 10px 16px rgba(17, 94, 89, 0.25);
 }
 
-button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(.ghost-btn):disabled,
+button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
+    .ghost-btn
+  ):disabled,
 .btn-link[aria-disabled="true"] {
   opacity: 0.46;
   cursor: not-allowed;
@@ -584,6 +584,11 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(.ghost
   gap: 10px;
 }
 
+.menu-display-page .menu-tile-grid {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+
 .menu-tile {
   border: 1px solid rgba(255, 255, 255, 0.86);
   border-radius: 14px;
@@ -632,6 +637,43 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(.ghost
   font-size: 1.35rem;
   font-weight: 900;
   letter-spacing: 0.02em;
+}
+
+.menu-display-page .menu-tile {
+  min-height: 190px;
+  padding: 18px;
+}
+
+.menu-display-page .menu-tile strong {
+  font-size: 1.44rem;
+  line-height: 1.2;
+}
+
+.menu-display-page .menu-tile-stat {
+  font-size: 1.7rem;
+}
+
+.menu-display-page .menu-tile-status {
+  font-size: 1.72rem;
+}
+
+.menu-display-fullscreen {
+  width: min(1920px, calc(100% - 14px));
+  margin-top: 8px;
+}
+
+.menu-display-fullscreen .menu-display-page .menu-tile {
+  min-height: 242px;
+  padding: 24px;
+}
+
+.menu-display-fullscreen .menu-display-page .menu-tile strong {
+  font-size: clamp(1.7rem, 2.8vw, 2.4rem);
+}
+
+.menu-display-fullscreen .menu-display-page .menu-tile-stat,
+.menu-display-fullscreen .menu-display-page .menu-tile-status {
+  font-size: clamp(2rem, 3vw, 2.7rem);
 }
 
 .menu-status-grid {
@@ -853,6 +895,21 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(.ghost
   background: #f7f7f7;
 }
 
+.order-age-safe {
+  background: #f0fdf8;
+  border-color: #8bceb7;
+}
+
+.order-age-warn {
+  background: #fff8ec;
+  border-color: #ddba84;
+}
+
+.order-age-danger {
+  background: #fff1f1;
+  border-color: #dd9494;
+}
+
 .waiter-tile-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -866,6 +923,8 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(.ghost
   background: var(--surface-strong);
   display: grid;
   gap: 8px;
+  align-content: start;
+  grid-template-rows: auto auto 1fr auto;
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.07);
 }
 
@@ -900,6 +959,37 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(.ghost
   font-size: clamp(2rem, 4vw, 2.9rem);
   line-height: 1;
   font-weight: 900;
+}
+
+.waiter-tile-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  min-height: 88px;
+}
+
+.waiter-tile-elapsed {
+  min-height: 28px;
+  display: flex;
+  align-items: flex-end;
+}
+
+.waiter-ready-list {
+  margin-top: 8px;
+}
+
+.waiter-serve-btn {
+  min-height: 36px;
+  min-width: 72px;
+  padding: 6px 12px;
+}
+
+.waiter-bulk-btn {
+  width: 100%;
+  min-height: 40px;
+  padding: 7px 12px;
+  margin-top: 8px;
 }
 
 .table {

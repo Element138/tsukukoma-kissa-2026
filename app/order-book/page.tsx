@@ -79,6 +79,19 @@ function orderStatusClass(orderStatus: string) {
   }
 }
 
+function orderAgeClass(orderStatus: string, elapsedSec: number) {
+  if (orderStatus === "COMPLETED" || orderStatus === "CANCELED") {
+    return "";
+  }
+  if (elapsedSec >= 600) {
+    return "order-age-danger";
+  }
+  if (elapsedSec >= 240) {
+    return "order-age-warn";
+  }
+  return "order-age-safe";
+}
+
 function bundleItems(items: OrderRow["items"]): BundledItem[] {
   const bucket = new Map<string, BundledItem>();
 
@@ -222,6 +235,7 @@ export default function OrderBookPage() {
 
       return {
         ...order,
+        elapsedSec,
         bundledItems: bundleItems(order.items),
         elapsedLabel:
           order.orderStatus === "COMPLETED"
@@ -247,9 +261,9 @@ export default function OrderBookPage() {
         offlineActors={session.offlineActors}
       />
       <DashboardShell
-        eyebrow="ORDER TIMELINE"
+        eyebrow="ORDER BOOK"
         title="オーダーブック"
-        subtitle="注文進行と決済状態を時系列で追跡"
+        // subtitle="注文進行と決済状態を時系列で追跡"
       >
         <div>
           <div className="row between wrap" style={{ marginBottom: 12 }}>
@@ -343,7 +357,10 @@ export default function OrderBookPage() {
 
           <div className="list">
             {rows.map((order) => (
-              <article key={order.id} className="card">
+              <article
+                key={order.id}
+                className={`card ${orderAgeClass(order.orderStatus, order.elapsedSec)}`}
+              >
                 <div className="row between wrap">
                   <div>
                     <strong>注文 #{order.orderNo}</strong>

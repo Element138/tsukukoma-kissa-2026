@@ -9,6 +9,7 @@ import { DashboardShell } from "@/components/dashboard-shell";
 import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
 import { useToast } from "@/components/toast";
 import { Card } from "@/components/ui/card";
+import { ACTOR_TYPE_LABEL, labelOf } from "@/lib/labels";
 
 type DineInOrder = {
   id: string;
@@ -53,6 +54,16 @@ function SectionTitle({ children }: { children: ReactNode }) {
       {children}
     </h2>
   );
+}
+
+function bundleTakeoutItems(names: string[]) {
+  const counts = new Map<string, number>();
+  for (const name of names) {
+    counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0], "ja"))
+    .map(([name, count]) => `${count}x ${name}`);
 }
 
 export default function WaiterPage() {
@@ -139,26 +150,6 @@ export default function WaiterPage() {
     [takeoutOrders, tickNow],
   );
 
-  const dineInTableReadySummary = useMemo(() => {
-    const summary = new Map<
-      number,
-      { orderIds: string[]; readyCount: number }
-    >();
-    for (const order of dineInOrders) {
-      if (order.tableNo == null) {
-        continue;
-      }
-      const current = summary.get(order.tableNo) ?? {
-        orderIds: [],
-        readyCount: 0,
-      };
-      current.orderIds.push(order.id);
-      current.readyCount += order.readyItems.length;
-      summary.set(order.tableNo, current);
-    }
-    return summary;
-  }, [dineInOrders]);
-
   const serveItem = async (orderItemId: string) => {
     try {
       await apiFetch("/api/waiter/serve-item", {
@@ -182,32 +173,6 @@ export default function WaiterPage() {
         body: JSON.stringify({ orderId }),
       });
       notify({ level: "success", message: "まとめて提供済みに更新しました" });
-      await reload();
-    } catch (e) {
-      notify({
-        level: "error",
-        message: e instanceof Error ? e.message : "提供処理に失敗しました",
-      });
-    }
-  };
-
-  const serveTable = async (order: DineInOrder) => {
-    const orderIds =
-      order.tableNo != null
-        ? (dineInTableReadySummary.get(order.tableNo)?.orderIds ?? [order.id])
-        : [order.id];
-
-    try {
-      for (const orderId of orderIds) {
-        await apiFetch("/api/waiter/serve-order", {
-          method: "POST",
-          body: JSON.stringify({ orderId }),
-        });
-      }
-      notify({
-        level: "success",
-        message: "テーブル分をまとめて提供済みに更新しました",
-      });
       await reload();
     } catch (e) {
       notify({
@@ -252,7 +217,9 @@ export default function WaiterPage() {
         offlineActors={session.offlineActors}
       />
       <DashboardShell
-        title="配膳ダッシュボード"
+        eyebrow="LIVE TERMINAL"
+        title={`${labelOf(ACTOR_TYPE_LABEL, session.actor.actorType)} · ${session.actor.label}`}
+        subtitle="配膳待ちを優先順で処理"
       >
         <div className="grid">
           <Card className="card">
@@ -274,27 +241,22 @@ export default function WaiterPage() {
                 <div className="muted">配膳待ちはありません</div>
               )}
               {dineInTiles.map((order) => {
-                const tableReadyCount =
-                  order.tableNo != null
-                    ? (dineInTableReadySummary.get(order.tableNo)?.readyCount ??
-                      order.readyItems.length)
-                    : order.readyItems.length;
                 const tone = queueTone(order.elapsedSeconds);
 
                 return (
                   <article key={order.id} className={`waiter-tile ${tone}`}>
-                    <div className="row between wrap">
+                    <div className="waiter-tile-head">
                       <div className="waiter-major">
                         <span className="waiter-major-label">テーブル番号</span>
                         <span className="waiter-major-value">{order.tableNo ?? "-"}</span>
                       </div>
                       <span className="badge">注文 #{order.orderNo}</span>
                     </div>
-                    <div className="muted">
+                    <div className="muted waiter-tile-elapsed">
                       注文から {order.elapsedSinceOrdered}
                     </div>
 
-                    <div className="list" style={{ marginTop: 8 }}>
+                    <div className="list waiter-ready-list">
                       {order.readyItems.map((item) => (
                         <div
                           key={item.id}
@@ -304,7 +266,7 @@ export default function WaiterPage() {
                           <span>{item.name}</span>
                           <button
                             type="button"
-                            className="ghost-btn"
+                            className="ghost-btn waiter-serve-btn"
                             onClick={() => serveItem(item.id)}
                           >
                             提供
@@ -313,13 +275,13 @@ export default function WaiterPage() {
                       ))}
                     </div>
 
-                    {tableReadyCount > 1 && (
+                    {order.readyItems.length > 1 && (
                       <button
                         type="button"
-                        style={{ marginTop: 8 }}
-                        onClick={() => serveTable(order)}
+                        className="waiter-bulk-btn"
+                        onClick={() => serveOrder(order.id)}
                       >
-                        テーブル分をまとめて提供済みにする
+                        まとめて提供済みにする
                       </button>
                     )}
 
@@ -340,22 +302,22 @@ export default function WaiterPage() {
               )}
               {takeoutTiles.map((order) => (
                 <article key={order.id} className={`waiter-tile ${queueTone(order.elapsedSeconds)}`}>
-                  <div className="row between wrap">
+                  <div className="waiter-tile-head">
                     <div className="waiter-major">
                       <span className="waiter-major-label">注文番号</span>
                       <span className="waiter-major-value">{order.orderNo}</span>
                     </div>
                     <span className="badge">{order.itemCount} 品</span>
                   </div>
-                  <div className="muted">
+                  <div className="muted waiter-tile-elapsed">
                     注文から {order.elapsedSinceOrdered}
                   </div>
-                  <div className="muted" style={{ marginTop: 8 }}>
-                    {order.itemNames.join(" / ")}
+                  <div className="muted waiter-ready-list">
+                    {bundleTakeoutItems(order.itemNames).join(" / ")}
                   </div>
                   <button
                     type="button"
-                    style={{ marginTop: 10 }}
+                    className="waiter-bulk-btn"
                     onClick={() => serveOrder(order.id)}
                   >
                     まとめて提供済みにする

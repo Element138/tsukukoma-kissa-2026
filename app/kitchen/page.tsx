@@ -7,7 +7,7 @@ import { useSession } from "@/components/use-session";
 import { TerminalBanner } from "@/components/terminal-banner";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
-import { AVAILABILITY_LABEL, labelOf } from "@/lib/labels";
+import { ACTOR_TYPE_LABEL, AVAILABILITY_LABEL, labelOf } from "@/lib/labels";
 import { useToast } from "@/components/toast";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -264,7 +264,9 @@ export default function KitchenPage() {
     <>
       <TerminalBanner actorId={session.actor.actorId} actorType={session.actor.actorType} actorLabel={session.actor.label} offlineActors={session.offlineActors} />
       <DashboardShell
-        title="キッチンダッシュボード"
+        eyebrow="LIVE TERMINAL"
+        title={`${labelOf(ACTOR_TYPE_LABEL, session.actor.actorType)} · ${session.actor.label}`}
+        subtitle="キュー処理と提供状態を同期"
       >
         <div className="grid">
         <Card className="card">
