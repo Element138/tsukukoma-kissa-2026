@@ -6,6 +6,7 @@ import { apiFetch } from "@/lib/client";
 import { useSession } from "@/components/use-session";
 import { TerminalBanner } from "@/components/terminal-banner";
 import { DashboardShell } from "@/components/dashboard-shell";
+import { LoadingScreen } from "@/components/loading-screen";
 import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
 import { ACTOR_TYPE_LABEL, AUDIT_RESULT_LABEL, labelOf } from "@/lib/labels";
 import { useToast } from "@/components/toast";
@@ -140,7 +141,7 @@ export default function AuditPage() {
   );
 
   if (loading || !session) {
-    return <main>読み込み中...</main>;
+    return <LoadingScreen />;
   }
 
   return (

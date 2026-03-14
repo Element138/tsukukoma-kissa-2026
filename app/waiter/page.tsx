@@ -6,6 +6,7 @@ import { apiFetch } from "@/lib/client";
 import { useSession } from "@/components/use-session";
 import { TerminalBanner } from "@/components/terminal-banner";
 import { DashboardShell } from "@/components/dashboard-shell";
+import { LoadingScreen } from "@/components/loading-screen";
 import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
 import { useToast } from "@/components/toast";
 import { Card } from "@/components/ui/card";
@@ -205,7 +206,7 @@ export default function WaiterPage() {
   };
 
   if (loading || !session) {
-    return <main>読み込み中...</main>;
+    return <LoadingScreen />;
   }
 
   return (
@@ -220,6 +221,7 @@ export default function WaiterPage() {
         eyebrow="LIVE TERMINAL"
         title={`${labelOf(ACTOR_TYPE_LABEL, session.actor.actorType)} · ${session.actor.label}`}
         subtitle="配膳待ちを優先順で処理"
+        hideHeader
       >
         <div className="grid">
           <Card className="card">

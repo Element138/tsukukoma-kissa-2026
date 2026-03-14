@@ -6,6 +6,7 @@ import { apiFetch } from "@/lib/client";
 import { useSession } from "@/components/use-session";
 import { TerminalBanner } from "@/components/terminal-banner";
 import { DashboardShell } from "@/components/dashboard-shell";
+import { LoadingScreen } from "@/components/loading-screen";
 import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
 import { ACTOR_TYPE_LABEL, AVAILABILITY_LABEL, labelOf } from "@/lib/labels";
 import { useToast } from "@/components/toast";
@@ -255,7 +256,7 @@ export default function KitchenPage() {
   };
 
   if (loading || !session) {
-    return <main>読み込み中...</main>;
+    return <LoadingScreen />;
   }
 
   const elapsedSinceFetchSec = Math.floor((tickNow - queueFetchedAt) / 1000);
@@ -267,6 +268,7 @@ export default function KitchenPage() {
         eyebrow="LIVE TERMINAL"
         title={`${labelOf(ACTOR_TYPE_LABEL, session.actor.actorType)} · ${session.actor.label}`}
         subtitle="キュー処理と提供状態を同期"
+        hideHeader
       >
         <div className="grid">
         <Card className="card">

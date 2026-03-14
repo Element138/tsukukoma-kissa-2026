@@ -28,6 +28,7 @@ import { apiFetch, fmtJpy } from "@/lib/client";
 import { useSession } from "@/components/use-session";
 import { TerminalBanner } from "@/components/terminal-banner";
 import { DashboardShell } from "@/components/dashboard-shell";
+import { LoadingScreen } from "@/components/loading-screen";
 import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
 import { ACTOR_TYPE_LABEL, AVAILABILITY_LABEL, labelOf } from "@/lib/labels";
 import { useToast } from "@/components/toast";
@@ -420,7 +421,7 @@ export default function AdminPage() {
     assignments.map((a) => [`${a.menuId}:${a.kitchenId}`, a.enabled]),
   );
 
-  if (loading || !session) return <main>読み込み中...</main>;
+  if (loading || !session) return <LoadingScreen />;
 
   return (
     <>

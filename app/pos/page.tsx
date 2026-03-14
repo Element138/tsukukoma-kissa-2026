@@ -7,6 +7,7 @@ import { useSession } from "@/components/use-session";
 import { TerminalBanner } from "@/components/terminal-banner";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { ConfirmSlider } from "@/components/confirm-slider";
+import { LoadingScreen } from "@/components/loading-screen";
 import {
   ACTOR_TYPE_LABEL,
   AVAILABILITY_LABEL,
@@ -273,7 +274,7 @@ export default function PosPage() {
   };
 
   if (loading || !session) {
-    return <main>読み込み中...</main>;
+    return <LoadingScreen />;
   }
 
   return (
@@ -283,6 +284,7 @@ export default function PosPage() {
         eyebrow="LIVE TERMINAL"
         title={`${labelOf(ACTOR_TYPE_LABEL, session.actor.actorType)} · ${session.actor.label}`}
         subtitle="注文登録と会計をリアルタイム運用"
+        hideHeader
       >
         <div className="grid two">
         <Card className="card">
@@ -364,7 +366,7 @@ export default function PosPage() {
               </div>
             ))}
             {paymentMethod === "PAYMENT_SKIPPED" && total > 0 && (
-              <div className="list-item row between">
+              <div className="list-item row between payment-skip-row">
                 <div>決済スキップ</div>
                 <strong>- {fmtJpy(total)}</strong>
               </div>
@@ -393,7 +395,7 @@ export default function PosPage() {
             {fulfillmentType === "DINE_IN" && (
               <label>
                 テーブル番号
-                <Input value={tableNo} onChange={(e) => setTableNo(e.target.value)} />
+                <Input type="number" min={1} step={1} inputMode="numeric" value={tableNo} onChange={(e) => setTableNo(e.target.value)} />
               </label>
             )}
 

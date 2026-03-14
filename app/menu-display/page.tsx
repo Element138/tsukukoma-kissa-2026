@@ -5,6 +5,7 @@ import { apiFetch, fmtJpy } from "@/lib/client";
 import { useSession } from "@/components/use-session";
 import { TerminalBanner } from "@/components/terminal-banner";
 import { DashboardShell } from "@/components/dashboard-shell";
+import { LoadingScreen } from "@/components/loading-screen";
 import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
 import { AVAILABILITY_LABEL, labelOf } from "@/lib/labels";
 import { useToast } from "@/components/toast";
@@ -88,7 +89,7 @@ export default function MenuDisplayPage() {
   });
 
   if (loading || !session) {
-    return <main>読み込み中...</main>;
+    return <LoadingScreen />;
   }
 
   const toggleFullscreen = async () => {
@@ -120,7 +121,7 @@ export default function MenuDisplayPage() {
         eyebrow="MENU"
         title="メニュー"
         subtitle={isFullscreen ? "全画面表示中" : "提供状況と目安時間をリアルタイム表示"}
-        fancyHeader={!isFullscreen}
+        fancyHeader
         className={isFullscreen ? "menu-display-fullscreen" : "menu-display-standard"}
         actions={
           <button type="button" className="ghost-btn" onClick={toggleFullscreen}>
