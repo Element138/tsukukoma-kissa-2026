@@ -32,7 +32,8 @@ function isPosAvailabilityOnlyPatch(body: ReturnType<typeof menuUpdateSchema.par
     "displayOrder",
     "categoryId",
     "isActive",
-    "showLeadTime"
+    "showLeadTime",
+    "coverImageDataUrl",
   ];
 
   return editableKeys.every((key) => body[key] === undefined) && body.availability !== undefined;
@@ -107,7 +108,8 @@ export async function POST(req: NextRequest) {
             workloadSeconds: body.workloadSeconds,
             displayOrder: body.displayOrder,
             categoryId: body.categoryId,
-            showLeadTime: body.showLeadTime ?? true
+            showLeadTime: body.showLeadTime ?? true,
+            coverImageDataUrl: body.coverImageDataUrl ?? null,
           }
         });
 
@@ -181,7 +183,8 @@ export async function PATCH(req: NextRequest) {
             displayOrder: body.displayOrder,
             categoryId: body.categoryId,
             isActive: body.isActive,
-            showLeadTime: body.showLeadTime
+            showLeadTime: body.showLeadTime,
+            coverImageDataUrl: body.coverImageDataUrl,
           }
         });
 

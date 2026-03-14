@@ -1,0 +1,1 @@
+ALTER TABLE "Menu" ADD COLUMN IF NOT EXISTS "coverImageDataUrl" TEXT;

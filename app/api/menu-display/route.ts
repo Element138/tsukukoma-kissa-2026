@@ -68,7 +68,8 @@ export async function GET(req: NextRequest) {
           name: menu.name,
           priceJpy: menu.priceJpy,
           availability: menu.availability,
-          leadTimeSecondsP75_30m: menu.showLeadTime ? percentile75(leadMap.get(menu.id) ?? []) : null
+          leadTimeSecondsP75_30m: menu.showLeadTime ? percentile75(leadMap.get(menu.id) ?? []) : null,
+          coverImageDataUrl: menu.coverImageDataUrl,
         }))
     }));
 

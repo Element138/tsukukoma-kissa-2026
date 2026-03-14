@@ -250,7 +250,9 @@ export default function WaiterPage() {
                     <div className="waiter-tile-head">
                       <div className="waiter-major">
                         <span className="waiter-major-label">テーブル番号</span>
-                        <span className="waiter-major-value">{order.tableNo ?? "-"}</span>
+                        <span className="waiter-major-value">
+                          {order.tableNo ?? "-"}
+                        </span>
                       </div>
                       <span className="badge">注文 #{order.orderNo}</span>
                     </div>
@@ -271,7 +273,7 @@ export default function WaiterPage() {
                             className="ghost-btn waiter-serve-btn"
                             onClick={() => serveItem(item.id)}
                           >
-                            提供
+                            提供済み
                           </button>
                         </div>
                       ))}
@@ -283,7 +285,7 @@ export default function WaiterPage() {
                         className="waiter-bulk-btn"
                         onClick={() => serveOrder(order.id)}
                       >
-                        まとめて提供済みにする
+                        全て提供済みにする
                       </button>
                     )}
 
@@ -303,11 +305,16 @@ export default function WaiterPage() {
                 <div className="muted">配膳待ちの持ち帰り注文はありません</div>
               )}
               {takeoutTiles.map((order) => (
-                <article key={order.id} className={`waiter-tile ${queueTone(order.elapsedSeconds)}`}>
+                <article
+                  key={order.id}
+                  className={`waiter-tile ${queueTone(order.elapsedSeconds)}`}
+                >
                   <div className="waiter-tile-head">
                     <div className="waiter-major">
                       <span className="waiter-major-label">注文番号</span>
-                      <span className="waiter-major-value">{order.orderNo}</span>
+                      <span className="waiter-major-value">
+                        {order.orderNo}
+                      </span>
                     </div>
                     <span className="badge">{order.itemCount} 品</span>
                   </div>
@@ -322,7 +329,7 @@ export default function WaiterPage() {
                     className="waiter-bulk-btn"
                     onClick={() => serveOrder(order.id)}
                   >
-                    まとめて提供済みにする
+                    提供済み
                   </button>
                 </article>
               ))}

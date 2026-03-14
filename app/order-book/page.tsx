@@ -19,6 +19,7 @@ import {
 import { routeByActorType } from "@/lib/routes";
 import { useToast } from "@/components/toast";
 import { Input } from "@/components/ui/input";
+import { AGE_GROUPS, type AgeGroupCounts } from "@/lib/age-groups";
 import {
   Select,
   SelectContent,
@@ -34,6 +35,7 @@ type OrderRow = {
   completedAt: string | null;
   fulfillmentType: "DINE_IN" | "TAKEOUT";
   tableNo: number | null;
+  ageGroupCounts: AgeGroupCounts;
   paymentMethod: string;
   paymentStatus: string;
   orderStatus: string;
@@ -283,8 +285,17 @@ export default function OrderBookPage() {
               >
                 更新
               </button>
-              <a href="/api/order-book/export" className="btn-link ghost-btn">
-                CSV出力
+              <a
+                href="/api/order-book/export?format=order"
+                className="btn-link ghost-btn"
+              >
+                CSV出力 (注文別)
+              </a>
+              <a
+                href="/api/order-book/export?format=item"
+                className="btn-link ghost-btn"
+              >
+                CSV出力 (商品別)
               </a>
             </div>
           </div>
@@ -392,6 +403,14 @@ export default function OrderBookPage() {
                     備考: {order.specialNote}
                   </div>
                 )}
+                <div className="muted" style={{ marginTop: 8 }}>
+                  年齢構成:
+                  {AGE_GROUPS.map((group) => (
+                    <span key={group.key} style={{ marginLeft: 8 }}>
+                      {group.label} {order.ageGroupCounts[group.key] ?? 0}
+                    </span>
+                  ))}
+                </div>
 
                 <div className="list" style={{ marginTop: 10 }}>
                   {order.bundledItems.map((item) => (

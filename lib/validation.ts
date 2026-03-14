@@ -140,7 +140,8 @@ export const menuCreateSchema = z.object({
   workloadSeconds: z.number().int().min(5).max(7200),
   displayOrder: z.number().int().min(0).max(999),
   categoryId: z.string().uuid(),
-  showLeadTime: z.boolean().optional()
+  showLeadTime: z.boolean().optional(),
+  coverImageDataUrl: z.string().max(2_000_000).nullable().optional(),
 });
 
 export const menuUpdateSchema = z.object({
@@ -152,7 +153,8 @@ export const menuUpdateSchema = z.object({
   displayOrder: z.number().int().min(0).max(999).optional(),
   categoryId: z.string().uuid().optional(),
   isActive: z.boolean().optional(),
-  showLeadTime: z.boolean().optional()
+  showLeadTime: z.boolean().optional(),
+  coverImageDataUrl: z.string().max(2_000_000).nullable().optional(),
 });
 
 export const assignmentUpsertSchema = z.object({

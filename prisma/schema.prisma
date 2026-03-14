@@ -132,6 +132,7 @@ model Menu {
   availability    Availability            @default(AVAILABLE)
   workloadSeconds Int
   displayOrder    Int                     @default(0)
+  coverImageDataUrl String?
   categoryId      String
   isActive        Boolean                 @default(true)
   showLeadTime    Boolean                 @default(true)

@@ -90,6 +90,7 @@ type Menu = {
   categoryId: string;
   isActive: boolean;
   hasActiveKitchenCoverage: boolean;
+  coverImageDataUrl: string | null;
 };
 type Assignment = { menuId: string; kitchenId: string; enabled: boolean };
 type MenuEdit = {
@@ -97,7 +98,10 @@ type MenuEdit = {
   priceJpy: string;
   workloadSeconds: string;
   categoryId: string;
+  coverImageDataUrl: string;
 };
+
+const MAX_MENU_COVER_FILE_BYTES = 1_000_000;
 
 const AVAILABILITY_OPTIONS: Array<Menu["availability"]> = [
   "AVAILABLE",
@@ -293,6 +297,7 @@ export default function AdminPage() {
             priceJpy: String(menu.priceJpy),
             workloadSeconds: String(menu.workloadSeconds),
             categoryId: menu.categoryId,
+            coverImageDataUrl: menu.coverImageDataUrl ?? "",
           };
         }
         return next;
@@ -413,6 +418,58 @@ export default function AdminPage() {
         level: "error",
         message:
           e instanceof Error ? e.message : "メニュー順の更新に失敗しました",
+      });
+    }
+  };
+
+  const readFileAsDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("画像ファイルを読み込めませんでした"));
+      reader.onload = () => {
+        if (typeof reader.result !== "string") {
+          reject(new Error("画像データの変換に失敗しました"));
+          return;
+        }
+        resolve(reader.result);
+      };
+      reader.readAsDataURL(file);
+    });
+
+  const uploadMenuCover = async (menu: Menu, file: File) => {
+    if (file.size > MAX_MENU_COVER_FILE_BYTES) {
+      notify({
+        level: "error",
+        message: "画像サイズは 1MB 以下にしてください",
+      });
+      return;
+    }
+
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      await patchMenu(
+        menu,
+        { coverImageDataUrl: dataUrl },
+        "メニュー画像を更新しました",
+      );
+      setMenuEdits((prev) => ({
+        ...prev,
+        [menu.id]: {
+          ...(prev[menu.id] ?? {
+            name: menu.name,
+            priceJpy: String(menu.priceJpy),
+            workloadSeconds: String(menu.workloadSeconds),
+            categoryId: menu.categoryId,
+            coverImageDataUrl: "",
+          }),
+          coverImageDataUrl: dataUrl,
+        },
+      }));
+      await reload();
+    } catch (e) {
+      notify({
+        level: "error",
+        message: e instanceof Error ? e.message : "画像更新に失敗しました",
       });
     }
   };
@@ -853,6 +910,7 @@ export default function AdminPage() {
                                 (activeMenus.at(-1)?.displayOrder ?? 0) + 1,
                               categoryId: newMenuCategoryId,
                               showLeadTime: true,
+                              coverImageDataUrl: null,
                             }),
                           });
                           setNewMenuName("");
@@ -879,6 +937,7 @@ export default function AdminPage() {
                     priceJpy: String(menu.priceJpy),
                     workloadSeconds: String(menu.workloadSeconds),
                     categoryId: menu.categoryId,
+                    coverImageDataUrl: menu.coverImageDataUrl ?? "",
                   };
                   return (
                     <AccordionItem
@@ -950,7 +1009,7 @@ export default function AdminPage() {
                         </div>
                       </AccordionTrigger>
                       <AccordionContent className="space-y-3">
-                        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
                           <InputField
                             label="メニュー名"
                             value={edit.name}
@@ -1006,6 +1065,67 @@ export default function AdminPage() {
                               </SelectContent>
                             </Select>
                           </label>
+                          <label className="grid gap-0">
+                            <span className="text-[11px] font-medium leading-none text-muted-foreground">
+                              画像URL / Data URL
+                            </span>
+                            <Input
+                              value={edit.coverImageDataUrl}
+                              placeholder="https://... または data:image/..."
+                              onChange={(e) =>
+                                setMenuEdits((p) => ({
+                                  ...p,
+                                  [menu.id]: {
+                                    ...edit,
+                                    coverImageDataUrl: e.target.value,
+                                  },
+                                }))
+                              }
+                            />
+                          </label>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 rounded-md border bg-card/70 p-2">
+                          <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium">
+                            画像をアップロード
+                            <input
+                              type="file"
+                              accept="image/png,image/jpeg,image/webp,image/gif"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  void uploadMenuCover(menu, file);
+                                }
+                                e.currentTarget.value = "";
+                              }}
+                            />
+                          </label>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              void patchMenu(
+                                menu,
+                                { coverImageDataUrl: null },
+                                "メニュー画像を削除しました",
+                              ).then(async () => {
+                                setMenuEdits((prev) => ({
+                                  ...prev,
+                                  [menu.id]: {
+                                    ...edit,
+                                    coverImageDataUrl: "",
+                                  },
+                                }));
+                                await reload();
+                              })
+                            }
+                          >
+                            画像を削除
+                          </Button>
+                          <span className="text-xs text-muted-foreground">
+                            推奨: 横長画像 / 1MB 以下
+                          </span>
                         </div>
                         <div className="flex flex-wrap items-center gap-1">
                           <IconActionButton
@@ -1019,6 +1139,8 @@ export default function AdminPage() {
                                   priceJpy: Number(edit.priceJpy),
                                   workloadSeconds: Number(edit.workloadSeconds),
                                   categoryId: edit.categoryId,
+                                  coverImageDataUrl:
+                                    edit.coverImageDataUrl.trim() || null,
                                 },
                                 "メニューを更新しました",
                               ).then(() => reload())

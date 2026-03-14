@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { requireSession } from "@/lib/server/auth";
 import { fail, ok } from "@/lib/response";
 import { runPaymentWatchdog } from "@/lib/domain/payment-watchdog";
+import { parseAgeRangesToCounts } from "@/lib/age-groups";
 
 const querySchema = z.object({
   orderNo: z.string().optional(),
@@ -113,6 +114,7 @@ export async function GET(req: NextRequest) {
         fulfillmentType: order.fulfillmentType,
         tableNo: order.tableNo,
         partySize: order.partySize,
+        ageGroupCounts: parseAgeRangesToCounts(order.ageRangesJson),
         paymentMethod: order.paymentMethod,
         paymentStatus: order.paymentStatus,
         orderStatus: order.orderStatus,
