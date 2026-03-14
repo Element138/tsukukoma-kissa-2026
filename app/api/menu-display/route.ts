@@ -18,15 +18,21 @@ export async function GET(req: NextRequest) {
   try {
     await requireSession(req, { actorTypes: ["MENU_DISPLAY", "POS", "ADMIN"] });
 
-    const categories = await prisma.menuCategory.findMany({
-      where: { isActive: true },
-      orderBy: { displayOrder: "asc" }
-    });
-
-    const menus = await prisma.menu.findMany({
-      where: { isActive: true },
-      orderBy: [{ displayOrder: "asc" }, { name: "asc" }]
-    });
+    const [categories, menus, setting] = await Promise.all([
+      prisma.menuCategory.findMany({
+        where: { isActive: true },
+        orderBy: [{ displayOrder: "asc" }, { name: "asc" }],
+      }),
+      prisma.menu.findMany({
+        where: { isActive: true },
+        orderBy: [{ displayOrder: "asc" }, { name: "asc" }],
+      }),
+      prisma.appSetting.upsert({
+        where: { id: 1 },
+        create: { id: 1, menuDisplayPageSeconds: 18 },
+        update: {},
+      }),
+    ]);
 
     const since = new Date(Date.now() - 30 * 60_000);
     const recentServed = await prisma.orderItem.findMany({
@@ -73,7 +79,12 @@ export async function GET(req: NextRequest) {
         }))
     }));
 
-    return ok({ categories: result });
+    return ok({
+      categories: result,
+      settings: {
+        pageDisplaySeconds: setting.menuDisplayPageSeconds,
+      },
+    });
   } catch (error) {
     return fail(error);
   }

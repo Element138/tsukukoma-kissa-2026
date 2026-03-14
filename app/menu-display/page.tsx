@@ -23,9 +23,19 @@ type DisplayCategory = {
   }>;
 };
 
-const HOLD_MS = 1800;
-const MIN_PAGE_DWELL_MS = 9000;
-const PAGE_FADE_MS = 900;
+type MenuDisplaySettings = {
+  pageDisplaySeconds: number;
+};
+
+type MenuDisplayPayload = {
+  categories: DisplayCategory[];
+  settings: MenuDisplaySettings;
+};
+
+const DEFAULT_SETTINGS: MenuDisplaySettings = {
+  pageDisplaySeconds: 18,
+};
+const PAGE_FADE_MS = 750;
 
 function formatEta(seconds: number | null) {
   if (seconds == null) {
@@ -46,32 +56,97 @@ function splitCategoryPages(categories: DisplayCategory[]) {
   return pages;
 }
 
+function categoryLayoutSignature(categories: DisplayCategory[]) {
+  return categories.map((category) => category.id).join("|");
+}
+
+function mergeMenusIntoCurrentLayout(
+  currentCategories: DisplayCategory[],
+  freshCategories: DisplayCategory[],
+) {
+  const freshByCategoryId = new Map(
+    freshCategories.map((category) => [category.id, category]),
+  );
+
+  return currentCategories.map((currentCategory) => {
+    const freshCategory = freshByCategoryId.get(currentCategory.id);
+    if (!freshCategory) {
+      return currentCategory;
+    }
+    return {
+      ...currentCategory,
+      menus: freshCategory.menus,
+    };
+  });
+}
+
 export default function MenuDisplayPage() {
   const { loading, session } = useSession(["MENU_DISPLAY"]);
   const { notify } = useToast();
 
   const [categories, setCategories] = useState<DisplayCategory[]>([]);
+  const [settings, setSettings] = useState<MenuDisplaySettings>(DEFAULT_SETTINGS);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [pageIndex, setPageIndex] = useState(0);
   const [isPageFading, setIsPageFading] = useState(false);
+  const [cycleTick, setCycleTick] = useState(0);
+
+  const categoriesRef = useRef<DisplayCategory[]>([]);
+  const pendingCategorySnapshotRef = useRef<DisplayCategory[] | null>(null);
   const reloadInFlightRef = useRef(false);
+  const queuedReloadRef = useRef(false);
   const viewportRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const trackRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const categoryPages = useMemo(() => splitCategoryPages(categories), [categories]);
   const activePage = categoryPages[pageIndex] ?? [];
+  const shouldFadeBetweenPages = categories.length > 3;
+
+  useEffect(() => {
+    categoriesRef.current = categories;
+  }, [categories]);
+
+  const fetchDisplayData = async () => {
+    return apiFetch<MenuDisplayPayload>("/api/menu-display");
+  };
+
+  const applyFetchedPayload = (payload: MenuDisplayPayload) => {
+    const currentCategories = categoriesRef.current;
+    const currentLayout = categoryLayoutSignature(currentCategories);
+    const nextLayout = categoryLayoutSignature(payload.categories);
+
+    setSettings(payload.settings ?? DEFAULT_SETTINGS);
+
+    if (currentCategories.length === 0) {
+      categoriesRef.current = payload.categories;
+      setCategories(payload.categories);
+      setPageIndex(0);
+      pendingCategorySnapshotRef.current = null;
+      return;
+    }
+
+    if (currentLayout === nextLayout) {
+      categoriesRef.current = payload.categories;
+      setCategories(payload.categories);
+      return;
+    }
+
+    pendingCategorySnapshotRef.current = payload.categories;
+    const merged = mergeMenusIntoCurrentLayout(currentCategories, payload.categories);
+    categoriesRef.current = merged;
+    setCategories(merged);
+  };
 
   const reload = async () => {
     if (reloadInFlightRef.current) {
+      queuedReloadRef.current = true;
       return;
     }
     reloadInFlightRef.current = true;
 
     try {
-      const data = await apiFetch<{ categories: DisplayCategory[] }>(
-        "/api/menu-display",
-      );
-      setCategories(data.categories);
+      const payload = await fetchDisplayData();
+      applyFetchedPayload(payload);
     } catch (e) {
       notify({
         level: "error",
@@ -80,6 +155,10 @@ export default function MenuDisplayPage() {
       });
     } finally {
       reloadInFlightRef.current = false;
+      if (queuedReloadRef.current) {
+        queuedReloadRef.current = false;
+        void reload();
+      }
     }
   };
 
@@ -105,19 +184,23 @@ export default function MenuDisplayPage() {
       setPageIndex(0);
       return;
     }
-    setPageIndex((prev) => prev % categoryPages.length);
-  }, [categoryPages.length]);
+    if (pageIndex >= categoryPages.length) {
+      setPageIndex(0);
+    }
+  }, [categoryPages.length, pageIndex]);
 
   useEffect(() => {
     if (activePage.length === 0) {
       return;
     }
 
-    const cleanups: Array<() => void> = [];
     const animations: Animation[] = [];
-    const raf = window.requestAnimationFrame(() => {
-      let longestCycleMs = 0;
+    const pageDisplayMs = Math.max(
+      6000,
+      Math.floor((settings.pageDisplaySeconds || DEFAULT_SETTINGS.pageDisplaySeconds) * 1000),
+    );
 
+    const raf = window.requestAnimationFrame(() => {
       for (const category of activePage) {
         const viewport = viewportRefs.current[category.id];
         const track = trackRefs.current[category.id];
@@ -126,37 +209,29 @@ export default function MenuDisplayPage() {
         }
 
         track.style.transform = "translateY(0px)";
-
         const overflowPx = Math.max(0, track.scrollHeight - viewport.clientHeight);
         if (overflowPx <= 1) {
-          longestCycleMs = Math.max(longestCycleMs, HOLD_MS * 2);
           continue;
         }
 
-        const moveMs = Math.max(7000, overflowPx * 28);
-        const totalMs = HOLD_MS + moveMs + HOLD_MS + moveMs + HOLD_MS;
-        longestCycleMs = Math.max(longestCycleMs, totalMs);
-
+        const waitMs = Math.floor(pageDisplayMs * 0.2);
+        const moveEachMs = Math.floor((pageDisplayMs - waitMs * 2) / 2);
         const animation = track.animate(
           [
             { transform: "translateY(0px)", offset: 0 },
-            { transform: "translateY(0px)", offset: HOLD_MS / totalMs },
+            { transform: `translateY(${-overflowPx}px)`, offset: moveEachMs / pageDisplayMs },
             {
               transform: `translateY(${-overflowPx}px)`,
-              offset: (HOLD_MS + moveMs) / totalMs,
-            },
-            {
-              transform: `translateY(${-overflowPx}px)`,
-              offset: (HOLD_MS + moveMs + HOLD_MS) / totalMs,
+              offset: (moveEachMs + waitMs) / pageDisplayMs,
             },
             {
               transform: "translateY(0px)",
-              offset: (HOLD_MS + moveMs + HOLD_MS + moveMs) / totalMs,
+              offset: (moveEachMs + waitMs + moveEachMs) / pageDisplayMs,
             },
             { transform: "translateY(0px)", offset: 1 },
           ],
           {
-            duration: totalMs,
+            duration: pageDisplayMs,
             easing: "linear",
             iterations: 1,
             fill: "both",
@@ -164,31 +239,85 @@ export default function MenuDisplayPage() {
         );
         animations.push(animation);
       }
+    });
 
-      if (categoryPages.length > 1) {
-        const dwellMs = Math.max(MIN_PAGE_DWELL_MS, longestCycleMs);
-        const switchTimer = window.setTimeout(() => {
+    let fadeTimer: number | null = null;
+
+    const moveToNext = () => {
+      const hasMultiplePages = categoryPages.length > 1;
+      const isLastPage = pageIndex >= categoryPages.length - 1;
+
+      const commitPendingCategoriesIfNeeded = () => {
+        const pending = pendingCategorySnapshotRef.current;
+        if (!pending) {
+          return false;
+        }
+        pendingCategorySnapshotRef.current = null;
+        categoriesRef.current = pending;
+        setCategories(pending);
+        setPageIndex(0);
+        return true;
+      };
+
+      if (!hasMultiplePages) {
+        const committed = commitPendingCategoriesIfNeeded();
+        if (!committed) {
+          setCycleTick((prev) => prev + 1);
+        }
+        return;
+      }
+
+      if (!isLastPage) {
+        if (shouldFadeBetweenPages) {
           setIsPageFading(true);
-          const fadeTimer = window.setTimeout(() => {
-            setPageIndex((prev) => (prev + 1) % categoryPages.length);
+          fadeTimer = window.setTimeout(() => {
+            setPageIndex((prev) => Math.min(prev + 1, categoryPages.length - 1));
             setIsPageFading(false);
           }, PAGE_FADE_MS);
-          cleanups.push(() => window.clearTimeout(fadeTimer));
-        }, dwellMs);
-        cleanups.push(() => window.clearTimeout(switchTimer));
+          return;
+        }
+        setPageIndex((prev) => Math.min(prev + 1, categoryPages.length - 1));
+        return;
       }
-    });
+
+      if (shouldFadeBetweenPages) {
+        setIsPageFading(true);
+      }
+      const onWrapped = () => {
+        const committed = commitPendingCategoriesIfNeeded();
+        if (!committed) {
+          setPageIndex(0);
+        }
+        setIsPageFading(false);
+      };
+
+      if (shouldFadeBetweenPages) {
+        fadeTimer = window.setTimeout(onWrapped, PAGE_FADE_MS);
+      } else {
+        onWrapped();
+      }
+    };
+
+    const timer = window.setTimeout(moveToNext, pageDisplayMs);
 
     return () => {
       window.cancelAnimationFrame(raf);
+      window.clearTimeout(timer);
+      if (fadeTimer != null) {
+        window.clearTimeout(fadeTimer);
+      }
       for (const animation of animations) {
         animation.cancel();
       }
-      for (const cleanup of cleanups) {
-        cleanup();
-      }
     };
-  }, [activePage, categoryPages.length, pageIndex]);
+  }, [
+    activePage,
+    categoryPages.length,
+    cycleTick,
+    pageIndex,
+    settings.pageDisplaySeconds,
+    shouldFadeBetweenPages,
+  ]);
 
   useRealtimeSubscription({
     enabled: Boolean(session),
@@ -290,21 +419,19 @@ export default function MenuDisplayPage() {
                           ) : (
                             <div className="menu-display-row-meta">
                               <span>{fmtJpy(menu.priceJpy)}</span>
-                              <span>提供目安 {formatEta(menu.leadTimeSecondsP75_30m)}</span>
+                              <span>
+                                提供目安 {formatEta(menu.leadTimeSecondsP75_30m)}
+                              </span>
                             </div>
                           )}
                         </div>
                         <div className="menu-display-row-image-wrap">
-                          {menu.coverImageDataUrl ? (
+                          {menu.coverImageDataUrl && (
                             <img
                               src={menu.coverImageDataUrl}
                               alt={`${menu.name} の画像`}
                               className="menu-display-row-image"
                             />
-                          ) : (
-                            <div className="menu-display-row-image-placeholder">
-                              NO IMAGE
-                            </div>
                           )}
                         </div>
                       </article>

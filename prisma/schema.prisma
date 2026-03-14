@@ -269,3 +269,10 @@ model RealtimeEvent {
   @@index([channel, id])
   @@index([createdAt])
 }
+
+model AppSetting {
+  id                     Int      @id
+  menuDisplayPageSeconds Int      @default(18)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+}

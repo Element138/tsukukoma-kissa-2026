@@ -100,6 +100,9 @@ type MenuEdit = {
   categoryId: string;
   coverImageDataUrl: string;
 };
+type MenuDisplaySettings = {
+  pageDisplaySeconds: number;
+};
 
 const MAX_MENU_COVER_FILE_BYTES = 1_000_000;
 
@@ -117,11 +120,7 @@ const STATUS_BUTTON_ACTIVE_TONE: Record<Menu["availability"], string> = {
 
 const dangerConfirm = (message: string) => window.confirm(message);
 
-function SectionHeader(props: {
-  title: string;
-  subtitle: string;
-  icon: ReactNode;
-}) {
+function SectionHeader(props: { title: string; icon: ReactNode }) {
   return (
     <div className="flex items-center gap-3">
       <div className="grid h-8 w-8 place-items-center rounded-md border bg-muted/30 text-foreground">
@@ -131,7 +130,6 @@ function SectionHeader(props: {
         <h2 className="text-sm font-semibold leading-none tracking-tight">
           {props.title}
         </h2>
-        <p className="mt-1 text-xs text-muted-foreground">{props.subtitle}</p>
       </div>
     </div>
   );
@@ -191,7 +189,7 @@ function IconActionButton(props: {
 
 export default function AdminPage() {
   const { loading, session } = useSession(["ADMIN"]);
-  const { notify } = useToast();
+  const { notify, clearByPrefix } = useToast();
 
   const [actors, setActors] = useState<Actor[]>([]);
   const [menus, setMenus] = useState<Menu[]>([]);
@@ -212,6 +210,9 @@ export default function AdminPage() {
   const [newMenuCategoryId, setNewMenuCategoryId] = useState("");
   const [newMenuWorkloadSeconds, setNewMenuWorkloadSeconds] = useState("300");
   const [menuEdits, setMenuEdits] = useState<Record<string, MenuEdit>>({});
+  const [menuDisplaySettings, setMenuDisplaySettings] =
+    useState<MenuDisplaySettings | null>(null);
+  const [pageDisplaySecondsDraft, setPageDisplaySecondsDraft] = useState("18");
   const [menuAvailabilityBusyId, setMenuAvailabilityBusyId] = useState<
     string | null
   >(null);
@@ -257,12 +258,49 @@ export default function AdminPage() {
         ),
     [menus, categoryOrder],
   );
+  const hasUnsavedChanges = useMemo(() => {
+    const categoryDirty = activeCategories.some(
+      (category) => (categoryNameDrafts[category.id] ?? category.name) !== category.name,
+    );
+
+    const menuDirty = activeMenus.some((menu) => {
+      const edit = menuEdits[menu.id];
+      if (!edit) {
+        return false;
+      }
+      const normalizedCover = edit.coverImageDataUrl.trim();
+      const menuCover = menu.coverImageDataUrl ?? "";
+      return (
+        edit.name !== menu.name ||
+        Number(edit.priceJpy) !== menu.priceJpy ||
+        Number(edit.workloadSeconds) !== menu.workloadSeconds ||
+        edit.categoryId !== menu.categoryId ||
+        normalizedCover !== menuCover
+      );
+    });
+
+    const draftSeconds = Number(pageDisplaySecondsDraft);
+    const displaySettingDirty =
+      menuDisplaySettings != null &&
+      (pageDisplaySecondsDraft.trim() !==
+        String(menuDisplaySettings.pageDisplaySeconds) ||
+        !Number.isFinite(draftSeconds));
+
+    return categoryDirty || menuDirty || displaySettingDirty;
+  }, [
+    activeCategories,
+    activeMenus,
+    categoryNameDrafts,
+    menuEdits,
+    menuDisplaySettings,
+    pageDisplaySecondsDraft,
+  ]);
 
   const reload = async () => {
     if (reloadInFlightRef.current) return;
     reloadInFlightRef.current = true;
     try {
-      const [a, m, c, s] = await Promise.all([
+      const [a, m, c, s, settings] = await Promise.all([
         apiFetch<{ actors: Actor[] }>("/api/admin/actors", {
           timeoutMs: 5000,
           retry: 1,
@@ -279,11 +317,29 @@ export default function AdminPage() {
           timeoutMs: 5000,
           retry: 1,
         }),
+        apiFetch<{ settings: MenuDisplaySettings }>(
+          "/api/admin/menu-display-settings",
+          {
+            timeoutMs: 5000,
+            retry: 1,
+          },
+        ),
       ]);
       setActors(a.actors);
       setMenus(m.menus);
       setCategories(c.categories);
       setAssignments(s.assignments);
+      setMenuDisplaySettings(settings.settings);
+      setPageDisplaySecondsDraft((prev) => {
+        const previousServerValue = menuDisplaySettings?.pageDisplaySeconds;
+        if (
+          previousServerValue != null &&
+          prev !== String(previousServerValue)
+        ) {
+          return prev;
+        }
+        return String(settings.settings.pageDisplaySeconds);
+      });
       setCategoryNameDrafts((prev) =>
         Object.fromEntries(
           c.categories.map((cat) => [cat.id, prev[cat.id] ?? cat.name]),
@@ -326,6 +382,65 @@ export default function AdminPage() {
     onEvent: () => void reload(),
     onResync: () => void reload(),
   });
+
+  useEffect(() => {
+    if (hasUnsavedChanges) {
+      notify({
+        id: "admin-unsaved-warning",
+        level: "warning",
+        sticky: true,
+        message: "未保存の変更があります。保存してください。",
+      });
+      return;
+    }
+    clearByPrefix("admin-unsaved-warning");
+  }, [hasUnsavedChanges, notify, clearByPrefix]);
+
+  useEffect(() => {
+    if (!hasUnsavedChanges) {
+      return;
+    }
+
+    const beforeUnloadHandler = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    const navigateHandler = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      const anchor = target?.closest("a[href]");
+      if (!anchor) {
+        return;
+      }
+      const href = anchor.getAttribute("href");
+      if (!href || href.startsWith("#")) {
+        return;
+      }
+      const nextUrl = new URL(href, window.location.href);
+      if (nextUrl.origin !== window.location.origin) {
+        return;
+      }
+      const currentPath = `${window.location.pathname}${window.location.search}`;
+      const nextPath = `${nextUrl.pathname}${nextUrl.search}`;
+      if (currentPath === nextPath) {
+        return;
+      }
+      const okToLeave = window.confirm(
+        "未保存の変更があります。このままページを移動しますか？",
+      );
+      if (!okToLeave) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+
+    window.addEventListener("beforeunload", beforeUnloadHandler);
+    document.addEventListener("click", navigateHandler, true);
+    return () => {
+      window.removeEventListener("beforeunload", beforeUnloadHandler);
+      document.removeEventListener("click", navigateHandler, true);
+    };
+  }, [hasUnsavedChanges]);
 
   const updateActor = async (
     id: string,
@@ -392,6 +507,41 @@ export default function AdminPage() {
     notify({ level: "success", message: msg });
   };
 
+  const saveMenuDisplaySettings = async () => {
+    const pageDisplaySeconds = Number(pageDisplaySecondsDraft);
+    if (
+      !Number.isFinite(pageDisplaySeconds) ||
+      pageDisplaySeconds < 6 ||
+      pageDisplaySeconds > 120
+    ) {
+      notify({
+        level: "error",
+        message: "表示時間は 6〜120 秒で入力してください",
+      });
+      return;
+    }
+
+    try {
+      const data = await apiFetch<{ settings: MenuDisplaySettings }>(
+        "/api/admin/menu-display-settings",
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            pageDisplaySeconds,
+          }),
+        },
+      );
+      setMenuDisplaySettings(data.settings);
+      setPageDisplaySecondsDraft(String(data.settings.pageDisplaySeconds));
+      notify({ level: "success", message: "表示サイクル設定を保存しました" });
+    } catch (e) {
+      notify({
+        level: "error",
+        message: e instanceof Error ? e.message : "設定の保存に失敗しました",
+      });
+    }
+  };
+
   const moveMenu = async (menu: Menu, direction: -1 | 1) => {
     const index = activeMenus.findIndex((row) => row.id === menu.id);
     const target = activeMenus[index + direction];
@@ -425,7 +575,8 @@ export default function AdminPage() {
   const readFileAsDataUrl = (file: File) =>
     new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
-      reader.onerror = () => reject(new Error("画像ファイルを読み込めませんでした"));
+      reader.onerror = () =>
+        reject(new Error("画像ファイルを読み込めませんでした"));
       reader.onload = () => {
         if (typeof reader.result !== "string") {
           reject(new Error("画像データの変換に失敗しました"));
@@ -491,8 +642,7 @@ export default function AdminPage() {
       <DashboardShell
         className="admin-shell"
         eyebrow="ADMIN CONTROL"
-        title="管理ダッシュボード"
-        // subtitle="アカウント、カテゴリ、メニュー、担当設定をまとめて運用"
+        title="管理者パネル"
         fancyHeader
         actions={
           <div className="flex items-center justify-end gap-2">
@@ -515,11 +665,7 @@ export default function AdminPage() {
           <div className="grid gap-3 xl:grid-cols-[1.08fr_0.92fr]">
             <Card>
               <CardHeader className="pb-3">
-                <SectionHeader
-                  title="アカウント"
-                  subtitle="役割・状態・権限操作"
-                  icon={<PersonFilled />}
-                />
+                <SectionHeader title="アカウント" icon={<PersonFilled />} />
               </CardHeader>
               <CardContent className="space-y-3">
                 <Accordion
@@ -699,8 +845,7 @@ export default function AdminPage() {
             <Card>
               <CardHeader className="pb-3">
                 <SectionHeader
-                  title="カテゴリ"
-                  subtitle="名前・並び順"
+                  title="メニューカテゴリ"
                   icon={<ShoppingBagFilled />}
                 />
               </CardHeader>
@@ -843,7 +988,6 @@ export default function AdminPage() {
             <CardHeader className="pb-3">
               <SectionHeader
                 title="メニュー"
-                subtitle="販売状態・編集・担当設定"
                 icon={<DocumentBulletListFilled />}
               />
             </CardHeader>
@@ -1009,7 +1153,7 @@ export default function AdminPage() {
                         </div>
                       </AccordionTrigger>
                       <AccordionContent className="space-y-3">
-                        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                           <InputField
                             label="メニュー名"
                             value={edit.name}
@@ -1064,24 +1208,6 @@ export default function AdminPage() {
                                 ))}
                               </SelectContent>
                             </Select>
-                          </label>
-                          <label className="grid gap-0">
-                            <span className="text-[11px] font-medium leading-none text-muted-foreground">
-                              画像URL / Data URL
-                            </span>
-                            <Input
-                              value={edit.coverImageDataUrl}
-                              placeholder="https://... または data:image/..."
-                              onChange={(e) =>
-                                setMenuEdits((p) => ({
-                                  ...p,
-                                  [menu.id]: {
-                                    ...edit,
-                                    coverImageDataUrl: e.target.value,
-                                  },
-                                }))
-                              }
-                            />
                           </label>
                         </div>
                         <div className="flex flex-wrap items-center gap-2 rounded-md border bg-card/70 p-2">
@@ -1215,6 +1341,35 @@ export default function AdminPage() {
                   );
                 })}
               </Accordion>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm">メニュー表示サイクル</CardTitle>
+              <CardDescription>
+                ページ表示時間 (秒) に応じてスクロール速度を自動調整
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-wrap items-end gap-2">
+              <InputField
+                label="1ページ表示時間 (秒)"
+                value={pageDisplaySecondsDraft}
+                onChange={setPageDisplaySecondsDraft}
+                className="max-w-xs"
+              />
+              <Button
+                type="button"
+                onClick={() => void saveMenuDisplaySettings()}
+                disabled={
+                  menuDisplaySettings == null ||
+                  Number(pageDisplaySecondsDraft) ===
+                    menuDisplaySettings.pageDisplaySeconds
+                }
+              >
+                <Save20Regular />
+                設定を保存
+              </Button>
+              <span className="text-xs text-muted-foreground">6〜120 秒</span>
             </CardContent>
           </Card>
           <Card>

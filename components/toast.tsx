@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { createContext, PropsWithChildren, useCallback, useContext, useMemo, useState } from "react";
+import { Dismiss20Regular } from "@fluentui/react-icons";
 
 export type ToastLevel = "info" | "success" | "warning" | "error";
 
@@ -89,7 +90,7 @@ export function ToastProvider({ children }: PropsWithChildren) {
           <div key={toast.id} className={`toast toast-${toast.level}`}>
             <div>{toast.message}</div>
             <button className="toast-close" onClick={() => dismiss(toast.id)} aria-label={"閉じる"}>
-              x
+              <Dismiss20Regular />
             </button>
           </div>
         ))}

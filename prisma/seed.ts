@@ -8,6 +8,15 @@ function hashSecret(secret: string): string {
 }
 
 async function main() {
+  await prisma.appSetting.upsert({
+    where: { id: 1 },
+    create: {
+      id: 1,
+      menuDisplayPageSeconds: 18,
+    },
+    update: {},
+  });
+
   const beverageCategory = await prisma.menuCategory.upsert({
     where: { id: "7cb786af-3743-406f-ab43-0b59595c78b4" },
     create: {
