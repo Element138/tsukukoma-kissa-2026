@@ -8,7 +8,7 @@ import { minutesFromNow, now } from "@/lib/time";
 export const SESSION_COOKIE = "kissa_session";
 const SESSION_TTL_MINUTES = 10;
 const MENU_DISPLAY_TTL_MINUTES = 60 * 24 * 365 * 10;
-const HEARTBEAT_TOUCH_MS = 30_000;
+const HEARTBEAT_TOUCH_MS = 10_000;
 
 type SessionActor = {
   id: string;

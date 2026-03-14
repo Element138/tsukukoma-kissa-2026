@@ -279,7 +279,12 @@ export default function PosPage() {
                   <div className="menu-tile-footer">
                     <span className="menu-tile-stat">{fmtJpy(menu.priceJpy)}</span>
                     <div className="row" style={{ justifyContent: "flex-end" }}>
-                      <button className="ghost-btn" type="button" onClick={() => changeQty(menu.id, -1)}>
+                      <button
+                        className="ghost-btn"
+                        type="button"
+                        disabled={qty <= 0}
+                        onClick={() => changeQty(menu.id, -1)}
+                      >
                         -
                       </button>
                       <strong>{qty}</strong>
@@ -370,7 +375,12 @@ export default function PosPage() {
                 <div className="age-group-row" key={group.key}>
                   <span>{group.label}</span>
                   <div className="row">
-                    <button className="ghost-btn" type="button" onClick={() => changeAgeGroup(group.key, -1)}>
+                    <button
+                      className="ghost-btn"
+                      type="button"
+                      disabled={(ageGroupCounts[group.key] ?? 0) <= 0}
+                      onClick={() => changeAgeGroup(group.key, -1)}
+                    >
                       -
                     </button>
                     <strong>{ageGroupCounts[group.key]}</strong>

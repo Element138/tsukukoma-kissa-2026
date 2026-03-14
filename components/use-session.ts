@@ -66,7 +66,7 @@ export function useSession(requiredTypes?: Array<SessionPayload["actor"]["actorT
     };
 
     void load();
-    const timer = setInterval(load, 15000);
+    const timer = setInterval(load, 10000);
 
     return () => {
       alive = false;

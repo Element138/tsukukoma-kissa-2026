@@ -1,8 +1,10 @@
 import { PrismaClient, Prisma } from "@prisma/client";
 import { now } from "@/lib/time";
 
+export const OFFLINE_ACTOR_THRESHOLD_MS = 35_000;
+
 export async function findOfflineActors(db: PrismaClient | Prisma.TransactionClient) {
-  const threshold = new Date(Date.now() - 45_000);
+  const threshold = new Date(Date.now() - OFFLINE_ACTOR_THRESHOLD_MS);
 
   const actors = await db.actor.findMany({
     where: {

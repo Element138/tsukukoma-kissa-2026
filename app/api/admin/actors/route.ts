@@ -8,6 +8,7 @@ import { actorCreateSchema, actorUpdateSchema } from "@/lib/validation";
 import { hashSecret } from "@/lib/crypto";
 import { writeAuditLog } from "@/lib/domain/audit";
 import { updateMenusAvailabilityByKitchenCoverage } from "@/lib/domain/kitchen-assignment";
+import { OFFLINE_ACTOR_THRESHOLD_MS } from "@/lib/server/queries";
 import { withRouteTrace, traceError } from "@/lib/server/trace";
 import { AppError } from "@/lib/errors";
 import { broadcastInvalidation, CHANNEL_GROUPS, kitchenChannel } from "@/lib/server/realtime-broadcast";
@@ -18,6 +19,7 @@ const actorPublicSelect = {
   label: true,
   isActive: true,
   online: true,
+  lastSeenAt: true,
   kitchenEnabled: true,
   kitchenDisplayOrder: true
 } as const;
@@ -42,7 +44,13 @@ export async function GET(req: NextRequest) {
       });
       trace("db.findMany.ok", { count: actors.length });
 
-      return ok({ actors });
+      const nowMs = Date.now();
+      const actorsWithFreshOnline = actors.map(({ lastSeenAt, ...row }) => ({
+        ...row,
+        online: Boolean(row.isActive && lastSeenAt && nowMs - lastSeenAt.getTime() < OFFLINE_ACTOR_THRESHOLD_MS)
+      }));
+
+      return ok({ actors: actorsWithFreshOnline });
     } catch (error) {
       traceError(trace, "error", error);
       return fail(error);

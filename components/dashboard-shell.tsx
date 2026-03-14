@@ -22,7 +22,7 @@ export function DashboardShell(props: DashboardShellProps) {
           props.fancyHeader ? "dashboard-hero-fancy" : "dashboard-hero-plain"
         )}
       >
-        <CardContent className="flex items-start justify-between gap-4 p-5">
+        <CardContent className="flex w-full items-start justify-between gap-4 p-5">
           <div className="min-w-0 flex-1">
             {props.eyebrow && <p className="dashboard-eyebrow">{props.eyebrow}</p>}
             <h1 className="dashboard-title">{props.title}</h1>

@@ -237,7 +237,7 @@ main {
   background: var(--surface);
   border: 1px solid rgba(255, 255, 255, 0.8);
   border-radius: var(--radius);
-  box-shadow: var(--shadow-md);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
   backdrop-filter: blur(12px);
   padding: 14px;
 }
@@ -298,6 +298,11 @@ button {
   font: inherit;
 }
 
+label {
+  display: grid;
+  gap: 4px;
+}
+
 input,
 select,
 textarea {
@@ -322,7 +327,7 @@ textarea:focus {
   box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.16);
 }
 
-button:not(.inline-flex):not([data-state]),
+button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb),
 .btn-link {
   border: 1px solid transparent;
   border-radius: 12px;
@@ -343,13 +348,13 @@ button:not(.inline-flex):not([data-state]),
   letter-spacing: 0.01em;
 }
 
-button:not(.inline-flex):not([data-state]):hover,
+button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):hover,
 .btn-link:hover {
   transform: translateY(-1px);
   box-shadow: 0 10px 16px rgba(17, 94, 89, 0.25);
 }
 
-button:not(.inline-flex):not([data-state]):disabled,
+button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):disabled,
 .btn-link[aria-disabled="true"] {
   opacity: 0.46;
   cursor: not-allowed;
@@ -425,6 +430,16 @@ button:not(.inline-flex):not([data-state]):disabled,
 .status-btn.active {
   color: #fff;
   border-color: transparent;
+}
+
+.status-btn {
+  background: #fff;
+  border-color: #d6deea;
+  color: #344054;
+}
+
+.status-btn:hover {
+  background: #f3f6fb;
 }
 
 .status-btn.status-available.active {
@@ -818,6 +833,27 @@ button:not(.inline-flex):not([data-state]):disabled,
 .table {
   width: 100%;
   border-collapse: collapse;
+}
+
+.table-scroll {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.audit-table {
+  min-width: 980px;
+}
+
+.audit-wrap-cell {
+  max-width: 440px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.audit-entity-cell {
+  white-space: nowrap;
 }
 
 .table th,

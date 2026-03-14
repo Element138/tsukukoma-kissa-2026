@@ -63,6 +63,10 @@ export async function GET(req: NextRequest) {
     });
 
     const actorEntityIds = [...new Set(logs.filter((log) => log.entityType === "actor").map((log) => log.entityId))];
+    const menuEntityIds = [...new Set(logs.filter((log) => log.entityType === "menu").map((log) => log.entityId))];
+    const categoryEntityIds = [...new Set(logs.filter((log) => log.entityType === "menu_category").map((log) => log.entityId))];
+    const orderEntityIds = [...new Set(logs.filter((log) => log.entityType === "order").map((log) => log.entityId))];
+
     const actorEntities =
       actorEntityIds.length === 0
         ? []
@@ -77,13 +81,78 @@ export async function GET(req: NextRequest) {
               label: true
             }
           });
+
+    const menuEntities =
+      menuEntityIds.length === 0
+        ? []
+        : await prisma.menu.findMany({
+            where: {
+              id: {
+                in: menuEntityIds
+              }
+            },
+            select: {
+              id: true,
+              name: true
+            }
+          });
+
+    const categoryEntities =
+      categoryEntityIds.length === 0
+        ? []
+        : await prisma.menuCategory.findMany({
+            where: {
+              id: {
+                in: categoryEntityIds
+              }
+            },
+            select: {
+              id: true,
+              name: true
+            }
+          });
+
+    const orderEntities =
+      orderEntityIds.length === 0
+        ? []
+        : await prisma.order.findMany({
+            where: {
+              id: {
+                in: orderEntityIds
+              }
+            },
+            select: {
+              id: true,
+              orderNo: true
+            }
+          });
+
     const actorEntityMap = new Map(actorEntities.map((actor) => [actor.id, actor.label]));
+    const menuEntityMap = new Map(menuEntities.map((menu) => [menu.id, menu.name]));
+    const categoryEntityMap = new Map(categoryEntities.map((category) => [category.id, category.name]));
+    const orderEntityMap = new Map(orderEntities.map((order) => [order.id, `#${order.orderNo}`]));
+
+    const entityLabelFor = (entityType: string, entityId: string) => {
+      if (entityType === "actor") {
+        return actorEntityMap.get(entityId) ?? null;
+      }
+      if (entityType === "menu") {
+        return menuEntityMap.get(entityId) ?? null;
+      }
+      if (entityType === "menu_category") {
+        return categoryEntityMap.get(entityId) ?? null;
+      }
+      if (entityType === "order") {
+        return orderEntityMap.get(entityId) ?? null;
+      }
+      return null;
+    };
 
     return ok({
       logs: logs.map((log) => ({
         ...log,
         actorLabel: log.actor?.label ?? null,
-        entityLabel: log.entityType === "actor" ? actorEntityMap.get(log.entityId) ?? null : null
+        entityLabel: entityLabelFor(log.entityType, log.entityId)
       }))
     });
   } catch (error) {
