@@ -15,6 +15,10 @@ import { TerminalBanner } from "@/components/terminal-banner";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { LoadingScreen } from "@/components/loading-screen";
 import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
+import {
+  formatAllergenNotice,
+  type SpecifiedAllergenKey,
+} from "@/lib/allergens";
 import { AVAILABILITY_LABEL, labelOf } from "@/lib/labels";
 import { useToast } from "@/components/toast";
 
@@ -28,6 +32,9 @@ type DisplayCategory = {
     availability: "AVAILABLE" | "PAUSED" | "SOLD_OUT";
     leadTimeSecondsP75_30m: number | null;
     coverImageDataUrl: string | null;
+    allergens: SpecifiedAllergenKey[];
+    customBadgeText: string | null;
+    customBadgeColor: string | null;
   }>;
 };
 
@@ -94,6 +101,17 @@ function mergeMenusIntoCurrentLayout(
       menus: freshCategory.menus,
     };
   });
+}
+
+function splitLongKatakanaChunk(chunk: string) {
+  const tokens: string[] = [];
+  let cursor = 0;
+  while (cursor < chunk.length) {
+    const size = cursor === 0 ? 3 : 4;
+    tokens.push(chunk.slice(cursor, cursor + size));
+    cursor += size;
+  }
+  return tokens;
 }
 
 export default function MenuDisplayPage() {
@@ -196,8 +214,7 @@ export default function MenuDisplayPage() {
     } catch (e) {
       notify({
         level: "error",
-        message:
-          e instanceof Error ? e.message : "メニュー表示の取得に失敗しました",
+        message: e instanceof Error ? e.message : "メニュー表示の更新に失敗しました",
       });
     } finally {
       reloadInFlightRef.current = false;
@@ -255,30 +272,32 @@ export default function MenuDisplayPage() {
         }
 
         track.style.transform = "translateY(0px)";
-        const overflowPx = Math.max(0, track.scrollHeight - viewport.clientHeight);
+
+        const viewportStyle = window.getComputedStyle(viewport);
+        const viewportPaddingY =
+          (Number.parseFloat(viewportStyle.paddingTop) || 0) +
+          (Number.parseFloat(viewportStyle.paddingBottom) || 0);
+        const visibleHeight = Math.max(
+          0,
+          viewport.clientHeight - viewportPaddingY,
+        );
+        const overflowPx = Math.max(0, track.scrollHeight - visibleHeight + 2);
         if (overflowPx <= 1) {
           continue;
         }
 
-        const waitMs = Math.floor(pageDisplayMs * 0.2);
-        const moveEachMs = Math.max(1, Math.floor((pageDisplayMs - waitMs * 2) / 2));
         const animation = track.animate(
           [
             { transform: "translateY(0px)", offset: 0 },
-            { transform: `translateY(${-overflowPx}px)`, offset: moveEachMs / pageDisplayMs },
-            {
-              transform: `translateY(${-overflowPx}px)`,
-              offset: (moveEachMs + waitMs) / pageDisplayMs,
-            },
-            {
-              transform: "translateY(0px)",
-              offset: (moveEachMs + waitMs + moveEachMs) / pageDisplayMs,
-            },
+            { transform: "translateY(0px)", offset: 0.12 },
+            { transform: `translateY(${-overflowPx}px)`, offset: 0.56 },
+            { transform: `translateY(${-overflowPx}px)`, offset: 0.78 },
+            { transform: "translateY(0px)", offset: 0.96 },
             { transform: "translateY(0px)", offset: 1 },
           ],
           {
             duration: pageDisplayMs,
-            easing: "linear",
+            easing: "cubic-bezier(0.42, 0, 0.24, 1)",
             iterations: 1,
             fill: "both",
           },
@@ -326,9 +345,7 @@ export default function MenuDisplayPage() {
         };
         if (shouldFadeBetweenPages) {
           setIsPageFading(true);
-          fadeTimer = window.setTimeout(() => {
-            goNextPage();
-          }, PAGE_FADE_MS);
+          fadeTimer = window.setTimeout(goNextPage, PAGE_FADE_MS);
           return;
         }
         goNextPage();
@@ -338,6 +355,7 @@ export default function MenuDisplayPage() {
       if (shouldFadeBetweenPages) {
         setIsPageFading(true);
       }
+
       const onWrapped = () => {
         applyCycleDurationForNextPage();
         const committed = commitPendingCategoriesIfNeeded();
@@ -385,7 +403,7 @@ export default function MenuDisplayPage() {
           level: "info",
           message: next
             ? "提供目安のデバッグ表示を有効化しました"
-            : "提供目安のデバッグ表示を解除しました",
+            : "提供目安のデバッグ表示を無効化しました",
         });
         return next;
       });
@@ -428,8 +446,29 @@ export default function MenuDisplayPage() {
   };
 
   const columnCount = Math.min(3, Math.max(1, activePage.length));
+
   const renderBudouX = (text: string) => {
-    const chunks = parser.parse(text);
+    const chunks = parser
+      .parse(text)
+      .flatMap((chunk) => {
+        const regex = /[ァ-ヶー]{6,}/g;
+        const parts: string[] = [];
+        let cursor = 0;
+        for (const match of chunk.matchAll(regex)) {
+          const start = match.index ?? 0;
+          if (start > cursor) {
+            parts.push(chunk.slice(cursor, start));
+          }
+          parts.push(...splitLongKatakanaChunk(match[0]));
+          cursor = start + match[0].length;
+        }
+        if (cursor < chunk.length) {
+          parts.push(chunk.slice(cursor));
+        }
+        return parts.length > 0 ? parts : [chunk];
+      })
+      .filter((chunk) => chunk.length > 0);
+
     return chunks.map((chunk, index) => (
       <Fragment key={index}>
         {chunk}
@@ -448,6 +487,7 @@ export default function MenuDisplayPage() {
           offlineActors={session.offlineActors}
         />
       )}
+
       <DashboardShell
         eyebrow="MENU"
         title="メニュー"
@@ -498,13 +538,39 @@ export default function MenuDisplayPage() {
                       menu.leadTimeSecondsP75_30m,
                       forceShowEtaDebug,
                     );
+                    const allergenNotice = formatAllergenNotice(menu.allergens);
+                    const hasAllergenWarning = menu.allergens.length > 0;
+                    const badgeText = menu.customBadgeText?.trim() ?? "";
+                    const badgeColor = menu.customBadgeColor?.trim() || "#d97706";
+
                     return (
                       <article
                         key={menu.id}
                         className={`menu-display-row ${hasImage ? "has-image" : "no-image"} ${unavailable ? "unavailable" : ""}`}
+                        style={
+                          badgeText
+                            ? ({
+                                borderColor: badgeColor,
+                                borderWidth: "2px",
+                              } as CSSProperties)
+                            : undefined
+                        }
                       >
                         <div className="menu-display-row-text">
+                          {badgeText ? (
+                            <span
+                              className="menu-display-row-badge"
+                              style={{ backgroundColor: badgeColor }}
+                            >
+                              {badgeText}
+                            </span>
+                          ) : null}
                           <strong>{renderBudouX(menu.name)}</strong>
+                          <div
+                            className={`menu-display-row-allergen ${hasAllergenWarning ? "has-allergen" : "none"}`}
+                          >
+                            {allergenNotice}
+                          </div>
                           {unavailable ? (
                             <div className="menu-display-row-status">
                               {labelOf(AVAILABILITY_LABEL, menu.availability)}

@@ -12,130 +12,101 @@ function csvEscape(v: unknown): string {
   return s;
 }
 
+function normalizeMenuLabel(label: string | null | undefined) {
+  const trimmed = (label ?? "").trim();
+  return trimmed.length > 0 ? trimmed : "不明メニュー";
+}
+
 export async function GET(req: NextRequest) {
   try {
-    await requireSession(req, { actorTypes: ["POS", "KITCHEN", "WAITER", "ADMIN"] });
-    const format = req.nextUrl.searchParams.get("format") === "item" ? "item" : "order";
-
-    const orders = await prisma.order.findMany({
-      include: {
-        items: {
-          include: {
-            menu: {
-              select: {
-                categoryId: true
-              }
-            }
-          }
-        }
-      },
-      take: 1000,
-      orderBy: {
-        createdAt: "desc"
-      }
+    await requireSession(req, {
+      actorTypes: ["POS", "KITCHEN", "WAITER", "ADMIN"],
     });
+
+    const [orders, menus] = await Promise.all([
+      prisma.order.findMany({
+        include: {
+          items: {
+            select: {
+              itemNameSnapshot: true,
+            },
+          },
+        },
+        take: 1000,
+        orderBy: {
+          createdAt: "desc",
+        },
+      }),
+      prisma.menu.findMany({
+        select: {
+          name: true,
+          displayOrder: true,
+        },
+        orderBy: [{ displayOrder: "asc" }, { name: "asc" }],
+      }),
+    ]);
+
+    const menuLabelSet = new Set<string>();
+    for (const menu of menus) {
+      menuLabelSet.add(normalizeMenuLabel(menu.name));
+    }
+    for (const order of orders) {
+      for (const item of order.items) {
+        menuLabelSet.add(normalizeMenuLabel(item.itemNameSnapshot));
+      }
+    }
+    const menuColumns = [...menuLabelSet].sort((a, b) => a.localeCompare(b, "ja"));
 
     const ageColumns = AGE_GROUPS.map((group) => group.csvColumn);
     const lines: string[] = [];
 
-    if (format === "order") {
+    lines.push(
+      [
+        "order_no",
+        "created_at",
+        "confirmed_at",
+        "fulfillment_type",
+        "table_no",
+        "party_size",
+        "payment_method",
+        "payment_status",
+        "order_status",
+        "total_price_jpy",
+        "item_count",
+        ...ageColumns,
+        "special_note",
+        ...menuColumns,
+      ].join(","),
+    );
+
+    for (const order of orders) {
+      const ageCounts = parseAgeRangesToCounts(order.ageRangesJson);
+      const menuCounts = new Map<string, number>();
+      for (const item of order.items) {
+        const label = normalizeMenuLabel(item.itemNameSnapshot);
+        menuCounts.set(label, (menuCounts.get(label) ?? 0) + 1);
+      }
+
       lines.push(
         [
-          "order_no",
-          "created_at",
-          "confirmed_at",
-          "fulfillment_type",
-          "table_no",
-          "party_size",
-          "payment_method",
-          "payment_status",
-          "order_status",
-          "total_price_jpy",
-          "item_count",
-          ...ageColumns,
-          "special_note",
-        ].join(","),
+          order.orderNo,
+          order.createdAt.toISOString(),
+          order.confirmedAt?.toISOString() ?? "",
+          order.fulfillmentType,
+          order.tableNo ?? "",
+          order.partySize,
+          order.paymentMethod,
+          order.paymentStatus,
+          order.orderStatus,
+          order.totalPriceJpy,
+          order.items.length,
+          ...AGE_GROUPS.map((group) => ageCounts[group.key]),
+          order.specialNote ?? "",
+          ...menuColumns.map((menuLabel) => menuCounts.get(menuLabel) ?? 0),
+        ]
+          .map(csvEscape)
+          .join(","),
       );
-
-      for (const order of orders) {
-        const ageCounts = parseAgeRangesToCounts(order.ageRangesJson);
-        lines.push(
-          [
-            order.orderNo,
-            order.createdAt.toISOString(),
-            order.confirmedAt?.toISOString() ?? "",
-            order.fulfillmentType,
-            order.tableNo ?? "",
-            order.partySize,
-            order.paymentMethod,
-            order.paymentStatus,
-            order.orderStatus,
-            order.totalPriceJpy,
-            order.items.length,
-            ...AGE_GROUPS.map((group) => ageCounts[group.key]),
-            order.specialNote ?? "",
-          ]
-            .map(csvEscape)
-            .join(","),
-        );
-      }
-    } else {
-      lines.push(
-        [
-          "order_no",
-          "created_at",
-          "confirmed_at",
-          "fulfillment_type",
-          "table_no",
-          "party_size",
-          "payment_method",
-          "payment_status",
-          "order_status",
-          ...ageColumns,
-          "order_special_note",
-          "item_id",
-          "menu_id",
-          "menu_category_id",
-          "item_name",
-          "item_status",
-          "unit_price_jpy",
-          "kitchen_id",
-          "ready_at",
-          "served_at",
-        ].join(","),
-      );
-
-      for (const order of orders) {
-        const ageCounts = parseAgeRangesToCounts(order.ageRangesJson);
-        for (const item of order.items) {
-          lines.push(
-            [
-              order.orderNo,
-              order.createdAt.toISOString(),
-              order.confirmedAt?.toISOString() ?? "",
-              order.fulfillmentType,
-              order.tableNo ?? "",
-              order.partySize,
-              order.paymentMethod,
-              order.paymentStatus,
-              order.orderStatus,
-              ...AGE_GROUPS.map((group) => ageCounts[group.key]),
-              order.specialNote ?? "",
-              item.id,
-              item.menuId,
-              item.menu.categoryId,
-              item.itemNameSnapshot,
-              item.status,
-              item.unitPriceJpy,
-              item.kitchenId ?? "",
-              item.readyAt?.toISOString() ?? "",
-              item.servedAt?.toISOString() ?? "",
-            ]
-              .map(csvEscape)
-              .join(","),
-          );
-        }
-      }
     }
 
     const body = `\uFEFF${lines.join("\n")}`;
@@ -143,12 +114,10 @@ export async function GET(req: NextRequest) {
       status: 200,
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="order_book_${format}_wise_${Date.now()}.csv"`,
+        "Content-Disposition": `attachment; filename="order_book_order_wise_${Date.now()}.csv"`,
       },
     });
   } catch (error) {
     return fail(error);
   }
 }
-
-

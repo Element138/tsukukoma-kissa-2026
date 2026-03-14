@@ -286,16 +286,10 @@ export default function OrderBookPage() {
                 更新
               </button>
               <a
-                href="/api/order-book/export?format=order"
+                href="/api/order-book/export"
                 className="btn-link ghost-btn"
               >
                 CSV出力 (注文別)
-              </a>
-              <a
-                href="/api/order-book/export?format=item"
-                className="btn-link ghost-btn"
-              >
-                CSV出力 (商品別)
               </a>
             </div>
           </div>

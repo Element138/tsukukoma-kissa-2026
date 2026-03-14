@@ -34,6 +34,9 @@ function isPosAvailabilityOnlyPatch(body: ReturnType<typeof menuUpdateSchema.par
     "isActive",
     "showLeadTime",
     "coverImageDataUrl",
+    "allergensJson",
+    "customBadgeText",
+    "customBadgeColor",
   ];
 
   return editableKeys.every((key) => body[key] === undefined) && body.availability !== undefined;
@@ -113,6 +116,9 @@ export async function POST(req: NextRequest) {
             categoryId: body.categoryId,
             showLeadTime: body.showLeadTime ?? true,
             coverImageDataUrl: body.coverImageDataUrl ?? null,
+            allergensJson: body.allergensJson ?? [],
+            customBadgeText: body.customBadgeText ?? null,
+            customBadgeColor: body.customBadgeColor ?? null,
           }
         });
 
@@ -207,6 +213,9 @@ export async function PATCH(req: NextRequest) {
             isActive: body.isActive,
             showLeadTime: body.showLeadTime,
             coverImageDataUrl: body.coverImageDataUrl,
+            allergensJson: body.allergensJson,
+            customBadgeText: body.customBadgeText,
+            customBadgeColor: body.customBadgeColor,
           }
         });
 

@@ -74,16 +74,27 @@ function queueTone(seconds: number) {
   return "safe";
 }
 
-const AVAILABILITY_OPTIONS: Array<"AVAILABLE" | "PAUSED" | "SOLD_OUT"> = ["AVAILABLE", "PAUSED", "SOLD_OUT"];
-const STATUS_BUTTON_ACTIVE_TONE: Record<"AVAILABLE" | "PAUSED" | "SOLD_OUT", string> = {
+const AVAILABILITY_OPTIONS: Array<"AVAILABLE" | "PAUSED" | "SOLD_OUT"> = [
+  "AVAILABLE",
+  "PAUSED",
+  "SOLD_OUT",
+];
+const STATUS_BUTTON_ACTIVE_TONE: Record<
+  "AVAILABLE" | "PAUSED" | "SOLD_OUT",
+  string
+> = {
   AVAILABLE:
     "border-emerald-700 bg-emerald-600 text-white hover:bg-emerald-700",
   PAUSED: "border-amber-700 bg-amber-500 text-white hover:bg-amber-600",
-  SOLD_OUT: "border-rose-700 bg-rose-600 text-white hover:bg-rose-700"
+  SOLD_OUT: "border-rose-700 bg-rose-600 text-white hover:bg-rose-700",
 };
 
 function SectionTitle({ children }: { children: ReactNode }) {
-  return <h2 className="section-title text-base font-semibold tracking-tight">{children}</h2>;
+  return (
+    <h2 className="section-title text-base font-semibold tracking-tight">
+      {children}
+    </h2>
+  );
 }
 
 export default function KitchenPage() {
@@ -94,8 +105,12 @@ export default function KitchenPage() {
   const [myKitchen, setMyKitchen] = useState<KitchenActor | null>(null);
   const [busy, setBusy] = useState(false);
   const [menus, setMenus] = useState<AdminMenuPayload["menus"]>([]);
-  const [assignments, setAssignments] = useState<AssignmentPayload["assignments"]>([]);
-  const [availabilityBusyMenuId, setAvailabilityBusyMenuId] = useState<string | null>(null);
+  const [assignments, setAssignments] = useState<
+    AssignmentPayload["assignments"]
+  >([]);
+  const [availabilityBusyMenuId, setAvailabilityBusyMenuId] = useState<
+    string | null
+  >(null);
 
   const [pickerMenuId, setPickerMenuId] = useState<string | null>(null);
   const [pickerQuantity, setPickerQuantity] = useState<number>(1);
@@ -112,20 +127,29 @@ export default function KitchenPage() {
     reloadInFlightRef.current = true;
 
     try {
-      const [queue, actorPayload, menuPayload, assignmentPayload] = await Promise.all([
-        apiFetch<{ queues: QueueMenu[] }>("/api/kitchen/queue"),
-        apiFetch<{ actors: KitchenActor[] }>("/api/admin/actors"),
-        apiFetch<AdminMenuPayload>("/api/admin/menus"),
-        apiFetch<AssignmentPayload>("/api/admin/assignments")
-      ]);
+      const [queue, actorPayload, menuPayload, assignmentPayload] =
+        await Promise.all([
+          apiFetch<{ queues: QueueMenu[] }>("/api/kitchen/queue"),
+          apiFetch<{ actors: KitchenActor[] }>("/api/admin/actors"),
+          apiFetch<AdminMenuPayload>("/api/admin/menus"),
+          apiFetch<AssignmentPayload>("/api/admin/assignments"),
+        ]);
 
       setQueues(queue.queues);
       setQueueFetchedAt(Date.now());
-      setMyKitchen(actorPayload.actors.find((actor) => actor.id === session.actor.actorId) ?? null);
+      setMyKitchen(
+        actorPayload.actors.find(
+          (actor) => actor.id === session.actor.actorId,
+        ) ?? null,
+      );
       setMenus(menuPayload.menus.filter((menu) => menu.isActive));
       setAssignments(assignmentPayload.assignments);
     } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "キッチンデータの更新に失敗しました" });
+      notify({
+        level: "error",
+        message:
+          e instanceof Error ? e.message : "キッチンデータの更新に失敗しました",
+      });
     } finally {
       reloadInFlightRef.current = false;
     }
@@ -145,13 +169,15 @@ export default function KitchenPage() {
 
   useRealtimeSubscription({
     enabled: Boolean(session),
-    channels: session ? ["orders", "menus", "actors", `kitchen:${session.actor.actorId}`] : ["orders"],
+    channels: session
+      ? ["orders", "menus", "actors", `kitchen:${session.actor.actorId}`]
+      : ["orders"],
     onEvent: () => {
       void reload();
     },
     onResync: () => {
       void reload();
-    }
+    },
   });
 
   const myMenuIds = useMemo(() => {
@@ -159,31 +185,48 @@ export default function KitchenPage() {
       return new Set<string>();
     }
 
-    return new Set(assignments.filter((row) => row.kitchenId === session.actor.actorId && row.enabled).map((row) => row.menuId));
+    return new Set(
+      assignments
+        .filter((row) => row.kitchenId === session.actor.actorId && row.enabled)
+        .map((row) => row.menuId),
+    );
   }, [assignments, session]);
 
   const controllableMenus = useMemo(() => {
-    return menus.filter((menu) => myMenuIds.has(menu.id)).sort((a, b) => a.name.localeCompare(b.name, "ja"));
+    return menus
+      .filter((menu) => myMenuIds.has(menu.id))
+      .sort((a, b) => a.name.localeCompare(b.name, "ja"));
   }, [menus, myMenuIds]);
 
   const submitReady = async (menuId: string, quantity: number) => {
     setBusy(true);
     try {
-      const result = await apiFetch<{ markedReadyCount: number; affectedOrderCount: number }>("/api/kitchen/menus/ready", {
+      const result = await apiFetch<{
+        markedReadyCount: number;
+        affectedOrderCount: number;
+      }>("/api/kitchen/menus/ready", {
         method: "POST",
-        body: JSON.stringify({ menuId, quantity, idempotencyKey: newMutationKey() })
+        body: JSON.stringify({
+          menuId,
+          quantity,
+          idempotencyKey: newMutationKey(),
+        }),
       });
 
       notify({
         level: "success",
-        message: `${result.markedReadyCount} 件を提供可能に更新しました（対象注文 ${result.affectedOrderCount} 件）`
+        message: `${result.markedReadyCount} 件を提供可能に更新しました（対象注文 ${result.affectedOrderCount} 件）`,
       });
 
       setPickerMenuId(null);
       setPickerQuantity(1);
       await reload();
     } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "提供可能への更新に失敗しました" });
+      notify({
+        level: "error",
+        message:
+          e instanceof Error ? e.message : "提供可能への更新に失敗しました",
+      });
     } finally {
       setBusy(false);
     }
@@ -200,14 +243,23 @@ export default function KitchenPage() {
 
   const undo = async () => {
     try {
-      const data = await apiFetch<{ result: { revertedItemCount: number } }>("/api/undo", {
-        method: "POST",
-        body: JSON.stringify({ confirm: true })
+      const data = await apiFetch<{ result: { revertedItemCount: number } }>(
+        "/api/undo",
+        {
+          method: "POST",
+          body: JSON.stringify({ confirm: true }),
+        },
+      );
+      notify({
+        level: "success",
+        message: `取り消しました（${data.result.revertedItemCount} 件）`,
       });
-      notify({ level: "success", message: `取り消しました（${data.result.revertedItemCount} 件）` });
       await reload();
     } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "取り消しに失敗しました" });
+      notify({
+        level: "error",
+        message: e instanceof Error ? e.message : "取り消しに失敗しました",
+      });
     }
   };
 
@@ -219,23 +271,43 @@ export default function KitchenPage() {
     try {
       await apiFetch("/api/kitchen/toggle", {
         method: "POST",
-        body: JSON.stringify({ kitchenId: session.actor.actorId, kitchenEnabled: nextEnabled })
+        body: JSON.stringify({
+          kitchenId: session.actor.actorId,
+          kitchenEnabled: nextEnabled,
+        }),
       });
-      notify({ level: "success", message: nextEnabled ? "キッチン稼働に変更しました" : "キッチン停止に変更しました" });
+      notify({
+        level: "success",
+        message: nextEnabled
+          ? "オーダーを受け付けるようにしました"
+          : "オーダーを受け付けないようにしました",
+      });
       await reload();
     } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "キッチン状態の更新に失敗しました" });
+      notify({
+        level: "error",
+        message:
+          e instanceof Error
+            ? e.message
+            : "オーダー受付状態の更新に失敗しました",
+      });
     }
   };
 
-  const changeAvailability = async (menuId: string, availability: "AVAILABLE" | "PAUSED" | "SOLD_OUT") => {
+  const changeAvailability = async (
+    menuId: string,
+    availability: "AVAILABLE" | "PAUSED" | "SOLD_OUT",
+  ) => {
     const menu = controllableMenus.find((row) => row.id === menuId);
     if (!menu) {
       return;
     }
 
     if (availability === "AVAILABLE" && !menu.hasActiveKitchenCoverage) {
-      notify({ level: "error", message: "現在対応できるキッチンがないため、販売中にできません" });
+      notify({
+        level: "error",
+        message: "現在対応できるキッチンがないため、販売中にできません",
+      });
       return;
     }
 
@@ -244,12 +316,19 @@ export default function KitchenPage() {
     try {
       await apiFetch("/api/kitchen/menu-availability", {
         method: "POST",
-        body: JSON.stringify({ menuId, availability })
+        body: JSON.stringify({ menuId, availability }),
       });
-      notify({ level: "success", message: `${menu.name} を ${labelOf(AVAILABILITY_LABEL, availability)} に変更しました` });
+      notify({
+        level: "success",
+        message: `${menu.name} を ${labelOf(AVAILABILITY_LABEL, availability)} に変更しました`,
+      });
       await reload();
     } catch (e) {
-      notify({ level: "error", message: e instanceof Error ? e.message : "メニュー状態の更新に失敗しました" });
+      notify({
+        level: "error",
+        message:
+          e instanceof Error ? e.message : "メニュー状態の更新に失敗しました",
+      });
     } finally {
       setAvailabilityBusyMenuId(null);
     }
@@ -263,7 +342,12 @@ export default function KitchenPage() {
 
   return (
     <>
-      <TerminalBanner actorId={session.actor.actorId} actorType={session.actor.actorType} actorLabel={session.actor.label} offlineActors={session.offlineActors} />
+      <TerminalBanner
+        actorId={session.actor.actorId}
+        actorType={session.actor.actorType}
+        actorLabel={session.actor.label}
+        offlineActors={session.offlineActors}
+      />
       <DashboardShell
         eyebrow="LIVE TERMINAL"
         title={`${labelOf(ACTOR_TYPE_LABEL, session.actor.actorType)} · ${session.actor.label}`}
@@ -271,126 +355,165 @@ export default function KitchenPage() {
         hideHeader
       >
         <div className="grid">
-        <Card className="card">
-          <div className="row between wrap" style={{ marginBottom: 10 }}>
-            <SectionTitle>キッチンキュー</SectionTitle>
-            <div className="row wrap">
-              <button type="button" className="ghost-btn" onClick={undo}>
-                取り消し
-              </button>
-              <label className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs">
-                <span className="text-muted-foreground">キッチン稼働</span>
-                <Switch checked={Boolean(myKitchen?.kitchenEnabled)} onCheckedChange={(checked) => void setKitchenEnabled(checked)} />
-              </label>
-              <Link href="/order-book" className="btn-link ghost-btn">
-                オーダーブック
-              </Link>
-            </div>
-          </div>
-
-          <div className="queue-grid">
-            {queues.length === 0 && <div className="muted">現在キューはありません</div>}
-            {queues.map((queue) => {
-              const currentElapsed = queue.oldestQueuedSeconds + elapsedSinceFetchSec;
-              const tone = queueTone(currentElapsed);
-              const pickerOpen = pickerMenuId === queue.menuId;
-
-              return (
-                <div key={queue.menuId} className={`queue-card ${tone}`}>
-                  <div className="queue-menu-name">{queue.menuName}</div>
-
-                  {pickerOpen ? (
-                    <div className="queue-picker">
-                      <div className="stepper">
-                        <button
-                          type="button"
-                          className="ghost-btn"
-                          onClick={() => setPickerQuantity((prev) => Math.max(1, prev - 1))}
-                        >
-                          -
-                        </button>
-                        <div className="stepper-count">{pickerQuantity}</div>
-                        <button
-                          type="button"
-                          className="ghost-btn"
-                          onClick={() => setPickerQuantity((prev) => Math.min(queue.queuedCount, prev + 1))}
-                        >
-                          +
-                        </button>
-                      </div>
-                      <div className="row wrap">
-                        <button type="button" disabled={busy} onClick={() => submitReady(queue.menuId, pickerQuantity)}>
-                          提供可能にする
-                        </button>
-                        <button type="button" className="ghost-btn" disabled={busy} onClick={() => setPickerMenuId(null)}>
-                          閉じる
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="queue-count">{queue.queuedCount}</div>
-                      <div className="muted">最古: {formatMss(currentElapsed)}</div>
-                      <button type="button" disabled={busy} onClick={() => readyFromCard(queue)}>
-                        提供可能へ更新
-                      </button>
-                    </>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-
-        <Card className="card">
-          <SectionTitle>担当メニューの提供状態</SectionTitle>
-          <div className="list">
-            {controllableMenus.length === 0 && <div className="muted">担当メニューがありません</div>}
-            {controllableMenus.map((menu) => (
-              <div key={menu.id} className="list-item">
-                <div className="row between wrap">
-                  <strong>{menu.name}</strong>
-                </div>
-                <div className="menu-status-grid" style={{ marginTop: 8 }}>
-                  {AVAILABILITY_OPTIONS.map((status) => {
-                    const noCoverageForAvailable = status === "AVAILABLE" && !menu.hasActiveKitchenCoverage;
-                    const disabled = availabilityBusyMenuId === menu.id;
-                    const active = menu.availability === status;
-
-                    return (
-                      <Button
-                        key={status}
-                        type="button"
-                        variant={active ? "default" : "outline"}
-                        disabled={disabled}
-                        className={cn(
-                          "h-8 px-2 text-[11px] font-semibold leading-none",
-                          noCoverageForAvailable && !active && "opacity-50",
-                          active
-                            ? STATUS_BUTTON_ACTIVE_TONE[status]
-                            : "bg-background text-foreground hover:bg-muted"
-                        )}
-                        onClick={() => {
-                          if (noCoverageForAvailable) {
-                            notify({ level: "error", message: "現在対応できるキッチンがないため、販売中にできません" });
-                            return;
-                          }
-                          void changeAvailability(menu.id, status);
-                        }}
-                      >
-                        {labelOf(AVAILABILITY_LABEL, status)}
-                      </Button>
-                    );
-                  })}
-                </div>
+          <Card className="card">
+            <div className="row between wrap" style={{ marginBottom: 10 }}>
+              <SectionTitle>キッチンキュー</SectionTitle>
+              <div className="row wrap">
+                <button type="button" className="ghost-btn" onClick={undo}>
+                  取り消し
+                </button>
+                <label className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs">
+                  <span className="text-muted-foreground">
+                    オーダーを受け付ける
+                  </span>
+                  <Switch
+                    checked={Boolean(myKitchen?.kitchenEnabled)}
+                    onCheckedChange={(checked) =>
+                      void setKitchenEnabled(checked)
+                    }
+                  />
+                </label>
+                <Link href="/order-book" className="btn-link ghost-btn">
+                  オーダーブック
+                </Link>
               </div>
-            ))}
-          </div>
-        </Card>
+            </div>
+
+            <div className="queue-grid">
+              {queues.length === 0 && (
+                <div className="muted">現在キューはありません</div>
+              )}
+              {queues.map((queue) => {
+                const currentElapsed =
+                  queue.oldestQueuedSeconds + elapsedSinceFetchSec;
+                const tone = queueTone(currentElapsed);
+                const pickerOpen = pickerMenuId === queue.menuId;
+
+                return (
+                  <div key={queue.menuId} className={`queue-card ${tone}`}>
+                    <div className="queue-menu-name">{queue.menuName}</div>
+
+                    {pickerOpen ? (
+                      <div className="queue-picker">
+                        <div className="stepper">
+                          <button
+                            type="button"
+                            className="ghost-btn"
+                            onClick={() =>
+                              setPickerQuantity((prev) => Math.max(1, prev - 1))
+                            }
+                          >
+                            -
+                          </button>
+                          <div className="stepper-count">{pickerQuantity}</div>
+                          <button
+                            type="button"
+                            className="ghost-btn"
+                            onClick={() =>
+                              setPickerQuantity((prev) =>
+                                Math.min(queue.queuedCount, prev + 1),
+                              )
+                            }
+                          >
+                            +
+                          </button>
+                        </div>
+                        <div className="row wrap">
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() =>
+                              submitReady(queue.menuId, pickerQuantity)
+                            }
+                          >
+                            提供可能にする
+                          </button>
+                          <button
+                            type="button"
+                            className="ghost-btn"
+                            disabled={busy}
+                            onClick={() => setPickerMenuId(null)}
+                          >
+                            閉じる
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="queue-count">{queue.queuedCount}</div>
+                        <div className="muted">
+                          最古: {formatMss(currentElapsed)}
+                        </div>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => readyFromCard(queue)}
+                        >
+                          提供可能へ更新
+                        </button>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+
+          <Card className="card">
+            <SectionTitle>担当メニューの提供状態</SectionTitle>
+            <div className="list">
+              {controllableMenus.length === 0 && (
+                <div className="muted">担当メニューがありません</div>
+              )}
+              {controllableMenus.map((menu) => (
+                <div key={menu.id} className="list-item">
+                  <div className="row between wrap">
+                    <strong>{menu.name}</strong>
+                  </div>
+                  <div className="menu-status-grid" style={{ marginTop: 8 }}>
+                    {AVAILABILITY_OPTIONS.map((status) => {
+                      const noCoverageForAvailable =
+                        status === "AVAILABLE" &&
+                        !menu.hasActiveKitchenCoverage;
+                      const disabled = availabilityBusyMenuId === menu.id;
+                      const active = menu.availability === status;
+
+                      return (
+                        <Button
+                          key={status}
+                          type="button"
+                          variant={active ? "default" : "outline"}
+                          disabled={disabled}
+                          className={cn(
+                            "h-8 px-2 text-[11px] font-semibold leading-none",
+                            noCoverageForAvailable && !active && "opacity-50",
+                            active
+                              ? STATUS_BUTTON_ACTIVE_TONE[status]
+                              : "bg-background text-foreground hover:bg-muted",
+                          )}
+                          onClick={() => {
+                            if (noCoverageForAvailable) {
+                              notify({
+                                level: "error",
+                                message:
+                                  "現在対応できるキッチンがないため、販売中にできません",
+                              });
+                              return;
+                            }
+                            void changeAvailability(menu.id, status);
+                          }}
+                        >
+                          {labelOf(AVAILABILITY_LABEL, status)}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
         </div>
       </DashboardShell>
     </>
   );
 }
-
-

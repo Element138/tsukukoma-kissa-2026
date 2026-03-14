@@ -2,6 +2,7 @@
 import { prisma } from "@/lib/db";
 import { requireSession } from "@/lib/server/auth";
 import { fail, ok } from "@/lib/response";
+import { normalizeSpecifiedAllergens } from "@/lib/allergens";
 
 function percentile75(values: number[]): number | null {
   if (values.length === 0) {
@@ -82,6 +83,9 @@ export async function GET(req: NextRequest) {
           availability: menu.availability,
           leadTimeSecondsP75_30m: menu.showLeadTime ? percentile75(leadMap.get(menu.id) ?? []) : null,
           coverImageDataUrl: menu.coverImageDataUrl,
+          allergens: normalizeSpecifiedAllergens(menu.allergensJson),
+          customBadgeText: menu.customBadgeText,
+          customBadgeColor: menu.customBadgeColor,
         }))
     }));
 

@@ -133,6 +133,9 @@ model Menu {
   workloadSeconds Float
   displayOrder    Int?                    @default(0)
   coverImageDataUrl String?
+  allergensJson   Json                    @default("[]")
+  customBadgeText String?                 @db.VarChar(32)
+  customBadgeColor String?                @db.VarChar(16)
   categoryId      String
   isActive        Boolean                 @default(true)
   showLeadTime    Boolean                 @default(true)

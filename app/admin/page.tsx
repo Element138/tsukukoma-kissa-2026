@@ -64,6 +64,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  allergenLabelOf,
+  normalizeSpecifiedAllergens,
+  SPECIFIED_ALLERGENS,
+  type SpecifiedAllergenKey,
+} from "@/lib/allergens";
 import { cn } from "@/lib/utils";
 
 type Actor = {
@@ -93,6 +99,9 @@ type Menu = {
   isActive: boolean;
   hasActiveKitchenCoverage: boolean;
   coverImageDataUrl: string | null;
+  allergensJson: SpecifiedAllergenKey[];
+  customBadgeText: string | null;
+  customBadgeColor: string | null;
 };
 type Assignment = { menuId: string; kitchenId: string; enabled: boolean };
 type MenuEdit = {
@@ -101,6 +110,9 @@ type MenuEdit = {
   workloadPerMinute: string;
   categoryId: string;
   coverImageDataUrl: string;
+  allergens: SpecifiedAllergenKey[];
+  customBadgeText: string;
+  customBadgeColor: string;
 };
 type MenuDisplaySettings = {
   pageDisplaySeconds: number;
@@ -120,7 +132,8 @@ const STATUS_BUTTON_ACTIVE_TONE: Record<Menu["availability"], string> = {
   SOLD_OUT: "border-rose-700 bg-rose-600 text-white hover:bg-rose-700",
 };
 const NUMERIC_BLOCK_KEYS = new Set(["e", "E", "+", "-"]);
-const WORKLOAD_COMPARISON_TOLERANCE = 0.0001;
+const WORKLOAD_COMPARISON_TOLERANCE = 0.05;
+const BADGE_COLOR_HEX_REGEX = /^#[0-9a-fA-F]{6}$/;
 
 const dangerConfirm = (message: string) => window.confirm(message);
 
@@ -187,6 +200,14 @@ function formatEfficiencyInput(workloadSeconds: number) {
   if (!Number.isFinite(efficiency) || efficiency <= 0) {
     return "";
   }
+  return efficiency.toFixed(8).replace(/\.?0+$/, "");
+}
+
+function formatEfficiencyLabel(workloadSeconds: number) {
+  const efficiency = workloadSecondsToEfficiency(workloadSeconds);
+  if (!Number.isFinite(efficiency) || efficiency <= 0) {
+    return "-";
+  }
   return efficiency.toFixed(2).replace(/\.?0+$/, "");
 }
 
@@ -213,6 +234,9 @@ function toMenuEdit(menu: Menu): MenuEdit {
     workloadPerMinute: formatEfficiencyInput(menu.workloadSeconds),
     categoryId: menu.categoryId,
     coverImageDataUrl: menu.coverImageDataUrl ?? "",
+    allergens: normalizeSpecifiedAllergens(menu.allergensJson),
+    customBadgeText: menu.customBadgeText ?? "",
+    customBadgeColor: menu.customBadgeColor ?? "#d97706",
   };
 }
 
@@ -327,8 +351,10 @@ export default function AdminPage() {
   const [menuAvailabilityBusyId, setMenuAvailabilityBusyId] = useState<
     string | null
   >(null);
+  const [didBootstrap, setDidBootstrap] = useState(false);
 
   const reloadInFlightRef = useRef(false);
+  const hasSettledWithoutUnsavedRef = useRef(false);
 
   const kitchenActors = useMemo(
     () =>
@@ -355,7 +381,10 @@ export default function AdminPage() {
   const categoryOrder = useMemo(
     () =>
       new Map(
-        activeCategories.map((c) => [c.id, c.displayOrder ?? Number.MAX_SAFE_INTEGER]),
+        activeCategories.map((c) => [
+          c.id,
+          c.displayOrder ?? Number.MAX_SAFE_INTEGER,
+        ]),
       ),
     [activeCategories],
   );
@@ -385,6 +414,16 @@ export default function AdminPage() {
       }
       const normalizedCover = edit.coverImageDataUrl.trim();
       const menuCover = menu.coverImageDataUrl ?? "";
+      const normalizedEditAllergens = normalizeSpecifiedAllergens(edit.allergens);
+      const normalizedMenuAllergens = normalizeSpecifiedAllergens(
+        menu.allergensJson,
+      );
+      const editBadgeText = edit.customBadgeText.trim();
+      const menuBadgeText = (menu.customBadgeText ?? "").trim();
+      const editBadgeColor = editBadgeText ? edit.customBadgeColor.trim() : "";
+      const menuBadgeColor = menuBadgeText
+        ? (menu.customBadgeColor ?? "").trim()
+        : "";
       const parsedEfficiency = Number(edit.workloadPerMinute);
       const parsedWorkloadSeconds = Number.isFinite(parsedEfficiency)
         ? efficiencyToWorkloadSeconds(parsedEfficiency)
@@ -394,7 +433,10 @@ export default function AdminPage() {
         Number(edit.priceJpy) !== menu.priceJpy ||
         hasWorkloadDifference(parsedWorkloadSeconds, menu.workloadSeconds) ||
         edit.categoryId !== menu.categoryId ||
-        normalizedCover !== menuCover
+        normalizedCover !== menuCover ||
+        normalizedEditAllergens.join(",") !== normalizedMenuAllergens.join(",") ||
+        editBadgeText !== menuBadgeText ||
+        editBadgeColor !== menuBadgeColor
       );
     });
 
@@ -471,10 +513,15 @@ export default function AdminPage() {
         }
         return next;
       });
-      const firstActiveCategory = c.categories.find((category) => category.isActive);
+      const firstActiveCategory = c.categories.find(
+        (category) => category.isActive,
+      );
       if (!newMenuCategoryId && firstActiveCategory) {
         setNewMenuCategoryId(firstActiveCategory.id);
       }
+      window.setTimeout(() => {
+        setDidBootstrap(true);
+      }, 0);
     } catch (e) {
       notify({
         level: "error",
@@ -499,6 +546,17 @@ export default function AdminPage() {
   });
 
   useEffect(() => {
+    if (!didBootstrap) {
+      return;
+    }
+    if (!hasUnsavedChanges) {
+      hasSettledWithoutUnsavedRef.current = true;
+      clearByPrefix("admin-unsaved-warning");
+      return;
+    }
+    if (!hasSettledWithoutUnsavedRef.current) {
+      return;
+    }
     if (hasUnsavedChanges) {
       notify({
         id: "admin-unsaved-warning",
@@ -508,11 +566,14 @@ export default function AdminPage() {
       });
       return;
     }
-    clearByPrefix("admin-unsaved-warning");
-  }, [hasUnsavedChanges, notify, clearByPrefix]);
+  }, [didBootstrap, hasUnsavedChanges, notify, clearByPrefix]);
 
   useEffect(() => {
-    if (!hasUnsavedChanges) {
+    if (
+      !didBootstrap ||
+      !hasUnsavedChanges ||
+      !hasSettledWithoutUnsavedRef.current
+    ) {
       return;
     }
 
@@ -555,7 +616,7 @@ export default function AdminPage() {
       window.removeEventListener("beforeunload", beforeUnloadHandler);
       document.removeEventListener("click", navigateHandler, true);
     };
-  }, [hasUnsavedChanges]);
+  }, [didBootstrap, hasUnsavedChanges]);
 
   const updateActor = async (
     id: string,
@@ -638,10 +699,7 @@ export default function AdminPage() {
     }
   };
 
-  const patchCategory = async (
-    id: string,
-    patch: Partial<Category>,
-  ) => {
+  const patchCategory = async (id: string, patch: Partial<Category>) => {
     await apiFetch("/api/admin/categories", {
       method: "PATCH",
       body: JSON.stringify({ id, ...patch }),
@@ -660,6 +718,9 @@ export default function AdminPage() {
     workloadPerMinute: string;
     categoryId: string;
     coverImageDataUrl: string;
+    allergens: SpecifiedAllergenKey[];
+    customBadgeText: string;
+    customBadgeColor: string;
   }) => {
     const trimmedName = params.name.trim();
     if (!trimmedName) {
@@ -687,12 +748,22 @@ export default function AdminPage() {
       throw new Error("カテゴリを選択してください");
     }
 
+    const normalizedAllergens = normalizeSpecifiedAllergens(params.allergens);
+    const customBadgeText = params.customBadgeText.trim();
+    const customBadgeColor = params.customBadgeColor.trim();
+    if (customBadgeText && !BADGE_COLOR_HEX_REGEX.test(customBadgeColor)) {
+      throw new Error("バッジ色は #RRGGBB 形式で入力してください");
+    }
+
     return {
       name: trimmedName,
       priceJpy,
       workloadSeconds,
       categoryId: params.categoryId,
       coverImageDataUrl: params.coverImageDataUrl.trim() || null,
+      allergensJson: normalizedAllergens,
+      customBadgeText: customBadgeText || null,
+      customBadgeColor: customBadgeText ? customBadgeColor : null,
     };
   };
 
@@ -981,10 +1052,13 @@ export default function AdminPage() {
                           onClick={() =>
                             void runMutation({
                               action: async () => {
-                                await apiFetch("/api/admin/sessions/force-logout", {
-                                  method: "POST",
-                                  body: JSON.stringify({ actorId: actor.id }),
-                                });
+                                await apiFetch(
+                                  "/api/admin/sessions/force-logout",
+                                  {
+                                    method: "POST",
+                                    body: JSON.stringify({ actorId: actor.id }),
+                                  },
+                                );
                               },
                               successMessage:
                                 "セッションを強制ログアウトしました",
@@ -995,7 +1069,7 @@ export default function AdminPage() {
                         {actor.actorType === "KITCHEN" && (
                           <label className="ml-1 inline-flex items-center gap-2 rounded-md border px-2 py-1 text-xs">
                             <span className="text-muted-foreground">
-                              キッチン稼働
+                              オーダーを受け付ける
                             </span>
                             <Switch
                               checked={actor.kitchenEnabled}
@@ -1012,10 +1086,10 @@ export default function AdminPage() {
                                     });
                                   },
                                   successMessage: checked
-                                    ? "キッチンを稼働状態にしました"
-                                    : "キッチンを停止しました",
+                                    ? "オーダーを受け付けるようにしました"
+                                    : "オーダーを受け付けないようにしました",
                                   errorMessage:
-                                    "キッチン状態の更新に失敗しました",
+                                    "オーダー受付状態の更新に失敗しました",
                                 })
                               }
                             />
@@ -1042,7 +1116,8 @@ export default function AdminPage() {
                                           { method: "DELETE" },
                                         );
                                       },
-                                      successMessage: "アカウントを削除しました",
+                                      successMessage:
+                                        "アカウントを削除しました",
                                       errorMessage:
                                         "アカウント削除に失敗しました",
                                     });
@@ -1131,7 +1206,9 @@ export default function AdminPage() {
                             }))
                           }
                         />
-                        <Badge variant="outline">#{cat.displayOrder ?? "-"}</Badge>
+                        <Badge variant="outline">
+                          #{cat.displayOrder ?? "-"}
+                        </Badge>
                       </div>
                       <div className="mt-2 flex flex-wrap items-center gap-1">
                         <IconActionButton
@@ -1152,7 +1229,9 @@ export default function AdminPage() {
                               }
                               const saved = await runMutation({
                                 action: async () => {
-                                  await patchCategory(cat.id, { name: nextName });
+                                  await patchCategory(cat.id, {
+                                    name: nextName,
+                                  });
                                 },
                                 successMessage: "カテゴリ名を更新しました",
                                 errorMessage: "カテゴリ名の更新に失敗しました",
@@ -1338,6 +1417,9 @@ export default function AdminPage() {
                               workloadPerMinute: newMenuWorkloadPerMinute,
                               categoryId: newMenuCategoryId,
                               coverImageDataUrl: "",
+                              allergens: [],
+                              customBadgeText: "",
+                              customBadgeColor: "#d97706",
                             });
                           } catch (error) {
                             notifyError(error, "入力内容を確認してください");
@@ -1347,7 +1429,8 @@ export default function AdminPage() {
                           const nextDisplayOrder =
                             activeMenus
                               .filter(
-                                (row) => row.categoryId === parsedInput.categoryId,
+                                (row) =>
+                                  row.categoryId === parsedInput.categoryId,
                               )
                               .reduce(
                                 (max, row) =>
@@ -1412,8 +1495,8 @@ export default function AdminPage() {
                           <div>
                             <strong className="text-sm">{menu.name}</strong>
                             <div className="mt-1 text-xs text-muted-foreground">
-                              {fmtJpy(menu.priceJpy)} /{" "}
-                              {formatEfficiencyInput(menu.workloadSeconds)}個/分
+                              {fmtJpy(menu.priceJpy)} / 分速
+                              {formatEfficiencyLabel(menu.workloadSeconds)}個
                             </div>
                           </div>
                           <div
@@ -1458,7 +1541,8 @@ export default function AdminPage() {
                                               availability: status,
                                             });
                                           },
-                                          successMessage: "販売状態を更新しました",
+                                          successMessage:
+                                            "販売状態を更新しました",
                                           errorMessage:
                                             "販売状態の更新に失敗しました",
                                         });
@@ -1542,6 +1626,101 @@ export default function AdminPage() {
                             </Select>
                           </label>
                         </div>
+                        <div className="grid gap-2 rounded-md border bg-card/70 p-3">
+                          <div className="text-xs font-semibold text-muted-foreground">
+                            特定原材料（8品目）
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {SPECIFIED_ALLERGENS.map((allergen) => {
+                              const selected = edit.allergens.includes(
+                                allergen.key,
+                              );
+                              return (
+                                <Button
+                                  key={allergen.key}
+                                  type="button"
+                                  size="sm"
+                                  variant={selected ? "default" : "outline"}
+                                  className={cn(
+                                    "h-8 px-3 text-xs",
+                                    selected
+                                      ? "border-amber-700 bg-amber-500 text-white hover:bg-amber-600"
+                                      : "bg-background text-foreground hover:bg-muted",
+                                  )}
+                                  onClick={() =>
+                                    setMenuEdits((prev) => {
+                                      const current = normalizeSpecifiedAllergens(
+                                        prev[menu.id]?.allergens ??
+                                          edit.allergens,
+                                      );
+                                      const next = current.includes(allergen.key)
+                                        ? current.filter(
+                                            (row) => row !== allergen.key,
+                                          )
+                                        : [...current, allergen.key];
+                                      return {
+                                        ...prev,
+                                        [menu.id]: {
+                                          ...edit,
+                                          allergens:
+                                            normalizeSpecifiedAllergens(next),
+                                        },
+                                      };
+                                    })
+                                  }
+                                >
+                                  {allergen.label}
+                                </Button>
+                              );
+                            })}
+                          </div>
+                          <div className="text-[11px] text-muted-foreground">
+                            {edit.allergens.length > 0
+                              ? `選択中: ${edit.allergens
+                                  .map((key) => allergenLabelOf(key))
+                                  .join("、")}`
+                              : "選択中: 特定原材料なし"}
+                          </div>
+                        </div>
+                        <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                          <InputField
+                            label="カスタムバッジ文言"
+                            value={edit.customBadgeText}
+                            onChange={(value) =>
+                              setMenuEdits((prev) => ({
+                                ...prev,
+                                [menu.id]: {
+                                  ...edit,
+                                  customBadgeText: value.slice(0, 32),
+                                },
+                              }))
+                            }
+                            placeholder="例: おすすめ"
+                          />
+                          <label className="grid gap-0">
+                            <span className="text-[11px] font-medium leading-none text-muted-foreground">
+                              バッジ色
+                            </span>
+                            <Input
+                              type="color"
+                              value={
+                                BADGE_COLOR_HEX_REGEX.test(edit.customBadgeColor)
+                                  ? edit.customBadgeColor
+                                  : "#d97706"
+                              }
+                              className="h-9 w-20 p-1"
+                              onChange={(event) =>
+                                setMenuEdits((prev) => ({
+                                  ...prev,
+                                  [menu.id]: {
+                                    ...edit,
+                                    customBadgeColor: event.target.value,
+                                  },
+                                }))
+                              }
+                            />
+                          </label>
+                        </div>
                         <div className="flex flex-wrap items-center gap-2 rounded-md border bg-card/70 p-2">
                           <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium">
                             画像をアップロード
@@ -1577,15 +1756,16 @@ export default function AdminPage() {
                                   }));
                                 },
                                 successMessage: "メニュー画像を削除しました",
-                                errorMessage: "メニュー画像の削除に失敗しました",
+                                errorMessage:
+                                  "メニュー画像の削除に失敗しました",
                               })
                             }
                           >
                             画像を削除
                           </Button>
-                          <span className="text-xs text-muted-foreground">
+                          {/* <span className="text-xs text-muted-foreground">
                             推奨: 横長画像 / 1MB 以下
-                          </span>
+                          </span> */}
                         </div>
                         <div className="flex flex-wrap items-center gap-1">
                           <IconActionButton
@@ -1594,7 +1774,9 @@ export default function AdminPage() {
                             saveTone
                             onClick={() =>
                               void (async () => {
-                                let parsedInput: ReturnType<typeof parseMenuInput>;
+                                let parsedInput: ReturnType<
+                                  typeof parseMenuInput
+                                >;
                                 try {
                                   parsedInput = parseMenuInput({
                                     name: edit.name,
@@ -1602,9 +1784,15 @@ export default function AdminPage() {
                                     workloadPerMinute: edit.workloadPerMinute,
                                     categoryId: edit.categoryId,
                                     coverImageDataUrl: edit.coverImageDataUrl,
+                                    allergens: edit.allergens,
+                                    customBadgeText: edit.customBadgeText,
+                                    customBadgeColor: edit.customBadgeColor,
                                   });
                                 } catch (error) {
-                                  notifyError(error, "入力内容を確認してください");
+                                  notifyError(
+                                    error,
+                                    "入力内容を確認してください",
+                                  );
                                   return;
                                 }
 
@@ -1628,6 +1816,14 @@ export default function AdminPage() {
                                       categoryId: parsedInput.categoryId,
                                       coverImageDataUrl:
                                         parsedInput.coverImageDataUrl ?? "",
+                                      allergens: normalizeSpecifiedAllergens(
+                                        parsedInput.allergensJson,
+                                      ),
+                                      customBadgeText:
+                                        parsedInput.customBadgeText ?? "",
+                                      customBadgeColor:
+                                        parsedInput.customBadgeColor ??
+                                        "#d97706",
                                     },
                                   }));
                                 }
@@ -1690,14 +1886,17 @@ export default function AdminPage() {
                                   onCheckedChange={(checked) =>
                                     void runMutation({
                                       action: async () => {
-                                        await apiFetch("/api/admin/assignments", {
-                                          method: "POST",
-                                          body: JSON.stringify({
-                                            menuId: menu.id,
-                                            kitchenId: kitchen.id,
-                                            enabled: checked,
-                                          }),
-                                        });
+                                        await apiFetch(
+                                          "/api/admin/assignments",
+                                          {
+                                            method: "POST",
+                                            body: JSON.stringify({
+                                              menuId: menu.id,
+                                              kitchenId: kitchen.id,
+                                              enabled: checked,
+                                            }),
+                                          },
+                                        );
                                       },
                                       successMessage: checked
                                         ? "キッチン割り当てを有効化しました"

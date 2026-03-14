@@ -8,7 +8,7 @@ import {
   useMemo,
   useState,
 } from "react";
-import { DismissFilled } from "@fluentui/react-icons";
+import { Dismiss20Regular } from "@fluentui/react-icons";
 
 export type ToastLevel = "info" | "success" | "warning" | "error";
 
@@ -101,7 +101,7 @@ export function ToastProvider({ children }: PropsWithChildren) {
               onClick={() => dismiss(toast.id)}
               aria-label={"閉じる"}
             >
-              <DismissFilled />
+              <Dismiss20Regular />
             </button>
           </div>
         ))}

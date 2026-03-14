@@ -345,7 +345,7 @@ textarea:focus {
 
 button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
     .ghost-btn
-  ),
+  ):not(.toast-close),
 .btn-link {
   border: 1px solid transparent;
   border-radius: 12px;
@@ -368,7 +368,7 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
 
 button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
     .ghost-btn
-  ):hover,
+  ):not(.toast-close):hover,
 .btn-link:hover {
   transform: translateY(-1px);
   box-shadow: 0 10px 16px rgba(17, 94, 89, 0.25);
@@ -376,7 +376,7 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
 
 button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
     .ghost-btn
-  ):disabled,
+  ):not(.toast-close):disabled,
 .btn-link[aria-disabled="true"] {
   opacity: 0.46;
   cursor: not-allowed;
@@ -533,18 +533,29 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   background: rgba(255, 255, 255, 0.9);
   border-bottom: 1px solid rgba(19, 36, 58, 0.14);
   backdrop-filter: blur(12px);
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
   gap: 10px;
   padding: 10px 14px;
 }
 
+.terminal-banner > :first-child {
+  justify-self: start;
+  min-width: 0;
+}
+
 .banner-statuses {
+  justify-self: center;
   display: flex;
   gap: 8px;
   align-items: center;
   flex-wrap: wrap;
+  justify-content: center;
+}
+
+.terminal-banner > .ghost-btn {
+  justify-self: end;
 }
 
 .status {
@@ -669,12 +680,12 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
 }
 
 .menu-display-fullscreen {
-  width: calc(100% - 40px);
+  width: calc(100% - 68px);
   margin: 16px auto 20px;
 }
 
 .menu-display-standard {
-  width: min(1400px, calc(100% - 44px));
+  width: min(1400px, calc(100% - 68px));
   margin: 18px auto 56px;
 }
 
@@ -750,7 +761,7 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   display: grid;
   min-height: clamp(160px, 17vh, 228px);
   overflow: hidden;
-  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.16);
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.2);
 }
 
 .menu-display-row.has-image {
@@ -771,6 +782,17 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   display: grid;
   align-content: center;
   gap: 12px;
+}
+
+.menu-display-row-badge {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 10px;
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 700;
 }
 
 .menu-display-row-text strong {
@@ -815,6 +837,17 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   letter-spacing: 0.02em;
 }
 
+.menu-display-row-allergen {
+  font-size: clamp(0.84rem, 1.05vw, 1.04rem);
+  line-height: 1.35;
+  color: #4e5c70;
+}
+
+.menu-display-row-allergen.has-allergen {
+  font-weight: 800;
+  color: #2d3f57;
+}
+
 .menu-display-row-image-wrap {
   position: relative;
   border-left: 1px solid rgba(17, 31, 48, 0.08);
@@ -835,11 +868,14 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
 }
 
 .menu-display-fullscreen .menu-display-scroll-viewport {
-  height: calc(100vh - 260px);
+  height: 100%;
+  min-height: 0;
 }
 
 .menu-display-fullscreen .menu-display-category {
-  min-height: calc(100vh - 240px);
+  height: calc(100dvh - 320px);
+  max-height: calc(100dvh - 320px);
+  min-height: 0;
 }
 
 .menu-display-fullscreen .menu-display-row {
@@ -1037,7 +1073,7 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
 
 .toast-close {
   border: 1px solid rgba(15, 23, 42, 0.14);
-  background: transparent;
+  background: transparent !important;
   color: #2f3c4d;
   width: 28px;
   height: 28px;
@@ -1051,6 +1087,13 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
     transform 0.12s ease,
     background 0.12s ease,
     border-color 0.12s ease;
+}
+
+.toast-close svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+  color: #2f3c4d;
 }
 
 .toast-close:hover {
@@ -1442,12 +1485,17 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   }
 
   .terminal-banner {
+    grid-template-columns: 1fr;
     align-items: flex-start;
-    flex-wrap: wrap;
   }
 
-  .terminal-banner > button {
-    margin-left: auto;
+  .banner-statuses {
+    width: 100%;
+  }
+
+  .terminal-banner > .ghost-btn {
+    margin-left: 0;
+    justify-self: end;
   }
 
   .queue-count {
