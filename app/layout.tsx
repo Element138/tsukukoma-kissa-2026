@@ -1,7 +1,12 @@
 import type { Metadata } from "next";
-import { Zen_Kaku_Gothic_New } from "next/font/google";
+import { Inter, Zen_Kaku_Gothic_New } from "next/font/google";
 import "./globals.css";
 import { ToastProvider } from "@/components/toast";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter"
+});
 
 const zenKaku = Zen_Kaku_Gothic_New({
   subsets: ["latin"],
@@ -17,7 +22,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ja">
-      <body className={zenKaku.variable}>
+      <body className={`${inter.variable} ${zenKaku.variable}`}>
         <ToastProvider>{children}</ToastProvider>
       </body>
     </html>

@@ -1,5 +1,6 @@
 "use client";
 
+import { ArrowRightFilled } from "@fluentui/react-icons";
 import { useRef, useState } from "react";
 
 type ConfirmSliderProps = {
@@ -62,7 +63,9 @@ export function ConfirmSlider(props: ConfirmSliderProps) {
         void finishDrag();
       }}
     >
-      <div className="confirm-slider-text">{processing ? props.processingText : props.text}</div>
+      <div className="confirm-slider-text">
+        {processing ? props.processingText : props.text}
+      </div>
       <button
         type="button"
         className="confirm-slider-thumb"
@@ -70,7 +73,7 @@ export function ConfirmSlider(props: ConfirmSliderProps) {
         disabled={props.disabled || processing}
         onPointerDown={() => setDragging(true)}
       >
-        ?
+        <ArrowRightFilled />
       </button>
     </div>
   );

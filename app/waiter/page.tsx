@@ -37,6 +37,16 @@ function formatMss(totalSeconds: number) {
   return `${mm}:${String(ss).padStart(2, "0")}`;
 }
 
+function queueTone(seconds: number) {
+  if (seconds >= 600) {
+    return "danger";
+  }
+  if (seconds >= 240) {
+    return "warn";
+  }
+  return "safe";
+}
+
 function SectionTitle({ children }: { children: ReactNode }) {
   return (
     <h2 className="section-title text-base font-semibold tracking-tight">
@@ -105,9 +115,11 @@ export default function WaiterPage() {
     () =>
       dineInOrders.map((order) => {
         const createdMs = new Date(order.createdAt).getTime();
+        const elapsedSeconds = (tickNow - createdMs) / 1000;
         return {
           ...order,
-          elapsedSinceOrdered: formatMss((tickNow - createdMs) / 1000),
+          elapsedSeconds,
+          elapsedSinceOrdered: formatMss(elapsedSeconds),
         };
       }),
     [dineInOrders, tickNow],
@@ -117,9 +129,11 @@ export default function WaiterPage() {
     () =>
       takeoutOrders.map((order) => {
         const createdMs = new Date(order.createdAt).getTime();
+        const elapsedSeconds = (tickNow - createdMs) / 1000;
         return {
           ...order,
-          elapsedSinceOrdered: formatMss((tickNow - createdMs) / 1000),
+          elapsedSeconds,
+          elapsedSinceOrdered: formatMss(elapsedSeconds),
         };
       }),
     [takeoutOrders, tickNow],
@@ -265,11 +279,15 @@ export default function WaiterPage() {
                     ? (dineInTableReadySummary.get(order.tableNo)?.readyCount ??
                       order.readyItems.length)
                     : order.readyItems.length;
+                const tone = queueTone(order.elapsedSeconds);
 
                 return (
-                  <article key={order.id} className="waiter-tile">
+                  <article key={order.id} className={`waiter-tile ${tone}`}>
                     <div className="row between wrap">
-                      <strong>Table #{order.tableNo ?? "-"}</strong>
+                      <div className="waiter-major">
+                        <span className="waiter-major-label">テーブル番号</span>
+                        <span className="waiter-major-value">{order.tableNo ?? "-"}</span>
+                      </div>
                       <span className="badge">注文 #{order.orderNo}</span>
                     </div>
                     <div className="muted">
@@ -321,9 +339,12 @@ export default function WaiterPage() {
                 <div className="muted">配膳待ちの持ち帰り注文はありません</div>
               )}
               {takeoutTiles.map((order) => (
-                <article key={order.id} className="waiter-tile">
+                <article key={order.id} className={`waiter-tile ${queueTone(order.elapsedSeconds)}`}>
                   <div className="row between wrap">
-                    <strong>Order #{order.orderNo}</strong>
+                    <div className="waiter-major">
+                      <span className="waiter-major-label">注文番号</span>
+                      <span className="waiter-major-value">{order.orderNo}</span>
+                    </div>
                     <span className="badge">{order.itemCount} 品</span>
                   </div>
                   <div className="muted">

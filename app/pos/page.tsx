@@ -58,6 +58,13 @@ const AGE_GROUPS = [
 ] as const;
 
 type AgeGroupKey = (typeof AGE_GROUPS)[number]["key"];
+const EMPTY_AGE_COUNTS: Record<AgeGroupKey, number> = {
+  infant: 0,
+  child: 0,
+  teen: 0,
+  adult: 0,
+  senior: 0
+};
 
 function SectionTitle({ children }: { children: ReactNode }) {
   return <h2 className="section-title text-base font-semibold tracking-tight">{children}</h2>;
@@ -79,14 +86,8 @@ export default function PosPage() {
   const [cart, setCart] = useState<Record<string, number>>({});
 
   const [fulfillmentType, setFulfillmentType] = useState<"DINE_IN" | "TAKEOUT">("DINE_IN");
-  const [tableNo, setTableNo] = useState<string>("1");
-  const [ageGroupCounts, setAgeGroupCounts] = useState<Record<AgeGroupKey, number>>({
-    infant: 0,
-    child: 0,
-    teen: 0,
-    adult: 1,
-    senior: 0
-  });
+  const [tableNo, setTableNo] = useState<string>("");
+  const [ageGroupCounts, setAgeGroupCounts] = useState<Record<AgeGroupKey, number>>({ ...EMPTY_AGE_COUNTS });
   const [specialNote, setSpecialNote] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<"CASH" | "SQUARE" | "PAYMENT_SKIPPED">("CASH");
   const [skipReasonType, setSkipReasonType] = useState<"TEST" | "DEVICE_ERROR" | "NETWORK_ERROR" | "OTHER">("TEST");
@@ -216,13 +217,21 @@ export default function PosPage() {
       notify({ level: "warning", message: "年齢構成を入力してください" });
       return;
     }
+    if (fulfillmentType === "DINE_IN") {
+      const parsedTableNo = Number(tableNo);
+      if (!tableNo.trim() || !Number.isInteger(parsedTableNo) || parsedTableNo <= 0) {
+        notify({ level: "warning", message: "テーブル番号を入力してください" });
+        return;
+      }
+    }
 
     setBusy(true);
 
     try {
+      const parsedTableNo = Number(tableNo);
       const payload = {
         fulfillmentType,
-        tableNo: fulfillmentType === "DINE_IN" ? Number(tableNo) : null,
+        tableNo: fulfillmentType === "DINE_IN" ? parsedTableNo : null,
         partySize,
         ageRanges,
         specialNote: specialNote || undefined,
@@ -251,6 +260,8 @@ export default function PosPage() {
       }
 
       setCart({});
+      setAgeGroupCounts({ ...EMPTY_AGE_COUNTS });
+      setTableNo("");
       setSpecialNote("");
       setSkipReasonText("");
     } catch (e) {

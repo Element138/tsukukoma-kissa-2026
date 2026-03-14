@@ -61,7 +61,12 @@ body {
   padding: 0;
   min-height: 100%;
   color: var(--ink);
-  font-family: var(--font-zen-kaku), "Zen Kaku Gothic New", sans-serif;
+  font-family:
+    var(--font-inter),
+    var(--font-zen-kaku),
+    "Inter",
+    "Zen Kaku Gothic New",
+    sans-serif;
   background:
     radial-gradient(
       860px 500px at -6% -10%,
@@ -88,7 +93,12 @@ h4,
 .section-title,
 .dashboard-title,
 .terminal-banner strong {
-  font-family: var(--font-zen-kaku), "Zen Kaku Gothic New", sans-serif;
+  font-family:
+    var(--font-inter),
+    var(--font-zen-kaku),
+    "Inter",
+    "Zen Kaku Gothic New",
+    sans-serif;
   letter-spacing: 0.01em;
 }
 
@@ -289,6 +299,7 @@ main {
   border-radius: 12px;
   padding: 10px;
   background: var(--surface-strong);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
 }
 
 input,
@@ -585,6 +596,7 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(.ghost
     transform 0.14s ease,
     box-shadow 0.14s ease,
     border-color 0.14s ease;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.07);
 }
 
 .menu-tile:hover {
@@ -699,6 +711,7 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(.ghost
   display: grid;
   gap: 10px;
   background: var(--surface-strong);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.07);
 }
 
 .queue-card.safe {
@@ -853,6 +866,40 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(.ghost
   background: var(--surface-strong);
   display: grid;
   gap: 8px;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.07);
+}
+
+.waiter-tile.safe {
+  background: #f0fdf8;
+  border-color: #8bceb7;
+}
+
+.waiter-tile.warn {
+  background: #fff8ec;
+  border-color: #ddba84;
+}
+
+.waiter-tile.danger {
+  background: #fff1f1;
+  border-color: #dd9494;
+}
+
+.waiter-major {
+  display: grid;
+  gap: 2px;
+}
+
+.waiter-major-label {
+  font-size: 0.7rem;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  font-weight: 700;
+}
+
+.waiter-major-value {
+  font-size: clamp(2rem, 4vw, 2.9rem);
+  line-height: 1;
+  font-weight: 900;
 }
 
 .table {
@@ -991,6 +1038,7 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(.ghost
   background: var(--surface-strong);
   display: grid;
   gap: 7px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
 }
 
 .admin-row-head {

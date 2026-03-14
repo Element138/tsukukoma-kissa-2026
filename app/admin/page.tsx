@@ -21,7 +21,7 @@ import {
   Save20Regular,
   SignOut20Regular,
   PersonFilled,
-  TrayItemAddFilled,
+  ShoppingBagFilled,
   DocumentBulletListFilled,
 } from "@fluentui/react-icons";
 import { apiFetch, fmtJpy } from "@/lib/client";
@@ -140,8 +140,8 @@ function InputField(props: {
   placeholder?: string;
 }) {
   return (
-    <label className={cn("grid gap-0.5", props.className)}>
-      <span className="text-[11px] font-medium text-muted-foreground">
+    <label className={cn("grid gap-0", props.className)}>
+      <span className="text-[11px] font-medium leading-none text-muted-foreground">
         {props.label}
       </span>
       <Input
@@ -479,8 +479,8 @@ export default function AdminPage() {
                         onSubmit={createActor}
                         className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4"
                       >
-                        <label className="grid gap-0.5">
-                          <span className="text-[11px] font-medium text-muted-foreground">
+                        <label className="grid gap-0">
+                          <span className="text-[11px] font-medium leading-none text-muted-foreground">
                             ロール
                           </span>
                           <Select
@@ -643,7 +643,7 @@ export default function AdminPage() {
                 <SectionHeader
                   title="カテゴリ"
                   subtitle="名前・並び順"
-                  icon={<TrayItemAddFilled />}
+                  icon={<ShoppingBagFilled />}
                 />
               </CardHeader>
               <CardContent className="space-y-3">
@@ -817,8 +817,8 @@ export default function AdminPage() {
                         value={newMenuWorkloadSeconds}
                         onChange={setNewMenuWorkloadSeconds}
                       />
-                      <label className="grid gap-0.5">
-                        <span className="text-[11px] font-medium text-muted-foreground">
+                      <label className="grid gap-0">
+                        <span className="text-[11px] font-medium leading-none text-muted-foreground">
                           カテゴリ
                         </span>
                         <Select
@@ -980,8 +980,8 @@ export default function AdminPage() {
                               }))
                             }
                           />
-                          <label className="grid gap-0.5">
-                            <span className="text-[11px] font-medium text-muted-foreground">
+                          <label className="grid gap-0">
+                            <span className="text-[11px] font-medium leading-none text-muted-foreground">
                               カテゴリ
                             </span>
                             <Select
