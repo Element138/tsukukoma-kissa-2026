@@ -938,6 +938,16 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   user-select: none;
 }
 
+.confirm-slider.tone-green {
+  border-color: rgba(15, 118, 110, 0.55);
+  background: linear-gradient(90deg, #0c5d57 0%, #169184 100%);
+}
+
+.confirm-slider.tone-red {
+  border-color: rgba(185, 28, 28, 0.58);
+  background: linear-gradient(90deg, #8f1d1d 0%, #c13636 100%);
+}
+
 .confirm-slider.disabled {
   opacity: 0.6;
 }
@@ -981,23 +991,41 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   gap: 12px;
 }
 
-.kitchen-menu-stats {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+.kitchen-menu-metrics {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  flex-wrap: wrap;
 }
 
-.kitchen-stat {
-  border: 1px solid rgba(17, 31, 48, 0.14);
-  background: rgba(255, 255, 255, 0.76);
-  border-radius: 10px;
-  padding: 8px;
-  display: grid;
-  gap: 4px;
+.kitchen-queued-big {
+  font-size: clamp(2.3rem, 3.6vw, 3.1rem);
+  line-height: 0.9;
+  font-weight: 900;
+  letter-spacing: -0.02em;
 }
 
-.kitchen-stat strong {
-  font-size: 1.25rem;
+.kitchen-cap-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  color: #4f5e72;
+  font-weight: 700;
+}
+
+.kitchen-cap-summary {
+  font-size: 1rem;
+}
+
+.kitchen-cap-remaining {
+  font-size: 1rem;
+}
+
+.kitchen-cap-edit-trigger {
+  min-height: 30px;
+  padding: 4px 9px !important;
+  font-size: 0.78rem;
   line-height: 1;
 }
 
@@ -1081,6 +1109,32 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   align-items: flex-start;
   box-shadow: var(--shadow-sm);
   background: #fff;
+}
+
+.toast-body {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.toast-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.toast-action-btn {
+  border: 1px solid rgba(15, 23, 42, 0.22);
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #243345;
+}
+
+.toast-action-btn:hover {
+  background: rgba(226, 232, 240, 0.62);
 }
 
 .toast-info {
@@ -1542,8 +1596,8 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
     grid-template-columns: 1fr;
   }
 
-  .kitchen-menu-stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .kitchen-cap-inline {
+    gap: 6px;
   }
 
   .menu-display-scroll-viewport {

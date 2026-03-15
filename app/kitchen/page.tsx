@@ -431,7 +431,7 @@ export default function KitchenPage() {
               {orderedMenus.map((menu) => {
                 const currentElapsed =
                   menu.oldestQueuedSeconds + elapsedSinceFetchSec;
-                const tone = queueTone(currentElapsed);
+                const tone = menu.queuedCount > 0 ? queueTone(currentElapsed) : "";
                 const pickerOpen = pickerMenuId === menu.menuId;
                 const capPickerOpen = capPickerMenuId === menu.menuId;
                 const capValue = menu.dailyOrderCap;
@@ -445,34 +445,30 @@ export default function KitchenPage() {
                     <div className="row between wrap">
                       <div>
                         <div className="queue-menu-name">{menu.menuName}</div>
-                        <div className="muted text-xs">
-                          最古キュー:{" "}
-                          {menu.queuedCount > 0
-                            ? formatMss(currentElapsed)
-                            : "0:00"}
-                        </div>
+                        {menu.queuedCount > 0 ? (
+                          <div className="muted text-xs">
+                            最古キュー: {formatMss(currentElapsed)}
+                          </div>
+                        ) : null}
                       </div>
-                      <span className="badge">
-                        {labelOf(AVAILABILITY_LABEL, menu.availability)}
-                      </span>
                     </div>
 
-                    <div className="kitchen-menu-stats">
-                      <div className="kitchen-stat">
-                        <span className="muted text-xs">現在キュー</span>
-                        <strong>{menu.queuedCount}</strong>
-                      </div>
-                      <div className="kitchen-stat">
-                        <span className="muted text-xs">本日累計</span>
-                        <strong>{menu.todayOrderCount}</strong>
-                      </div>
-                      <div className="kitchen-stat">
-                        <span className="muted text-xs">残り</span>
-                        <strong>{remaining == null ? "∞" : remaining}</strong>
-                      </div>
-                      <div className="kitchen-stat">
-                        <span className="muted text-xs">上限</span>
-                        <strong>{capValue == null ? "∞" : capValue}</strong>
+                    <div className="kitchen-menu-metrics">
+                      <div className="kitchen-queued-big">{menu.queuedCount}</div>
+                      <div className="kitchen-cap-inline">
+                        <span className="kitchen-cap-summary">
+                          {menu.todayOrderCount} / {capValue == null ? "∞" : capValue}
+                        </span>
+                        <span className="kitchen-cap-remaining">
+                          {remaining == null ? "-" : remaining}
+                        </span>
+                        <button
+                          type="button"
+                          className="ghost-btn kitchen-cap-edit-trigger"
+                          onClick={() => openCapEditor(menu)}
+                        >
+                          上限
+                        </button>
                       </div>
                     </div>
 
@@ -611,15 +607,7 @@ export default function KitchenPage() {
                           </button>
                         </div>
                       </div>
-                    ) : (
-                      <button
-                        type="button"
-                        className="ghost-btn"
-                        onClick={() => openCapEditor(menu)}
-                      >
-                        上限を設定
-                      </button>
-                    )}
+                    ) : null}
 
                     <div className="menu-status-grid" style={{ marginTop: 8 }}>
                       {AVAILABILITY_OPTIONS.map((status) => {

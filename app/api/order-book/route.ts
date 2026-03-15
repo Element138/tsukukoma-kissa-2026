@@ -5,6 +5,7 @@ import { requireSession } from "@/lib/server/auth";
 import { fail, ok } from "@/lib/response";
 import { triggerPaymentWatchdogBestEffort } from "@/lib/server/payment-watchdog-trigger";
 import { parseAgeRangesToCounts } from "@/lib/age-groups";
+import { getMenuCapStates } from "@/lib/domain/menu-cap";
 
 const querySchema = z.object({
   orderNo: z.string().optional(),
@@ -133,11 +134,8 @@ export async function GET(req: NextRequest) {
       {
         menuId: string;
         name: string;
-        total: number;
+        ordered: number;
         queued: number;
-        ready: number;
-        served: number;
-        canceled: number;
       }
     >();
 
@@ -147,29 +145,56 @@ export async function GET(req: NextRequest) {
         const existing = menuCountsMap.get(key) ?? {
           menuId: item.menuId,
           name: item.name,
-          total: 0,
+          ordered: 0,
           queued: 0,
-          ready: 0,
-          served: 0,
-          canceled: 0,
         };
-        existing.total += 1;
+
         if (item.status === "QUEUED") {
+          existing.ordered += 1;
           existing.queued += 1;
         } else if (item.status === "READY") {
-          existing.ready += 1;
+          existing.ordered += 1;
         } else if (item.status === "SERVED") {
-          existing.served += 1;
-        } else if (item.status === "CANCELED") {
-          existing.canceled += 1;
+          existing.ordered += 1;
         }
         menuCountsMap.set(key, existing);
       }
     }
 
-    const menuCounts = [...menuCountsMap.values()].sort((a, b) =>
-      a.name.localeCompare(b.name, "ja"),
+    const countedMenuIds = [...menuCountsMap.keys()];
+    const countedMenus = await prisma.menu.findMany({
+      where: {
+        id: { in: countedMenuIds },
+      },
+      select: {
+        id: true,
+        name: true,
+        dailyOrderCap: true,
+      },
+    });
+    const countedMenuById = new Map(countedMenus.map((menu) => [menu.id, menu]));
+    const capStateByMenuId = await getMenuCapStates(
+      prisma,
+      countedMenus.map((menu) => ({
+        menuId: menu.id,
+        dailyOrderCap: menu.dailyOrderCap ?? null,
+      })),
     );
+
+    const menuCounts = [...menuCountsMap.values()]
+      .map((row) => {
+        const menu = countedMenuById.get(row.menuId);
+        const capState = capStateByMenuId.get(row.menuId);
+        return {
+          menuId: row.menuId,
+          name: menu?.name ?? row.name,
+          ordered: row.ordered,
+          queued: row.queued,
+          cap: capState?.dailyOrderCap ?? null,
+          toCap: capState?.remainingUntilCap ?? null,
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name, "ja"));
 
     return ok({ orders: rows, menuCounts });
   } catch (error) {

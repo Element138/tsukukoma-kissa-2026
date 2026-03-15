@@ -95,6 +95,18 @@ function newIdempotencyKey() {
   }
 }
 
+function summarizeOrderErrorMessage(rawMessage: string) {
+  const withoutTrace = rawMessage
+    .replace(/\s*\[trace:[^\]]+\]\s*$/i, "")
+    .trim();
+  const withoutCode = withoutTrace.replace(/\s*\([A-Z0-9_]+\)\s*$/, "").trim();
+  const normalized = withoutCode || "注文登録に失敗しました";
+  if (normalized.length <= 48) {
+    return normalized;
+  }
+  return `${normalized.slice(0, 48)}...`;
+}
+
 export default function PosPage() {
   const { loading, session } = useSession(["POS"]);
   const { notify } = useToast();
@@ -121,6 +133,7 @@ export default function PosPage() {
   const [menuAvailabilityBusyId, setMenuAvailabilityBusyId] = useState<
     string | null
   >(null);
+  const [sliderErrorText, setSliderErrorText] = useState<string | null>(null);
 
   const loadMenus = async () => {
     const data = await apiFetch<MenuPayload>("/api/admin/menus");
@@ -134,6 +147,16 @@ export default function PosPage() {
 
     loadMenus().catch((e) => notify({ level: "error", message: e.message }));
   }, [session, notify]);
+
+  useEffect(() => {
+    if (!sliderErrorText) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setSliderErrorText(null);
+    }, 5000);
+    return () => window.clearTimeout(timer);
+  }, [sliderErrorText]);
 
   const categoryOrderMap = useMemo(() => {
     if (!menus) {
@@ -184,6 +207,32 @@ export default function PosPage() {
   const ageRanges = useMemo(() => {
     return ageGroupCountsToRanges(ageGroupCounts);
   }, [ageGroupCounts]);
+  const parsedTableNo = Number(tableNo);
+  const missingRequiredFields = useMemo(() => {
+    const missing: string[] = [];
+    if (selectedItems.length === 0) {
+      missing.push("メニュー");
+    }
+    if (partySize <= 0) {
+      missing.push("年齢構成");
+    }
+    if (
+      fulfillmentType === "DINE_IN" &&
+      (!tableNo.trim() || !Number.isInteger(parsedTableNo) || parsedTableNo <= 0)
+    ) {
+      missing.push("テーブル番号");
+    }
+    return missing;
+  }, [fulfillmentType, parsedTableNo, partySize, selectedItems.length, tableNo]);
+  const sliderMissingText =
+    missingRequiredFields.length === 0
+      ? null
+      : missingRequiredFields.length === 1
+        ? `${missingRequiredFields[0]}が未入力です`
+        : "複数項目が未入力です";
+  const sliderDisplayText =
+    sliderErrorText ?? sliderMissingText ?? "スライドして注文を確定";
+  const sliderTone: "green" | "red" = sliderErrorText ? "red" : "green";
 
   const changeQty = (menuId: string, delta: number) => {
     const menu = menuList.find((m) => m.id === menuId);
@@ -294,7 +343,6 @@ export default function PosPage() {
       return;
     }
     if (fulfillmentType === "DINE_IN") {
-      const parsedTableNo = Number(tableNo);
       if (
         !tableNo.trim() ||
         !Number.isInteger(parsedTableNo) ||
@@ -306,9 +354,9 @@ export default function PosPage() {
     }
 
     setBusy(true);
+    setSliderErrorText(null);
 
     try {
-      const parsedTableNo = Number(tableNo);
       const payload = {
         fulfillmentType,
         tableNo: fulfillmentType === "DINE_IN" ? parsedTableNo : null,
@@ -352,11 +400,14 @@ export default function PosPage() {
       setTableNo("");
       setSpecialNote("");
       setSkipReasonText("");
+      setSliderErrorText(null);
     } catch (e) {
+      const errorMessage = e instanceof Error ? e.message : "注文登録に失敗しました";
       notify({
         level: "error",
-        message: e instanceof Error ? e.message : "注文登録に失敗しました",
+        message: errorMessage,
       });
+      setSliderErrorText(summarizeOrderErrorMessage(errorMessage));
     } finally {
       setBusy(false);
     }
@@ -667,13 +718,9 @@ export default function PosPage() {
 
             <div className="row wrap" style={{ marginTop: 14 }}>
               <ConfirmSlider
-                disabled={
-                  busy ||
-                  selectedItems.length === 0 ||
-                  partySize <= 0 ||
-                  (fulfillmentType === "DINE_IN" && !tableNo.trim())
-                }
-                text="スライドして注文を確定"
+                disabled={busy || missingRequiredFields.length > 0}
+                text={sliderDisplayText}
+                tone={sliderTone}
                 processingText="注文を送信中..."
                 onConfirm={submitOrder}
               />

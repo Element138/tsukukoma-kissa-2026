@@ -7,6 +7,7 @@ type ConfirmSliderProps = {
   disabled?: boolean;
   text: string;
   processingText: string;
+  tone?: "green" | "red";
   onConfirm: () => Promise<void> | void;
 };
 
@@ -54,7 +55,7 @@ export function ConfirmSlider(props: ConfirmSliderProps) {
   return (
     <div
       ref={trackRef}
-      className={`confirm-slider ${props.disabled || processing ? "disabled" : ""}`}
+      className={`confirm-slider tone-${props.tone ?? "green"} ${props.disabled || processing ? "disabled" : ""}`}
       onPointerMove={(e) => pointerMove(e.clientX)}
       onPointerUp={() => {
         void finishDrag();

@@ -55,11 +55,10 @@ type OrderRow = {
 type MenuCountRow = {
   menuId: string;
   name: string;
-  total: number;
+  ordered: number;
   queued: number;
-  ready: number;
-  served: number;
-  canceled: number;
+  cap: number | null;
+  toCap: number | null;
 };
 
 type BundledItem = {
@@ -164,9 +163,10 @@ export default function OrderBookPage() {
       if (paymentMethod) params.set("paymentMethod", paymentMethod);
       if (qOrderNo) params.set("orderNo", qOrderNo);
 
-      const data = await apiFetch<{ orders: OrderRow[]; menuCounts: MenuCountRow[] }>(
-        `/api/order-book?${params.toString()}`,
-      );
+      const data = await apiFetch<{
+        orders: OrderRow[];
+        menuCounts: MenuCountRow[];
+      }>(`/api/order-book?${params.toString()}`);
       setOrders(data.orders);
       setMenuCounts(data.menuCounts);
     } catch (e) {
@@ -250,7 +250,10 @@ export default function OrderBookPage() {
       const createdMs = new Date(order.createdAt).getTime();
       const elapsedSec = Math.max(0, Math.floor((tickNow - createdMs) / 1000));
       const confirmedLabel = order.confirmedAt
-        ? new Date(order.confirmedAt).toLocaleTimeString("ja-JP", {
+        ? new Date(order.confirmedAt).toLocaleString("ja-JP", {
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
             hour12: false,
             hour: "2-digit",
             minute: "2-digit",
@@ -382,34 +385,32 @@ export default function OrderBookPage() {
 
           <div className="card" style={{ marginBottom: 14 }}>
             <div className="row between wrap" style={{ marginBottom: 8 }}>
-              <strong>品目別カウント（表示のみ）</strong>
+              <strong>本日の提供数</strong>
             </div>
             <div className="table-scroll">
               <table className="table">
                 <thead>
                   <tr>
                     <th>メニュー</th>
-                    <th>合計</th>
+                    <th>注文済 (キュー+提供可+提供済)</th>
                     <th>キュー</th>
-                    <th>提供可</th>
-                    <th>提供済</th>
-                    <th>取消</th>
+                    <th>上限</th>
+                    <th>上限まで</th>
                   </tr>
                 </thead>
                 <tbody>
                   {menuCounts.map((item) => (
                     <tr key={item.menuId}>
                       <td>{item.name}</td>
-                      <td>{item.total}</td>
+                      <td>{item.ordered}</td>
                       <td>{item.queued}</td>
-                      <td>{item.ready}</td>
-                      <td>{item.served}</td>
-                      <td>{item.canceled}</td>
+                      <td>{item.cap == null ? "∞" : item.cap}</td>
+                      <td>{item.toCap == null ? "-" : item.toCap}</td>
                     </tr>
                   ))}
                   {menuCounts.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="muted">
+                      <td colSpan={5} className="muted">
                         対象データがありません
                       </td>
                     </tr>

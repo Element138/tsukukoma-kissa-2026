@@ -284,7 +284,7 @@ function buildRenderChunks(text: string) {
 
 export default function MenuDisplayPage() {
   const { loading, session } = useSession(["MENU_DISPLAY"]);
-  const { notify } = useToast();
+  const { notify, clearByPrefix } = useToast();
 
   const [categories, setCategories] = useState<DisplayCategory[]>([]);
   const [settings, setSettings] = useState<MenuDisplaySettings>(DEFAULT_SETTINGS);
@@ -321,6 +321,10 @@ export default function MenuDisplayPage() {
   useEffect(() => {
     categoriesRef.current = categories;
   }, [categories]);
+
+  useEffect(() => {
+    clearByPrefix("admin-unsaved-warning");
+  }, [clearByPrefix]);
 
   useEffect(() => {
     activePageRef.current = activePage;
@@ -683,7 +687,7 @@ export default function MenuDisplayPage() {
                           badgeText
                             ? ({
                                 borderColor: badgeColor,
-                                borderWidth: "2px",
+                                borderWidth: "3px",
                               } as CSSProperties)
                             : undefined
                         }

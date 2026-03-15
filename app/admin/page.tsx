@@ -5,6 +5,7 @@ import {
   KeyboardEvent as ReactKeyboardEvent,
   type InputHTMLAttributes,
   ReactNode,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -159,6 +160,7 @@ const STATUS_BUTTON_ACTIVE_TONE: Record<Menu["availability"], string> = {
 };
 const BADGE_COLOR_HEX_REGEX = /^#[0-9a-fA-F]{6}$/;
 const DEFAULT_MENU_WORKLOAD_SECONDS = 300;
+const LOW_STOCK_BADGE_THRESHOLD_UNLIMITED = 100000;
 
 const dangerConfirm = (message: string) => window.confirm(message);
 
@@ -321,7 +323,10 @@ function toMenuEdit(menu: Menu): MenuEdit {
     customBadgeColor: menu.customBadgeColor ?? "#d97706",
     dailyOrderCap: menu.dailyOrderCap == null ? "" : String(menu.dailyOrderCap),
     lowStockBadgeEnabled: Boolean(menu.lowStockBadgeEnabled),
-    lowStockBadgeThreshold: String(menu.lowStockBadgeThreshold ?? 0),
+    lowStockBadgeThreshold:
+      (menu.lowStockBadgeThreshold ?? 0) >= LOW_STOCK_BADGE_THRESHOLD_UNLIMITED
+        ? ""
+        : String(menu.lowStockBadgeThreshold ?? 0),
   };
 }
 
@@ -512,7 +517,14 @@ export default function AdminPage() {
         edit.dailyOrderCap.trim() === ""
           ? null
           : Number(edit.dailyOrderCap.trim());
-      const lowStockBadgeThreshold = Number(edit.lowStockBadgeThreshold.trim() || "0");
+      const lowStockBadgeThreshold =
+        edit.lowStockBadgeThreshold.trim() === ""
+          ? LOW_STOCK_BADGE_THRESHOLD_UNLIMITED
+          : Number(edit.lowStockBadgeThreshold.trim());
+      const menuLowStockBadgeThreshold =
+        (menu.lowStockBadgeThreshold ?? 0) >= LOW_STOCK_BADGE_THRESHOLD_UNLIMITED
+          ? LOW_STOCK_BADGE_THRESHOLD_UNLIMITED
+          : (menu.lowStockBadgeThreshold ?? 0);
       return (
         edit.name !== menu.name ||
         Number(edit.priceJpy) !== menu.priceJpy ||
@@ -524,7 +536,7 @@ export default function AdminPage() {
         editBadgeColor !== menuBadgeColor ||
         dailyOrderCap !== (menu.dailyOrderCap ?? null) ||
         edit.lowStockBadgeEnabled !== Boolean(menu.lowStockBadgeEnabled) ||
-        lowStockBadgeThreshold !== (menu.lowStockBadgeThreshold ?? 0)
+        lowStockBadgeThreshold !== menuLowStockBadgeThreshold
       );
     });
 
@@ -644,29 +656,6 @@ export default function AdminPage() {
     onEvent: () => void reload(),
     onResync: () => void reload(),
   });
-
-  useEffect(() => {
-    if (!didBootstrap) {
-      return;
-    }
-    if (!hasUnsavedChanges) {
-      hasSettledWithoutUnsavedRef.current = true;
-      clearByPrefix("admin-unsaved-warning");
-      return;
-    }
-    if (!hasSettledWithoutUnsavedRef.current) {
-      return;
-    }
-    if (hasUnsavedChanges) {
-      notify({
-        id: "admin-unsaved-warning",
-        level: "warning",
-        sticky: true,
-        message: "未保存の変更があります。保存してください。",
-      });
-      return;
-    }
-  }, [didBootstrap, hasUnsavedChanges, notify, clearByPrefix]);
 
   useEffect(() => {
     if (
@@ -860,11 +849,15 @@ export default function AdminPage() {
             min: 1,
             max: 100000,
           });
-    const lowStockBadgeThreshold = toPositiveFiniteNumber(
-      params.lowStockBadgeThreshold.trim() || "0",
-      "在庫バッジ閾値",
-      { integer: true, min: 0, max: 100000 },
-    );
+    const lowStockBadgeThresholdRaw = params.lowStockBadgeThreshold.trim();
+    const lowStockBadgeThreshold =
+      lowStockBadgeThresholdRaw === ""
+        ? LOW_STOCK_BADGE_THRESHOLD_UNLIMITED
+        : toPositiveFiniteNumber(lowStockBadgeThresholdRaw, "在庫バッジ閾値", {
+            integer: true,
+            min: 0,
+            max: LOW_STOCK_BADGE_THRESHOLD_UNLIMITED,
+          });
     if (params.lowStockBadgeEnabled && dailyOrderCap == null) {
       throw new Error("残数バッジを使う場合は日次上限を設定してください");
     }
@@ -921,6 +914,189 @@ export default function AdminPage() {
       });
     }
   };
+
+  const saveAllChanges = useCallback(async () => {
+    const categoryUpdates = activeCategories
+      .map((category) => ({
+        id: category.id,
+        nextName: (categoryNameDrafts[category.id] ?? category.name).trim(),
+        currentName: category.name,
+      }))
+      .filter((row) => row.nextName !== row.currentName);
+
+    const menuUpdates: Array<{
+      menuId: string;
+      parsedInput: ReturnType<typeof parseMenuInput>;
+    }> = [];
+
+    for (const menu of activeMenus) {
+      const edit = menuEdits[menu.id];
+      if (!edit) {
+        continue;
+      }
+      const normalizedCover = edit.coverImageDataUrl.trim();
+      const menuCover = menu.coverImageDataUrl ?? "";
+      const normalizedEditAllergens = normalizeSpecifiedAllergens(edit.allergens);
+      const normalizedMenuAllergens = normalizeSpecifiedAllergens(
+        menu.allergensJson,
+      );
+      const editBadgeText = edit.customBadgeText.trim();
+      const menuBadgeText = (menu.customBadgeText ?? "").trim();
+      const editBadgeColor = editBadgeText ? edit.customBadgeColor.trim() : "";
+      const menuBadgeColor = menuBadgeText
+        ? (menu.customBadgeColor ?? "").trim()
+        : "";
+      const dailyOrderCap =
+        edit.dailyOrderCap.trim() === ""
+          ? null
+          : Number(edit.dailyOrderCap.trim());
+      const lowStockBadgeThreshold =
+        edit.lowStockBadgeThreshold.trim() === ""
+          ? LOW_STOCK_BADGE_THRESHOLD_UNLIMITED
+          : Number(edit.lowStockBadgeThreshold.trim());
+      const menuLowStockBadgeThreshold =
+        (menu.lowStockBadgeThreshold ?? 0) >= LOW_STOCK_BADGE_THRESHOLD_UNLIMITED
+          ? LOW_STOCK_BADGE_THRESHOLD_UNLIMITED
+          : (menu.lowStockBadgeThreshold ?? 0);
+      const isDirty =
+        edit.name !== menu.name ||
+        Number(edit.priceJpy) !== menu.priceJpy ||
+        edit.categoryId !== menu.categoryId ||
+        edit.kitchenId !== (menu.assignedKitchenId ?? "") ||
+        normalizedCover !== menuCover ||
+        normalizedEditAllergens.join(",") !== normalizedMenuAllergens.join(",") ||
+        editBadgeText !== menuBadgeText ||
+        editBadgeColor !== menuBadgeColor ||
+        dailyOrderCap !== (menu.dailyOrderCap ?? null) ||
+        edit.lowStockBadgeEnabled !== Boolean(menu.lowStockBadgeEnabled) ||
+        lowStockBadgeThreshold !== menuLowStockBadgeThreshold;
+
+      if (!isDirty) {
+        continue;
+      }
+
+      menuUpdates.push({
+        menuId: menu.id,
+        parsedInput: parseMenuInput({
+          name: edit.name,
+          priceJpy: edit.priceJpy,
+          categoryId: edit.categoryId,
+          kitchenId: edit.kitchenId,
+          coverImageDataUrl: edit.coverImageDataUrl,
+          allergens: edit.allergens,
+          customBadgeText: edit.customBadgeText,
+          customBadgeColor: edit.customBadgeColor,
+          dailyOrderCap: edit.dailyOrderCap,
+          lowStockBadgeEnabled: edit.lowStockBadgeEnabled,
+          lowStockBadgeThreshold: edit.lowStockBadgeThreshold,
+        }),
+      });
+    }
+
+    const draftSeconds = Number(pageDisplaySecondsDraft);
+    const displaySettingDirty =
+      menuDisplaySettings != null &&
+      (pageDisplaySecondsDraft.trim() !==
+        String(menuDisplaySettings.pageDisplaySeconds) ||
+        !Number.isFinite(draftSeconds));
+    const nextDisplaySeconds = displaySettingDirty
+      ? toPositiveFiniteNumber(pageDisplaySecondsDraft, "表示時間", {
+          integer: true,
+          min: 6,
+          max: 120,
+        })
+      : null;
+
+    if (
+      categoryUpdates.length === 0 &&
+      menuUpdates.length === 0 &&
+      nextDisplaySeconds == null
+    ) {
+      return;
+    }
+
+    try {
+      for (const categoryUpdate of categoryUpdates) {
+        if (!categoryUpdate.nextName) {
+          throw new Error("カテゴリ名を入力してください");
+        }
+        await patchCategory(categoryUpdate.id, { name: categoryUpdate.nextName });
+      }
+
+      for (const menuUpdate of menuUpdates) {
+        await patchMenu(menuUpdate.menuId, menuUpdate.parsedInput);
+      }
+
+      if (nextDisplaySeconds != null) {
+        const data = await apiFetch<{ settings: MenuDisplaySettings }>(
+          "/api/admin/menu-display-settings",
+          {
+            method: "PATCH",
+            body: JSON.stringify({
+              pageDisplaySeconds: nextDisplaySeconds,
+            }),
+          },
+        );
+        setMenuDisplaySettings(data.settings);
+        setPageDisplaySecondsDraft(String(data.settings.pageDisplaySeconds));
+      }
+
+      notify({ level: "success", message: "未保存の変更をすべて保存しました" });
+      await reload();
+    } catch (error) {
+      notifyError(error, "一括保存に失敗しました");
+    }
+  }, [
+    activeCategories,
+    activeMenus,
+    categoryNameDrafts,
+    menuDisplaySettings,
+    menuEdits,
+    notifyError,
+    pageDisplaySecondsDraft,
+    parseMenuInput,
+    patchCategory,
+    patchMenu,
+    notify,
+    reload,
+  ]);
+
+  useEffect(() => {
+    if (!didBootstrap) {
+      return;
+    }
+    if (!hasUnsavedChanges) {
+      hasSettledWithoutUnsavedRef.current = true;
+      clearByPrefix("admin-unsaved-warning");
+      return;
+    }
+    if (!hasSettledWithoutUnsavedRef.current) {
+      return;
+    }
+    if (hasUnsavedChanges) {
+      notify({
+        id: "admin-unsaved-warning",
+        level: "warning",
+        sticky: true,
+        message: "未保存の変更があります。保存してください。",
+        actions: [
+          {
+            label: "すべて保存",
+            onClick: () => {
+              void saveAllChanges();
+            },
+          },
+        ],
+      });
+      return;
+    }
+  }, [
+    clearByPrefix,
+    didBootstrap,
+    hasUnsavedChanges,
+    notify,
+    saveAllChanges,
+  ]);
 
   const moveMenu = async (menu: Menu, direction: -1 | 1) => {
     const siblingMenus = activeMenus.filter(
@@ -1522,7 +1698,7 @@ export default function AdminPage() {
                               customBadgeColor: "#d97706",
                               dailyOrderCap: "",
                               lowStockBadgeEnabled: false,
-                              lowStockBadgeThreshold: "0",
+                              lowStockBadgeThreshold: "",
                             });
                           } catch (error) {
                             notifyError(error, "入力内容を確認してください");
@@ -1894,7 +2070,7 @@ export default function AdminPage() {
                             </div>
                           </label>
                           <InputField
-                            label="残数バッジ閾値"
+                            label="残数バッジ閾値 (空欄=無制限)"
                             value={edit.lowStockBadgeThreshold}
                             onChange={(value) =>
                               setMenuEdits((prev) => ({
@@ -1907,7 +2083,7 @@ export default function AdminPage() {
                               }))
                             }
                             inputMode="numeric"
-                            placeholder="例: 10"
+                            placeholder="例: 10 / 空欄で無制限"
                           />
                         </div>
                         <div className="row wrap">
@@ -1921,7 +2097,14 @@ export default function AdminPage() {
                             type="button"
                             size="sm"
                             variant="outline"
-                            onClick={() =>
+                            onClick={() => {
+                              if (
+                                !dangerConfirm(
+                                  `「${menu.name}」の本日カウントをリセットします。よろしいですか？`,
+                                )
+                              ) {
+                                return;
+                              }
                               void runMutation({
                                 action: async () => {
                                   await apiFetch("/api/admin/menus/reset-count", {
@@ -1932,8 +2115,8 @@ export default function AdminPage() {
                                 successMessage: "本日のカウントをリセットしました",
                                 errorMessage:
                                   "カウントのリセットに失敗しました",
-                              })
-                            }
+                              });
+                            }}
                           >
                             カウントをリセット
                           </Button>
@@ -2050,9 +2233,13 @@ export default function AdminPage() {
                                           : String(parsedInput.dailyOrderCap),
                                       lowStockBadgeEnabled:
                                         parsedInput.lowStockBadgeEnabled,
-                                      lowStockBadgeThreshold: String(
-                                        parsedInput.lowStockBadgeThreshold,
-                                      ),
+                                      lowStockBadgeThreshold:
+                                        parsedInput.lowStockBadgeThreshold >=
+                                        LOW_STOCK_BADGE_THRESHOLD_UNLIMITED
+                                          ? ""
+                                          : String(
+                                              parsedInput.lowStockBadgeThreshold,
+                                            ),
                                     },
                                   }));
                                 }

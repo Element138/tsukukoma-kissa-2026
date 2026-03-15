@@ -18,6 +18,12 @@ type ToastItem = {
   level: ToastLevel;
   sticky: boolean;
   durationMs: number;
+  actions: ToastAction[];
+};
+
+type ToastAction = {
+  label: string;
+  onClick: () => void;
 };
 
 type ToastInput = {
@@ -26,6 +32,7 @@ type ToastInput = {
   level?: ToastLevel;
   sticky?: boolean;
   durationMs?: number;
+  actions?: ToastAction[];
 };
 
 type ToastContextValue = {
@@ -59,6 +66,7 @@ export function ToastProvider({ children }: PropsWithChildren) {
       level: input.level ?? "info",
       sticky: input.sticky ?? false,
       durationMs: input.durationMs ?? 3500,
+      actions: input.actions ?? [],
     };
 
     setToasts((prev) => {
@@ -95,7 +103,23 @@ export function ToastProvider({ children }: PropsWithChildren) {
       <div className="toast-stack" role="status" aria-live="polite">
         {toasts.map((toast) => (
           <div key={toast.id} className={`toast toast-${toast.level}`}>
-            <div>{toast.message}</div>
+            <div className="toast-body">
+              <div>{toast.message}</div>
+              {toast.actions.length > 0 ? (
+                <div className="toast-actions">
+                  {toast.actions.map((action, index) => (
+                    <button
+                      key={`${toast.id}-action-${index}`}
+                      type="button"
+                      className="toast-action-btn"
+                      onClick={action.onClick}
+                    >
+                      {action.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
             <button
               className="toast-close"
               onClick={() => dismiss(toast.id)}
