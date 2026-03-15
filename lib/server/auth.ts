@@ -38,11 +38,11 @@ type SessionLoadResult = {
 };
 
 const SESSION_FAILURE_MESSAGE: Record<SessionFailureCode, string> = {
-  SESSION_MISSING: "Session required",
-  SESSION_INVALID: "Session is invalid",
-  SESSION_REVOKED: "Session was revoked",
-  SESSION_EXPIRED: "Session expired",
-  ACTOR_INACTIVE: "Actor is inactive"
+  SESSION_MISSING: "ログインが必要です",
+  SESSION_INVALID: "セッションが無効です",
+  SESSION_REVOKED: "セッションが無効化されています",
+  SESSION_EXPIRED: "セッションの有効期限が切れました",
+  ACTOR_INACTIVE: "アカウントが無効化されています"
 };
 
 function sessionTtlMinutes(actorType: ActorType) {
@@ -177,7 +177,7 @@ export async function requireSession(
   assert(loaded.session, 401, loaded.failureCode ?? "UNAUTHORIZED", SESSION_FAILURE_MESSAGE[loaded.failureCode ?? "SESSION_INVALID"]);
 
   if (options?.actorTypes && !options.actorTypes.includes(loaded.session.actor.actorType)) {
-    throw new AppError(403, "FORBIDDEN", "Actor type is not allowed");
+    throw new AppError(403, "FORBIDDEN", "この操作を実行する権限がありません");
   }
 
   await touchHeartbeatBestEffort(loaded.session);

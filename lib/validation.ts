@@ -27,22 +27,30 @@ export const orderCreateSchema = z
   })
   .superRefine((v, ctx) => {
     if (v.fulfillmentType === "DINE_IN" && (!v.tableNo || v.tableNo <= 0)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "tableNo is required for DINE_IN", path: ["tableNo"] });
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "店内注文ではテーブル番号が必要です",
+        path: ["tableNo"],
+      });
     }
     if (v.fulfillmentType === "TAKEOUT" && v.tableNo != null) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "tableNo must be null for TAKEOUT", path: ["tableNo"] });
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "持ち帰り注文ではテーブル番号を指定できません",
+        path: ["tableNo"],
+      });
     }
     if (v.ageRanges.length !== v.partySize) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "ageRanges length must match partySize",
+        message: "年齢構成の人数と来店人数が一致していません",
         path: ["ageRanges"]
       });
     }
     if (v.paymentMethod === "PAYMENT_SKIPPED" && !v.paymentSkipReasonType) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "paymentSkipReasonType is required for PAYMENT_SKIPPED",
+        message: "決済スキップ時は理由の選択が必要です",
         path: ["paymentSkipReasonType"]
       });
     }
@@ -119,7 +127,7 @@ export const actorCreateSchema = z
     if (v.actorType !== "KITCHEN" && hasKitchenFields) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "kitchenEnabled / kitchenDisplayOrder are allowed only for KITCHEN actor",
+        message: "kitchenEnabled / kitchenDisplayOrder は KITCHEN のみ指定できます",
         path: ["actorType"]
       });
     }
@@ -135,7 +143,7 @@ export const actorUpdateSchema = z
   })
   .strict()
   .refine((v) => Object.keys(v).some((key) => key !== "id"), {
-    message: "At least one field to update is required"
+    message: "更新項目を 1 つ以上指定してください"
   });
 
 const specifiedAllergenSchema = z.enum([

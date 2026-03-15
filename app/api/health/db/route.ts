@@ -21,7 +21,7 @@ export async function GET() {
           ok: false,
           error: {
             code: "DB_NOT_MIGRATED",
-            message: "Tables are missing. Run prisma migrate deploy."
+            message: "テーブルが不足しています。prisma migrate deploy を実行してください"
           }
         }),
         {

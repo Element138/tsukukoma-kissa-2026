@@ -32,7 +32,7 @@ async function applySquareCallback(payload: { orderId: string | null; result: "S
         ok: false,
         error: {
           code: "ORDER_ID_REQUIRED",
-          message: "order id is required"
+          message: "注文 ID が必要です"
         }
       },
       { status: 400 }
@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
           ok: false,
           error: {
             code: "INVALID_SIGNATURE",
-            message: "Invalid callback signature"
+            message: "コールバック署名が不正です"
           }
         },
         { status: 401 }

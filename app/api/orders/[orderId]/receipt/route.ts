@@ -48,7 +48,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ orderI
     });
 
     if (!order) {
-      return new Response("Not found", { status: 404 });
+      return new Response("対象の注文が見つかりません", { status: 404 });
     }
 
     const text = renderReceipt(order);

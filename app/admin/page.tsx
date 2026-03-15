@@ -432,6 +432,18 @@ export default function AdminPage() {
   const [newMenuPrice, setNewMenuPrice] = useState("500");
   const [newMenuCategoryId, setNewMenuCategoryId] = useState("");
   const [newMenuKitchenId, setNewMenuKitchenId] = useState("");
+  const [newMenuAvailability, setNewMenuAvailability] =
+    useState<Menu["availability"]>("PAUSED");
+  const [newMenuCoverImageDataUrl, setNewMenuCoverImageDataUrl] = useState("");
+  const [newMenuAllergens, setNewMenuAllergens] = useState<SpecifiedAllergenKey[]>(
+    [],
+  );
+  const [newMenuCustomBadgeText, setNewMenuCustomBadgeText] = useState("");
+  const [newMenuCustomBadgeColor, setNewMenuCustomBadgeColor] =
+    useState("#d97706");
+  const [newMenuDailyOrderCap, setNewMenuDailyOrderCap] = useState("");
+  const [newMenuLowStockBadgeThreshold, setNewMenuLowStockBadgeThreshold] =
+    useState("");
   const [menuEdits, setMenuEdits] = useState<Record<string, MenuEdit>>({});
   const [menuDisplaySettings, setMenuDisplaySettings] =
     useState<MenuDisplaySettings | null>(null);
@@ -536,7 +548,6 @@ export default function AdminPage() {
         editBadgeText !== menuBadgeText ||
         editBadgeColor !== menuBadgeColor ||
         dailyOrderCap !== (menu.dailyOrderCap ?? null) ||
-        edit.lowStockBadgeEnabled !== Boolean(menu.lowStockBadgeEnabled) ||
         lowStockBadgeThreshold !== menuLowStockBadgeThreshold
       );
     });
@@ -851,15 +862,16 @@ export default function AdminPage() {
             max: 100000,
           });
     const lowStockBadgeThresholdRaw = params.lowStockBadgeThreshold.trim();
+    const lowStockBadgeEnabled = lowStockBadgeThresholdRaw !== "";
     const lowStockBadgeThreshold =
-      lowStockBadgeThresholdRaw === ""
+      !lowStockBadgeEnabled
         ? LOW_STOCK_BADGE_THRESHOLD_UNLIMITED
         : toPositiveFiniteNumber(lowStockBadgeThresholdRaw, "在庫バッジ閾値", {
             integer: true,
             min: 0,
             max: LOW_STOCK_BADGE_THRESHOLD_UNLIMITED,
           });
-    if (params.lowStockBadgeEnabled && dailyOrderCap == null) {
+    if (lowStockBadgeEnabled && dailyOrderCap == null) {
       throw new Error("残数バッジを使う場合は日次上限を設定してください");
     }
 
@@ -873,7 +885,7 @@ export default function AdminPage() {
       customBadgeText: customBadgeText || null,
       customBadgeColor: customBadgeText ? customBadgeColor : null,
       dailyOrderCap,
-      lowStockBadgeEnabled: params.lowStockBadgeEnabled,
+      lowStockBadgeEnabled,
       lowStockBadgeThreshold,
     };
   };
@@ -929,94 +941,98 @@ export default function AdminPage() {
       menuId: string;
       parsedInput: ReturnType<typeof parseMenuInput>;
     }> = [];
-
-    for (const menu of activeMenus) {
-      const edit = menuEdits[menu.id];
-      if (!edit) {
-        continue;
-      }
-      const normalizedCover = edit.coverImageDataUrl.trim();
-      const menuCover = menu.coverImageDataUrl ?? "";
-      const normalizedEditAllergens = normalizeSpecifiedAllergens(edit.allergens);
-      const normalizedMenuAllergens = normalizeSpecifiedAllergens(
-        menu.allergensJson,
-      );
-      const editBadgeText = edit.customBadgeText.trim();
-      const menuBadgeText = (menu.customBadgeText ?? "").trim();
-      const editBadgeColor = editBadgeText ? edit.customBadgeColor.trim() : "";
-      const menuBadgeColor = menuBadgeText
-        ? (menu.customBadgeColor ?? "").trim()
-        : "";
-      const dailyOrderCap =
-        edit.dailyOrderCap.trim() === ""
-          ? null
-          : Number(edit.dailyOrderCap.trim());
-      const lowStockBadgeThreshold =
-        edit.lowStockBadgeThreshold.trim() === ""
-          ? LOW_STOCK_BADGE_THRESHOLD_UNLIMITED
-          : Number(edit.lowStockBadgeThreshold.trim());
-      const menuLowStockBadgeThreshold =
-        (menu.lowStockBadgeThreshold ?? 0) >= LOW_STOCK_BADGE_THRESHOLD_UNLIMITED
-          ? LOW_STOCK_BADGE_THRESHOLD_UNLIMITED
-          : (menu.lowStockBadgeThreshold ?? 0);
-      const isDirty =
-        edit.name !== menu.name ||
-        Number(edit.priceJpy) !== menu.priceJpy ||
-        edit.categoryId !== menu.categoryId ||
-        edit.kitchenId !== (menu.assignedKitchenId ?? "") ||
-        normalizedCover !== menuCover ||
-        normalizedEditAllergens.join(",") !== normalizedMenuAllergens.join(",") ||
-        editBadgeText !== menuBadgeText ||
-        editBadgeColor !== menuBadgeColor ||
-        dailyOrderCap !== (menu.dailyOrderCap ?? null) ||
-        edit.lowStockBadgeEnabled !== Boolean(menu.lowStockBadgeEnabled) ||
-        lowStockBadgeThreshold !== menuLowStockBadgeThreshold;
-
-      if (!isDirty) {
-        continue;
-      }
-
-      menuUpdates.push({
-        menuId: menu.id,
-        parsedInput: parseMenuInput({
-          name: edit.name,
-          priceJpy: edit.priceJpy,
-          categoryId: edit.categoryId,
-          kitchenId: edit.kitchenId,
-          coverImageDataUrl: edit.coverImageDataUrl,
-          allergens: edit.allergens,
-          customBadgeText: edit.customBadgeText,
-          customBadgeColor: edit.customBadgeColor,
-          dailyOrderCap: edit.dailyOrderCap,
-          lowStockBadgeEnabled: edit.lowStockBadgeEnabled,
-          lowStockBadgeThreshold: edit.lowStockBadgeThreshold,
-        }),
-      });
-    }
-
-    const draftSeconds = Number(pageDisplaySecondsDraft);
-    const displaySettingDirty =
-      menuDisplaySettings != null &&
-      (pageDisplaySecondsDraft.trim() !==
-        String(menuDisplaySettings.pageDisplaySeconds) ||
-        !Number.isFinite(draftSeconds));
-    const nextDisplaySeconds = displaySettingDirty
-      ? toPositiveFiniteNumber(pageDisplaySecondsDraft, "表示時間", {
-          integer: true,
-          min: 6,
-          max: 120,
-        })
-      : null;
-
-    if (
-      categoryUpdates.length === 0 &&
-      menuUpdates.length === 0 &&
-      nextDisplaySeconds == null
-    ) {
-      return;
-    }
+    let nextDisplaySeconds: number | null = null;
 
     try {
+      for (const menu of activeMenus) {
+        const edit = menuEdits[menu.id];
+        if (!edit) {
+          continue;
+        }
+        const normalizedCover = edit.coverImageDataUrl.trim();
+        const menuCover = menu.coverImageDataUrl ?? "";
+        const normalizedEditAllergens = normalizeSpecifiedAllergens(
+          edit.allergens,
+        );
+        const normalizedMenuAllergens = normalizeSpecifiedAllergens(
+          menu.allergensJson,
+        );
+        const editBadgeText = edit.customBadgeText.trim();
+        const menuBadgeText = (menu.customBadgeText ?? "").trim();
+        const editBadgeColor = editBadgeText ? edit.customBadgeColor.trim() : "";
+        const menuBadgeColor = menuBadgeText
+          ? (menu.customBadgeColor ?? "").trim()
+          : "";
+        const dailyOrderCap =
+          edit.dailyOrderCap.trim() === ""
+            ? null
+            : Number(edit.dailyOrderCap.trim());
+        const lowStockBadgeThreshold =
+          edit.lowStockBadgeThreshold.trim() === ""
+            ? LOW_STOCK_BADGE_THRESHOLD_UNLIMITED
+            : Number(edit.lowStockBadgeThreshold.trim());
+        const menuLowStockBadgeThreshold =
+          (menu.lowStockBadgeThreshold ?? 0) >=
+          LOW_STOCK_BADGE_THRESHOLD_UNLIMITED
+            ? LOW_STOCK_BADGE_THRESHOLD_UNLIMITED
+            : (menu.lowStockBadgeThreshold ?? 0);
+        const isDirty =
+          edit.name !== menu.name ||
+          Number(edit.priceJpy) !== menu.priceJpy ||
+          edit.categoryId !== menu.categoryId ||
+          edit.kitchenId !== (menu.assignedKitchenId ?? "") ||
+          normalizedCover !== menuCover ||
+          normalizedEditAllergens.join(",") !==
+            normalizedMenuAllergens.join(",") ||
+          editBadgeText !== menuBadgeText ||
+          editBadgeColor !== menuBadgeColor ||
+          dailyOrderCap !== (menu.dailyOrderCap ?? null) ||
+          lowStockBadgeThreshold !== menuLowStockBadgeThreshold;
+
+        if (!isDirty) {
+          continue;
+        }
+
+        menuUpdates.push({
+          menuId: menu.id,
+          parsedInput: parseMenuInput({
+            name: edit.name,
+            priceJpy: edit.priceJpy,
+            categoryId: edit.categoryId,
+            kitchenId: edit.kitchenId,
+            coverImageDataUrl: edit.coverImageDataUrl,
+            allergens: edit.allergens,
+            customBadgeText: edit.customBadgeText,
+            customBadgeColor: edit.customBadgeColor,
+            dailyOrderCap: edit.dailyOrderCap,
+            lowStockBadgeEnabled: edit.lowStockBadgeEnabled,
+            lowStockBadgeThreshold: edit.lowStockBadgeThreshold,
+          }),
+        });
+      }
+
+      const draftSeconds = Number(pageDisplaySecondsDraft);
+      const displaySettingDirty =
+        menuDisplaySettings != null &&
+        (pageDisplaySecondsDraft.trim() !==
+          String(menuDisplaySettings.pageDisplaySeconds) ||
+          !Number.isFinite(draftSeconds));
+      nextDisplaySeconds = displaySettingDirty
+        ? toPositiveFiniteNumber(pageDisplaySecondsDraft, "表示時間", {
+            integer: true,
+            min: 6,
+            max: 120,
+          })
+        : null;
+
+      if (
+        categoryUpdates.length === 0 &&
+        menuUpdates.length === 0 &&
+        nextDisplaySeconds == null
+      ) {
+        return;
+      }
+
       for (const categoryUpdate of categoryUpdates) {
         if (!categoryUpdate.nextName) {
           throw new Error("カテゴリ名を入力してください");
@@ -1628,128 +1644,267 @@ export default function AdminPage() {
                     新規メニューを追加
                   </AccordionTrigger>
                   <AccordionContent>
-                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-                      <InputField
-                        label="メニュー名"
-                        value={newMenuName}
-                        onChange={setNewMenuName}
-                      />
-                      <InputField
-                        label="価格 (円)"
-                        value={newMenuPrice}
-                        onChange={(value) =>
-                          setNewMenuPrice(sanitizeIntegerInput(value))
-                        }
-                        inputMode="numeric"
-                      />
-                      <label className="grid gap-0">
-                        <span className="text-[11px] font-medium leading-none text-muted-foreground">
-                          カテゴリ
-                        </span>
-                        <Select
-                          value={newMenuCategoryId}
-                          onValueChange={setNewMenuCategoryId}
-                        >
-                          <SelectTrigger className="bg-background text-foreground">
-                            <SelectValue placeholder="カテゴリ" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {activeCategories.map((c) => (
-                              <SelectItem key={c.id} value={c.id}>
-                                {c.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </label>
-                      <label className="grid gap-0">
-                        <span className="text-[11px] font-medium leading-none text-muted-foreground">
-                          担当キッチン
-                        </span>
-                        <Select
-                          value={newMenuKitchenId}
-                          onValueChange={setNewMenuKitchenId}
-                        >
-                          <SelectTrigger className="bg-background text-foreground">
-                            <SelectValue placeholder="キッチン" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {kitchenActors.map((kitchen) => (
-                              <SelectItem key={kitchen.id} value={kitchen.id}>
-                                {kitchen.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </label>
-                      <Button
-                        type="button"
-                        className="self-end"
-                        onClick={async () => {
-                          let parsedInput: ReturnType<typeof parseMenuInput>;
-                          try {
-                            parsedInput = parseMenuInput({
-                              name: newMenuName,
-                              priceJpy: newMenuPrice,
-                              categoryId: newMenuCategoryId,
-                              kitchenId: newMenuKitchenId,
-                              coverImageDataUrl: "",
-                              allergens: [],
-                              customBadgeText: "",
-                              customBadgeColor: "#d97706",
-                              dailyOrderCap: "",
-                              lowStockBadgeEnabled: false,
-                              lowStockBadgeThreshold: "",
-                            });
-                          } catch (error) {
-                            notifyError(error, "入力内容を確認してください");
-                            return;
+                    <div className="space-y-3">
+                      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                        <InputField
+                          label="メニュー名"
+                          value={newMenuName}
+                          onChange={setNewMenuName}
+                        />
+                        <InputField
+                          label="価格 (円)"
+                          value={newMenuPrice}
+                          onChange={(value) =>
+                            setNewMenuPrice(sanitizeIntegerInput(value))
                           }
-
-                          const nextDisplayOrder =
-                            activeMenus
-                              .filter(
-                                (row) =>
-                                  row.categoryId === parsedInput.categoryId,
-                              )
-                              .reduce(
-                                (max, row) =>
-                                  Math.max(max, row.displayOrder ?? 0),
-                                0,
-                              ) + 1;
-
-                          const saved = await runMutation({
-                            action: async () => {
-                              await apiFetch("/api/admin/menus", {
-                                method: "POST",
-                                body: JSON.stringify({
-                                  ...parsedInput,
-                                  availability: "PAUSED",
-                                  workloadSeconds: DEFAULT_MENU_WORKLOAD_SECONDS,
-                                  displayOrder: nextDisplayOrder,
-                                  showLeadTime: true,
-                                }),
+                          inputMode="numeric"
+                        />
+                        <label className="grid gap-0">
+                          <span className="text-[11px] font-medium leading-none text-muted-foreground">
+                            カテゴリ
+                          </span>
+                          <Select
+                            value={newMenuCategoryId}
+                            onValueChange={setNewMenuCategoryId}
+                          >
+                            <SelectTrigger className="bg-background text-foreground">
+                              <SelectValue placeholder="カテゴリ" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {activeCategories.map((c) => (
+                                <SelectItem key={c.id} value={c.id}>
+                                  {c.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </label>
+                        <label className="grid gap-0">
+                          <span className="text-[11px] font-medium leading-none text-muted-foreground">
+                            担当キッチン
+                          </span>
+                          <Select
+                            value={newMenuKitchenId}
+                            onValueChange={setNewMenuKitchenId}
+                          >
+                            <SelectTrigger className="bg-background text-foreground">
+                              <SelectValue placeholder="キッチン" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {kitchenActors.map((kitchen) => (
+                                <SelectItem key={kitchen.id} value={kitchen.id}>
+                                  {kitchen.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </label>
+                        <label className="grid gap-0">
+                          <span className="text-[11px] font-medium leading-none text-muted-foreground">
+                            販売状態
+                          </span>
+                          <Select
+                            value={newMenuAvailability}
+                            onValueChange={(value) =>
+                              setNewMenuAvailability(value as Menu["availability"])
+                            }
+                          >
+                            <SelectTrigger className="bg-background text-foreground">
+                              <SelectValue placeholder="販売状態" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {AVAILABILITY_OPTIONS.map((status) => (
+                                <SelectItem key={status} value={status}>
+                                  {labelOf(AVAILABILITY_LABEL, status)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </label>
+                      </div>
+                      <InputField
+                        label="画像URL (任意)"
+                        value={newMenuCoverImageDataUrl}
+                        onChange={setNewMenuCoverImageDataUrl}
+                        placeholder="https://..."
+                      />
+                      <div className="grid gap-2 rounded-md border bg-card/70 p-3">
+                        <div className="text-xs font-semibold text-muted-foreground">
+                          特定原材料（8品目）
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {SPECIFIED_ALLERGENS.map((allergen) => {
+                            const selected = newMenuAllergens.includes(
+                              allergen.key,
+                            );
+                            return (
+                              <Button
+                                key={allergen.key}
+                                type="button"
+                                size="sm"
+                                variant={selected ? "default" : "outline"}
+                                className={cn(
+                                  "h-8 px-3 text-xs",
+                                  selected
+                                    ? "border-amber-700 bg-amber-500 text-white hover:bg-amber-600"
+                                    : "bg-background text-foreground hover:bg-muted",
+                                )}
+                                onClick={() =>
+                                  setNewMenuAllergens((prev) => {
+                                    const current =
+                                      normalizeSpecifiedAllergens(prev);
+                                    const next = current.includes(allergen.key)
+                                      ? current.filter(
+                                          (row) => row !== allergen.key,
+                                        )
+                                      : [...current, allergen.key];
+                                    return normalizeSpecifiedAllergens(next);
+                                  })
+                                }
+                              >
+                                {allergen.label}
+                              </Button>
+                            );
+                          })}
+                        </div>
+                        <div className="text-[11px] text-muted-foreground">
+                          {newMenuAllergens.length > 0
+                            ? `選択中: ${newMenuAllergens
+                                .map((key) => allergenLabelOf(key))
+                                .join("、")}`
+                            : "選択中: 特定原材料なし"}
+                        </div>
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                        <InputField
+                          label="カスタムバッジ文言"
+                          value={newMenuCustomBadgeText}
+                          onChange={(value) =>
+                            setNewMenuCustomBadgeText(value.slice(0, 32))
+                          }
+                          placeholder="例: おすすめ"
+                        />
+                        <label className="grid gap-0">
+                          <span className="text-[11px] font-medium leading-none text-muted-foreground">
+                            バッジ色
+                          </span>
+                          <Input
+                            type="color"
+                            value={
+                              BADGE_COLOR_HEX_REGEX.test(newMenuCustomBadgeColor)
+                                ? newMenuCustomBadgeColor
+                                : "#d97706"
+                            }
+                            className="h-9 w-20 p-1"
+                            onChange={(event) =>
+                              setNewMenuCustomBadgeColor(event.target.value)
+                            }
+                          />
+                        </label>
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <InputField
+                          label="日次上限 (空欄=無制限)"
+                          value={newMenuDailyOrderCap}
+                          onChange={(value) =>
+                            setNewMenuDailyOrderCap(sanitizeIntegerInput(value))
+                          }
+                          inputMode="numeric"
+                          placeholder="例: 120"
+                        />
+                        <InputField
+                          label="残数バッジ閾値 (空欄=無制限)"
+                          value={newMenuLowStockBadgeThreshold}
+                          onChange={(value) =>
+                            setNewMenuLowStockBadgeThreshold(
+                              sanitizeIntegerInput(value),
+                            )
+                          }
+                          inputMode="numeric"
+                          placeholder="例: 10 / 空欄で無制限"
+                        />
+                      </div>
+                      <div className="flex justify-end">
+                        <Button
+                          type="button"
+                          className="self-end"
+                          onClick={async () => {
+                            let parsedInput: ReturnType<typeof parseMenuInput>;
+                            try {
+                              parsedInput = parseMenuInput({
+                                name: newMenuName,
+                                priceJpy: newMenuPrice,
+                                categoryId: newMenuCategoryId,
+                                kitchenId: newMenuKitchenId,
+                                coverImageDataUrl: newMenuCoverImageDataUrl,
+                                allergens: newMenuAllergens,
+                                customBadgeText: newMenuCustomBadgeText,
+                                customBadgeColor: newMenuCustomBadgeColor,
+                                dailyOrderCap: newMenuDailyOrderCap,
+                                lowStockBadgeEnabled:
+                                  newMenuLowStockBadgeThreshold.trim() !== "",
+                                lowStockBadgeThreshold:
+                                  newMenuLowStockBadgeThreshold,
                               });
-                            },
-                            successMessage: "メニューを追加しました",
-                            errorMessage: "メニュー追加に失敗しました",
-                          });
+                            } catch (error) {
+                              notifyError(error, "入力内容を確認してください");
+                              return;
+                            }
 
-                          if (saved) {
-                            setNewMenuName("");
+                            const nextDisplayOrder =
+                              activeMenus
+                                .filter(
+                                  (row) =>
+                                    row.categoryId === parsedInput.categoryId,
+                                )
+                                .reduce(
+                                  (max, row) =>
+                                    Math.max(max, row.displayOrder ?? 0),
+                                  0,
+                                ) + 1;
+
+                            const saved = await runMutation({
+                              action: async () => {
+                                await apiFetch("/api/admin/menus", {
+                                  method: "POST",
+                                  body: JSON.stringify({
+                                    ...parsedInput,
+                                    availability: newMenuAvailability,
+                                    workloadSeconds:
+                                      DEFAULT_MENU_WORKLOAD_SECONDS,
+                                    displayOrder: nextDisplayOrder,
+                                    showLeadTime: true,
+                                  }),
+                                });
+                              },
+                              successMessage: "メニューを追加しました",
+                              errorMessage: "メニュー追加に失敗しました",
+                            });
+
+                            if (saved) {
+                              setNewMenuName("");
+                              setNewMenuPrice("500");
+                              setNewMenuAvailability("PAUSED");
+                              setNewMenuCoverImageDataUrl("");
+                              setNewMenuAllergens([]);
+                              setNewMenuCustomBadgeText("");
+                              setNewMenuCustomBadgeColor("#d97706");
+                              setNewMenuDailyOrderCap("");
+                              setNewMenuLowStockBadgeThreshold("");
+                            }
+                          }}
+                          disabled={
+                            !newMenuName ||
+                            !newMenuCategoryId ||
+                            !newMenuKitchenId ||
+                            !newMenuPrice ||
+                            kitchenActors.length === 0
                           }
-                        }}
-                        disabled={
-                          !newMenuName ||
-                          !newMenuCategoryId ||
-                          !newMenuKitchenId ||
-                          !newMenuPrice ||
-                          kitchenActors.length === 0
-                        }
-                      >
-                        <Add20Regular />
-                        追加
-                      </Button>
+                        >
+                          <Add20Regular />
+                          追加
+                        </Button>
+                      </div>
                     </div>
                   </AccordionContent>
                 </AccordionItem>
@@ -2035,7 +2190,7 @@ export default function AdminPage() {
                             />
                           </label>
                         </div>
-                        <div className="grid gap-2 sm:grid-cols-3">
+                        <div className="grid gap-2 sm:grid-cols-2">
                           <InputField
                             label="日次上限 (空欄=無制限)"
                             value={edit.dailyOrderCap}
@@ -2051,25 +2206,6 @@ export default function AdminPage() {
                             inputMode="numeric"
                             placeholder="例: 120"
                           />
-                          <label className="grid gap-0">
-                            <span className="text-[11px] font-medium leading-none text-muted-foreground">
-                              残数バッジ表示
-                            </span>
-                            <div className="mt-2">
-                              <Switch
-                                checked={edit.lowStockBadgeEnabled}
-                                onCheckedChange={(checked) =>
-                                  setMenuEdits((prev) => ({
-                                    ...prev,
-                                    [menu.id]: {
-                                      ...edit,
-                                      lowStockBadgeEnabled: checked,
-                                    },
-                                  }))
-                                }
-                              />
-                            </div>
-                          </label>
                           <InputField
                             label="残数バッジ閾値 (空欄=無制限)"
                             value={edit.lowStockBadgeThreshold}

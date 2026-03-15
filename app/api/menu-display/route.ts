@@ -5,6 +5,8 @@ import { requireSession } from "@/lib/server/auth";
 import { fail, ok } from "@/lib/response";
 import { normalizeSpecifiedAllergens } from "@/lib/allergens";
 
+const LOW_STOCK_BADGE_THRESHOLD_UNLIMITED = 100000;
+
 export async function GET(req: NextRequest) {
   try {
     await requireSession(req, { actorTypes: ["MENU_DISPLAY", "POS", "ADMIN"] });
@@ -42,8 +44,10 @@ export async function GET(req: NextRequest) {
           const capState = capStateMap.get(menu.id);
           const isCapReached = capState?.isCapReached ?? false;
           const remainingUntilCap = capState?.remainingUntilCap ?? null;
+          const hasThresholdInput =
+            menu.lowStockBadgeThreshold < LOW_STOCK_BADGE_THRESHOLD_UNLIMITED;
           const showLowStockBadge =
-            Boolean(menu.lowStockBadgeEnabled) &&
+            hasThresholdInput &&
             menu.dailyOrderCap != null &&
             remainingUntilCap != null &&
             remainingUntilCap <= menu.lowStockBadgeThreshold;

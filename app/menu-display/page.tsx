@@ -693,7 +693,7 @@ export default function MenuDisplayPage() {
                         }
                       >
                         <div className="menu-display-row-text">
-                          {badgeText || showLowStockBadge ? (
+                          {!unavailable && (badgeText || showLowStockBadge) ? (
                             <div className="menu-display-row-badge-wrap">
                               {badgeText ? (
                                 <span

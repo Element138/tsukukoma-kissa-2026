@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
     if (configuredSecret) {
       const sent = req.headers.get("x-cron-secret");
       if (sent !== configuredSecret) {
-        return new Response("Unauthorized", { status: 401 });
+        return new Response("認証に失敗しました", { status: 401 });
       }
     }
 

@@ -188,7 +188,7 @@ export async function GET(req: NextRequest) {
         return {
           menuId: row.menuId,
           name: menu?.name ?? row.name,
-          ordered: row.ordered,
+          ordered: capState?.todayCount ?? 0,
           queued: row.queued,
           cap: capState?.dailyOrderCap ?? null,
           toCap: capState?.remainingUntilCap ?? null,
