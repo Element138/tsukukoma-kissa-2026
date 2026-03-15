@@ -828,24 +828,6 @@ export default function PosPage() {
           <Card className="card">
             <SectionTitle>注文内容</SectionTitle>
 
-            {isAwaitingLocked && awaitingOrder && (
-              <div className="notice error" style={{ marginBottom: 12 }}>
-                <div style={{ fontWeight: 800 }}>
-                  注文 #{awaitingOrder.orderNo} のSquare決済結果を待機中です
-                </div>
-                <div>
-                  {awaitingDeadlineLabel
-                    ? `タイムアウト目安: ${awaitingDeadlineLabel}`
-                    : "タイムアウト目安を取得できませんでした"}
-                </div>
-                <div className="row wrap" style={{ marginTop: 8 }}>
-                  <a href={awaitingOrder.reopenDeepLink} className="btn-link ghost-btn">
-                    Square POSアプリを再表示
-                  </a>
-                </div>
-              </div>
-            )}
-
             {debugScenario !== "none" && (
               <div className="notice" style={{ marginBottom: 12 }}>
                 DEBUGシナリオ: {debugScenario}（本番投入前にこのショートカット実装を削除してください）
@@ -1041,10 +1023,31 @@ export default function PosPage() {
                   processingText="注文を送信中..."
                   onConfirm={submitOrder}
                 />
-                <Link href="/order-book" className="btn-link ghost-btn">
-                  オーダーブック
-                </Link>
               </div>
+            </div>
+
+            {isAwaitingLocked && awaitingOrder && (
+              <div className="notice error" style={{ marginTop: 12 }}>
+                <div style={{ fontWeight: 800 }}>
+                  注文 #{awaitingOrder.orderNo} のSquare決済結果を待機中です
+                </div>
+                <div>
+                  {awaitingDeadlineLabel
+                    ? `タイムアウト目安: ${awaitingDeadlineLabel}`
+                    : "タイムアウト目安を取得できませんでした"}
+                </div>
+                <div className="row wrap" style={{ marginTop: 8 }}>
+                  <a href={awaitingOrder.reopenDeepLink} className="btn-link ghost-btn">
+                    Square POSアプリを再表示
+                  </a>
+                </div>
+              </div>
+            )}
+
+            <div className="row wrap" style={{ marginTop: 12 }}>
+              <Link href="/order-book" className="btn-link ghost-btn">
+                オーダーブック
+              </Link>
             </div>
           </Card>
         </div>

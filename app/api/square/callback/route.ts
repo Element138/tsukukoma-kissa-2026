@@ -19,21 +19,30 @@ function normalizeSquareResult(value: unknown): "SUCCESS" | "FAILED" {
 }
 
 function parseSquarePayload(text: string, url: URL) {
+  const queryOrderId = url.searchParams.get("state") || url.searchParams.get("orderId");
+  const queryResult = normalizeSquareResult(
+    url.searchParams.get("result") ||
+      url.searchParams.get("status") ||
+      url.searchParams.get("success")
+  );
+  const querySquareTransactionId = url.searchParams.get("transaction_id") || undefined;
+
   try {
-    const parsed = JSON.parse(text);
+    const parsed = JSON.parse(text || "{}");
+    const parsedResultSource = parsed.result ?? parsed.status ?? parsed.success;
     return {
-      orderId: parsed.state || parsed.orderId,
-      result: normalizeSquareResult(parsed.result ?? parsed.status ?? parsed.success),
-      squareTransactionId: parsed.transaction_id || parsed.squareTransactionId
+      orderId: parsed.state || parsed.orderId || queryOrderId,
+      result:
+        parsedResultSource === undefined
+          ? queryResult
+          : normalizeSquareResult(parsedResultSource),
+      squareTransactionId: parsed.transaction_id || parsed.squareTransactionId || querySquareTransactionId
     } as const;
   } catch {
-    const orderId = url.searchParams.get("state") || url.searchParams.get("orderId");
-    const result = normalizeSquareResult(url.searchParams.get("result") || url.searchParams.get("status"));
-    const squareTransactionId = url.searchParams.get("transaction_id") || undefined;
     return {
-      orderId,
-      result,
-      squareTransactionId
+      orderId: queryOrderId,
+      result: queryResult,
+      squareTransactionId: querySquareTransactionId
     } as const;
   }
 }
@@ -167,7 +176,7 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
-    const payload = parseSquarePayload("{}", req.nextUrl);
+    const payload = parseSquarePayload("", req.nextUrl);
     return applySquareCallback(payload);
   } catch (error) {
     return fail(error);
