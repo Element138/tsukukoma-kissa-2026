@@ -33,6 +33,8 @@ type DisplayCategory = {
     allergens: SpecifiedAllergenKey[];
     customBadgeText: string | null;
     customBadgeColor: string | null;
+    showLowStockBadge: boolean;
+    remainingUntilCap: number | null;
   }>;
 };
 
@@ -667,6 +669,11 @@ export default function MenuDisplayPage() {
                     const hasAllergenWarning = menu.allergens.length > 0;
                     const badgeText = menu.customBadgeText?.trim() ?? "";
                     const badgeColor = menu.customBadgeColor?.trim() || "#d97706";
+                    const showLowStockBadge = menu.showLowStockBadge;
+                    const lowStockLabel =
+                      menu.remainingUntilCap != null
+                        ? `残り ${menu.remainingUntilCap}`
+                        : "残り -";
 
                     return (
                       <article
@@ -682,13 +689,22 @@ export default function MenuDisplayPage() {
                         }
                       >
                         <div className="menu-display-row-text">
-                          {badgeText ? (
-                            <span
-                              className="menu-display-row-badge"
-                              style={{ backgroundColor: badgeColor }}
-                            >
-                              {badgeText}
-                            </span>
+                          {badgeText || showLowStockBadge ? (
+                            <div className="menu-display-row-badge-wrap">
+                              {badgeText ? (
+                                <span
+                                  className="menu-display-row-badge"
+                                  style={{ backgroundColor: badgeColor }}
+                                >
+                                  {badgeText}
+                                </span>
+                              ) : null}
+                              {showLowStockBadge ? (
+                                <span className="menu-display-row-badge menu-display-row-badge-low-stock">
+                                  {lowStockLabel}
+                                </span>
+                              ) : null}
+                            </div>
                           ) : null}
                           <strong>{renderDisplayText(menu.name)}</strong>
                           <div

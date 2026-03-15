@@ -47,6 +47,10 @@ type MenuPayload = {
     categoryId: string;
     displayOrder: number;
     hasActiveKitchenCoverage: boolean;
+    todayOrderCount: number;
+    dailyOrderCap: number | null;
+    remainingUntilCap: number | null;
+    isCapReached: boolean;
   }>;
   categories: Array<{
     id: string;
@@ -70,8 +74,8 @@ const STATUS_BUTTON_ACTIVE_TONE: Record<
   AVAILABLE:
     "border-emerald-700 bg-emerald-600 text-white hover:bg-emerald-700",
   INCREASED_WAIT:
-    "border-orange-700 bg-orange-500 text-white hover:bg-orange-600",
-  PAUSED: "border-amber-700 bg-amber-500 text-white hover:bg-amber-600",
+    "border-amber-700 bg-amber-500 text-white hover:bg-amber-600",
+  PAUSED: "border-orange-700 bg-orange-500 text-white hover:bg-orange-600",
   SOLD_OUT: "border-rose-700 bg-rose-600 text-white hover:bg-rose-700",
 };
 
@@ -193,6 +197,17 @@ export default function PosPage() {
     ) {
       return;
     }
+    if (delta > 0) {
+      const selected = cart[menuId] ?? 0;
+      const remaining = menu.remainingUntilCap;
+      if (remaining != null && selected >= remaining) {
+        notify({
+          level: "warning",
+          message: `${menu.name} は本日の上限に達しています`,
+        });
+        return;
+      }
+    }
 
     setCart((prev) => {
       const next = (prev[menuId] ?? 0) + delta;
@@ -232,6 +247,16 @@ export default function PosPage() {
       notify({
         level: "error",
         message: "現在対応できるキッチンがないため、販売中にできません",
+      });
+      return;
+    }
+    if (
+      menu.isCapReached &&
+      (next === "AVAILABLE" || next === "INCREASED_WAIT" || next === "PAUSED")
+    ) {
+      notify({
+        level: "error",
+        message: "本日の上限に達しているため変更できません",
       });
       return;
     }
@@ -361,7 +386,9 @@ export default function PosPage() {
             <div className="menu-tile-grid">
               {menuList.map((menu) => {
                 const qty = cart[menu.id] ?? 0;
+                const remainingUntilCap = menu.remainingUntilCap;
                 const unavailable =
+                  menu.isCapReached ||
                   menu.availability !== "AVAILABLE" &&
                   menu.availability !== "INCREASED_WAIT";
                 return (
@@ -371,6 +398,11 @@ export default function PosPage() {
                   >
                     <div className="row between">
                       <strong>{menu.name}</strong>
+                      {menu.dailyOrderCap != null ? (
+                        <span className="muted text-xs">
+                          残り {remainingUntilCap ?? 0} / 上限 {menu.dailyOrderCap}
+                        </span>
+                      ) : null}
                     </div>
                     <div className="menu-tile-footer">
                       <span className="menu-tile-stat">
@@ -393,7 +425,10 @@ export default function PosPage() {
                           className="ghost-btn"
                           type="button"
                           onClick={() => changeQty(menu.id, 1)}
-                          disabled={unavailable}
+                          disabled={
+                            unavailable ||
+                            (remainingUntilCap != null && qty >= remainingUntilCap)
+                          }
                         >
                           +
                         </button>
@@ -405,7 +440,13 @@ export default function PosPage() {
                           (option === "AVAILABLE" ||
                             option === "INCREASED_WAIT") &&
                           !menu.hasActiveKitchenCoverage;
-                        const disabled = menuAvailabilityBusyId === menu.id;
+                        const capBlockedStatus =
+                          menu.isCapReached &&
+                          (option === "AVAILABLE" ||
+                            option === "INCREASED_WAIT" ||
+                            option === "PAUSED");
+                        const disabled =
+                          menuAvailabilityBusyId === menu.id || capBlockedStatus;
                         const active = menu.availability === option;
 
                         return (
@@ -416,7 +457,9 @@ export default function PosPage() {
                             disabled={disabled}
                             className={cn(
                               "h-8 px-2 text-[11px] font-semibold leading-none",
-                              noCoverageForAvailable && !active && "opacity-50",
+                              (noCoverageForAvailable || capBlockedStatus) &&
+                                !active &&
+                                "opacity-50",
                               active
                                 ? STATUS_BUTTON_ACTIVE_TONE[option]
                                 : "bg-background text-foreground hover:bg-muted",
@@ -427,6 +470,14 @@ export default function PosPage() {
                                   level: "error",
                                   message:
                                     "現在対応できるキッチンがないため、販売中にできません",
+                                });
+                                return;
+                              }
+                              if (capBlockedStatus) {
+                                notify({
+                                  level: "error",
+                                  message:
+                                    "本日の上限に達しているため変更できません",
                                 });
                                 return;
                               }

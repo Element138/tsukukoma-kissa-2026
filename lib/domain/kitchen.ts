@@ -5,6 +5,7 @@ import { recalcAndPersistOrderStatus } from "@/lib/domain/orders";
 import { saveUndoOperation } from "@/lib/domain/undo";
 import { writeAuditLog } from "@/lib/domain/audit";
 import { reassignQueuedItemsFromKitchen, updateMenusAvailabilityByKitchenCoverage } from "@/lib/domain/kitchen-assignment";
+import { getMenuCapStates } from "@/lib/domain/menu-cap";
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
 
@@ -363,6 +364,25 @@ export async function updateMenuAvailabilityByKitchen(
   const before = await db.menu.findUnique({ where: { id: params.menuId } });
   assert(before, 404, "MENU_NOT_FOUND", "Menu not found");
 
+  if (
+    (params.availability === "AVAILABLE" ||
+      params.availability === "INCREASED_WAIT" ||
+      params.availability === "PAUSED") &&
+    before.dailyOrderCap != null
+  ) {
+    const capStateMap = await getMenuCapStates(db, [
+      { menuId: before.id, dailyOrderCap: before.dailyOrderCap },
+    ]);
+    const capState = capStateMap.get(before.id);
+    if (capState?.isCapReached) {
+      throw new AppError(
+        409,
+        "MENU_CAP_REACHED",
+        "本日の上限に達しているため販売状態を変更できません",
+      );
+    }
+  }
+
   const updated = await db.menu.update({
     where: { id: params.menuId },
     data: {
@@ -383,6 +403,62 @@ export async function updateMenuAvailabilityByKitchen(
       availability: updated.availability
     },
     result: "SUCCESS"
+  });
+
+  return updated;
+}
+
+export async function updateMenuCapByKitchen(
+  db: DbClient,
+  params: {
+    actorId: string;
+    kitchenId: string;
+    menuId: string;
+    dailyOrderCap: number | null;
+  },
+) {
+  const assignment = await db.menuKitchenAssignment.findFirst({
+    where: {
+      menuId: params.menuId,
+      kitchenId: params.kitchenId,
+      enabled: true,
+    },
+  });
+  assert(assignment, 403, "FORBIDDEN", "Kitchen can update only own-kitchen menus");
+
+  const before = await db.menu.findUnique({
+    where: { id: params.menuId },
+    select: {
+      id: true,
+      dailyOrderCap: true,
+    },
+  });
+  assert(before, 404, "MENU_NOT_FOUND", "Menu not found");
+
+  const updated = await db.menu.update({
+    where: { id: params.menuId },
+    data: {
+      dailyOrderCap: params.dailyOrderCap,
+    },
+    select: {
+      id: true,
+      dailyOrderCap: true,
+    },
+  });
+
+  await writeAuditLog(db, {
+    actorId: params.actorId,
+    actorType: "KITCHEN",
+    actionType: "MENU_DAILY_CAP_UPDATED",
+    entityType: "menu",
+    entityId: params.menuId,
+    beforeJson: {
+      dailyOrderCap: before.dailyOrderCap,
+    },
+    afterJson: {
+      dailyOrderCap: updated.dailyOrderCap,
+    },
+    result: "SUCCESS",
   });
 
   return updated;

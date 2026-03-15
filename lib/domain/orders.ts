@@ -10,6 +10,7 @@ import { AppError, assert } from "@/lib/errors";
 import { aggregateOrderPrice, deriveOrderStatus } from "@/lib/domain/order-status";
 import { assignUnassignedItemsForOrder } from "@/lib/domain/kitchen-assignment";
 import { writeAuditLog } from "@/lib/domain/audit";
+import { reserveMenuDailyCountsForOrder } from "@/lib/domain/menu-cap";
 import { now, secondsFromNow } from "@/lib/time";
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
@@ -153,7 +154,8 @@ export async function createOrderAtPaymentStart(
       id: true,
       name: true,
       priceJpy: true,
-      workloadSeconds: true
+      workloadSeconds: true,
+      dailyOrderCap: true
     }
   });
 
@@ -162,6 +164,21 @@ export async function createOrderAtPaymentStart(
   }
 
   const menuMap = new Map(menus.map((m) => [m.id, m]));
+  const menuNameById = new Map(menus.map((menu) => [menu.id, menu.name]));
+  const dailyOrderCapById = new Map(
+    menus.map((menu) => [menu.id, menu.dailyOrderCap ?? null]),
+  );
+  const quantitiesByMenuId = new Map<string, number>();
+  for (const item of params.payload.items) {
+    quantitiesByMenuId.set(item.menuId, (quantitiesByMenuId.get(item.menuId) ?? 0) + item.quantity);
+  }
+
+  await reserveMenuDailyCountsForOrder(db, {
+    menuNameById,
+    dailyOrderCapById,
+    quantitiesByMenuId,
+  });
+
   const expanded = expandItems(menuMap, params.payload.items);
   assert(expanded.length > 0, 400, "EMPTY_ITEMS", "Order must contain at least one item");
 

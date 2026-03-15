@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -15,11 +15,18 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
-type QueueMenu = {
+type KitchenMenuRow = {
   menuId: string;
   menuName: string;
+  availability: "AVAILABLE" | "INCREASED_WAIT" | "PAUSED" | "SOLD_OUT";
+  hasActiveKitchenCoverage: boolean;
   queuedCount: number;
   oldestQueuedSeconds: number;
+  oldestElapsed: string;
+  todayOrderCount: number;
+  remainingUntilCap: number | null;
+  dailyOrderCap: number | null;
+  isCapReached: boolean;
 };
 
 type KitchenActor = {
@@ -29,17 +36,6 @@ type KitchenActor = {
   isActive: boolean;
   kitchenEnabled: boolean;
   kitchenDisplayOrder: number;
-};
-
-type AdminMenuPayload = {
-  menus: Array<{
-    id: string;
-    name: string;
-    availability: "AVAILABLE" | "INCREASED_WAIT" | "PAUSED" | "SOLD_OUT";
-    isActive: boolean;
-    assignedKitchenId: string | null;
-    hasActiveKitchenCoverage: boolean;
-  }>;
 };
 
 function newMutationKey() {
@@ -69,12 +65,7 @@ function queueTone(seconds: number) {
 
 const AVAILABILITY_OPTIONS: Array<
   "AVAILABLE" | "INCREASED_WAIT" | "PAUSED" | "SOLD_OUT"
-> = [
-  "AVAILABLE",
-  "INCREASED_WAIT",
-  "PAUSED",
-  "SOLD_OUT",
-];
+> = ["AVAILABLE", "INCREASED_WAIT", "PAUSED", "SOLD_OUT"];
 const STATUS_BUTTON_ACTIVE_TONE: Record<
   "AVAILABLE" | "INCREASED_WAIT" | "PAUSED" | "SOLD_OUT",
   string
@@ -82,8 +73,8 @@ const STATUS_BUTTON_ACTIVE_TONE: Record<
   AVAILABLE:
     "border-emerald-700 bg-emerald-600 text-white hover:bg-emerald-700",
   INCREASED_WAIT:
-    "border-orange-700 bg-orange-500 text-white hover:bg-orange-600",
-  PAUSED: "border-amber-700 bg-amber-500 text-white hover:bg-amber-600",
+    "border-amber-700 bg-amber-500 text-white hover:bg-amber-600",
+  PAUSED: "border-orange-700 bg-orange-500 text-white hover:bg-orange-600",
   SOLD_OUT: "border-rose-700 bg-rose-600 text-white hover:bg-rose-700",
 };
 
@@ -99,28 +90,32 @@ export default function KitchenPage() {
   const { loading, session } = useSession(["KITCHEN"]);
   const { notify } = useToast();
 
-  const [queues, setQueues] = useState<QueueMenu[]>([]);
+  const [menus, setMenus] = useState<KitchenMenuRow[]>([]);
   const [myKitchen, setMyKitchen] = useState<KitchenActor | null>(null);
   const [busy, setBusy] = useState(false);
-  const [menus, setMenus] = useState<AdminMenuPayload["menus"]>([]);
   const [availabilityBusyMenuId, setAvailabilityBusyMenuId] = useState<
     string | null
   >(null);
+  const [capBusyMenuId, setCapBusyMenuId] = useState<string | null>(null);
 
   const [pickerMenuId, setPickerMenuId] = useState<string | null>(null);
   const [pickerQuantity, setPickerQuantity] = useState<number>(1);
+  const [capPickerMenuId, setCapPickerMenuId] = useState<string | null>(null);
+  const [capDraft, setCapDraft] = useState<number>(1);
+  const [capUnlimited, setCapUnlimited] = useState<boolean>(true);
 
   const [tickNow, setTickNow] = useState(Date.now());
   const [queueFetchedAt, setQueueFetchedAt] = useState(Date.now());
 
   const reloadInFlightRef = useRef(false);
-  const queuedReloadModeRef = useRef<"all" | "queue" | null>(null);
+  const queuedReloadModeRef = useRef<"all" | "menus" | null>(null);
 
-  const reload = async (mode: "all" | "queue" = "all") => {
+  const reload = async (mode: "all" | "menus" = "all") => {
     if (!session || reloadInFlightRef.current) {
       if (session && reloadInFlightRef.current) {
         if (queuedReloadModeRef.current !== "all") {
-          queuedReloadModeRef.current = mode === "all" ? "all" : queuedReloadModeRef.current ?? "queue";
+          queuedReloadModeRef.current =
+            mode === "all" ? "all" : queuedReloadModeRef.current ?? "menus";
         }
       }
       return;
@@ -129,32 +124,30 @@ export default function KitchenPage() {
 
     try {
       const tasks: Promise<void>[] = [];
-
       tasks.push(
-        apiFetch<{ queues: QueueMenu[] }>("/api/kitchen/queue").then((queue) => {
-          setQueues(queue.queues);
-          setQueueFetchedAt(Date.now());
-        }),
+        apiFetch<{ menus: KitchenMenuRow[] }>("/api/kitchen/queue").then(
+          (payload) => {
+            setMenus(payload.menus);
+            setQueueFetchedAt(Date.now());
+          },
+        ),
       );
 
       if (mode === "all") {
         tasks.push(
-          Promise.all([
-            apiFetch<{ actors: KitchenActor[] }>("/api/admin/actors"),
-            apiFetch<AdminMenuPayload>("/api/admin/menus"),
-          ]).then(([actorPayload, menuPayload]) => {
-            setMyKitchen(
-              actorPayload.actors.find(
-                (actor) => actor.id === session.actor.actorId,
-              ) ?? null,
-            );
-            setMenus(menuPayload.menus.filter((menu) => menu.isActive));
-          }),
+          apiFetch<{ actors: KitchenActor[] }>("/api/admin/actors").then(
+            (actorPayload) => {
+              setMyKitchen(
+                actorPayload.actors.find(
+                  (actor) => actor.id === session.actor.actorId,
+                ) ?? null,
+              );
+            },
+          ),
         );
       }
 
       await Promise.all(tasks);
-
     } catch (e) {
       notify({
         level: "error",
@@ -190,7 +183,7 @@ export default function KitchenPage() {
       : ["orders"],
     onEvent: (event) => {
       if (event.channel === "orders" || event.channel.startsWith("kitchen:")) {
-        void reload("queue");
+        void reload("menus");
         return;
       }
       void reload("all");
@@ -200,15 +193,7 @@ export default function KitchenPage() {
     },
   });
 
-  const controllableMenus = useMemo(() => {
-    if (!session) {
-      return [] as AdminMenuPayload["menus"];
-    }
-
-    return menus
-      .filter((menu) => menu.assignedKitchenId === session.actor.actorId)
-      .sort((a, b) => a.name.localeCompare(b.name, "ja"));
-  }, [menus, session]);
+  const orderedMenus = useMemo(() => menus, [menus]);
 
   const submitReady = async (menuId: string, quantity: number) => {
     setBusy(true);
@@ -232,7 +217,7 @@ export default function KitchenPage() {
 
       setPickerMenuId(null);
       setPickerQuantity(1);
-      await reload();
+      await reload("menus");
     } catch (e) {
       notify({
         level: "error",
@@ -244,13 +229,13 @@ export default function KitchenPage() {
     }
   };
 
-  const readyFromCard = async (queue: QueueMenu) => {
-    if (queue.queuedCount <= 1) {
-      await submitReady(queue.menuId, 1);
+  const readyFromCard = async (menu: KitchenMenuRow) => {
+    if (menu.queuedCount <= 1) {
+      await submitReady(menu.menuId, 1);
       return;
     }
-    setPickerMenuId(queue.menuId);
-    setPickerQuantity(Math.min(queue.queuedCount, 1));
+    setPickerMenuId(menu.menuId);
+    setPickerQuantity(1);
   };
 
   const undo = async () => {
@@ -266,7 +251,7 @@ export default function KitchenPage() {
         level: "success",
         message: `取り消しました（${data.result.revertedItemCount} 件）`,
       });
-      await reload();
+      await reload("menus");
     } catch (e) {
       notify({
         level: "error",
@@ -294,7 +279,7 @@ export default function KitchenPage() {
           ? "オーダーを受け付けるようにしました"
           : "オーダーを受け付けないようにしました",
       });
-      await reload();
+      await reload("all");
     } catch (e) {
       notify({
         level: "error",
@@ -307,14 +292,9 @@ export default function KitchenPage() {
   };
 
   const changeAvailability = async (
-    menuId: string,
+    menu: KitchenMenuRow,
     availability: "AVAILABLE" | "INCREASED_WAIT" | "PAUSED" | "SOLD_OUT",
   ) => {
-    const menu = controllableMenus.find((row) => row.id === menuId);
-    if (!menu) {
-      return;
-    }
-
     if (
       (availability === "AVAILABLE" || availability === "INCREASED_WAIT") &&
       !menu.hasActiveKitchenCoverage
@@ -325,19 +305,30 @@ export default function KitchenPage() {
       });
       return;
     }
+    if (
+      menu.isCapReached &&
+      (availability === "AVAILABLE" ||
+        availability === "INCREASED_WAIT" ||
+        availability === "PAUSED")
+    ) {
+      notify({
+        level: "error",
+        message: "本日の上限に達しているため変更できません",
+      });
+      return;
+    }
 
-    setAvailabilityBusyMenuId(menuId);
-
+    setAvailabilityBusyMenuId(menu.menuId);
     try {
       await apiFetch("/api/kitchen/menu-availability", {
         method: "POST",
-        body: JSON.stringify({ menuId, availability }),
+        body: JSON.stringify({ menuId: menu.menuId, availability }),
       });
       notify({
         level: "success",
-        message: `${menu.name} を ${labelOf(AVAILABILITY_LABEL, availability)} に変更しました`,
+        message: `${menu.menuName} を ${labelOf(AVAILABILITY_LABEL, availability)} に変更しました`,
       });
-      await reload();
+      await reload("menus");
     } catch (e) {
       notify({
         level: "error",
@@ -346,6 +337,45 @@ export default function KitchenPage() {
       });
     } finally {
       setAvailabilityBusyMenuId(null);
+    }
+  };
+
+  const openCapEditor = (menu: KitchenMenuRow) => {
+    setCapPickerMenuId(menu.menuId);
+    if (menu.dailyOrderCap == null) {
+      setCapUnlimited(true);
+      setCapDraft(1);
+      return;
+    }
+    setCapUnlimited(false);
+    setCapDraft(Math.max(1, menu.dailyOrderCap));
+  };
+
+  const saveCap = async (menu: KitchenMenuRow) => {
+    setCapBusyMenuId(menu.menuId);
+    try {
+      await apiFetch("/api/kitchen/menu-cap", {
+        method: "POST",
+        body: JSON.stringify({
+          menuId: menu.menuId,
+          dailyOrderCap: capUnlimited ? null : Math.max(1, capDraft),
+        }),
+      });
+      notify({
+        level: "success",
+        message: capUnlimited
+          ? `${menu.menuName} の上限を無制限にしました`
+          : `${menu.menuName} の上限を ${Math.max(1, capDraft)} にしました`,
+      });
+      setCapPickerMenuId(null);
+      await reload("menus");
+    } catch (e) {
+      notify({
+        level: "error",
+        message: e instanceof Error ? e.message : "上限設定の更新に失敗しました",
+      });
+    } finally {
+      setCapBusyMenuId(null);
     }
   };
 
@@ -366,13 +396,13 @@ export default function KitchenPage() {
       <DashboardShell
         eyebrow="LIVE TERMINAL"
         title={`${labelOf(ACTOR_TYPE_LABEL, session.actor.actorType)} · ${session.actor.label}`}
-        subtitle="キュー処理と提供状態を同期"
+        subtitle="メニュー別に調理進行と上限を管理"
         hideHeader
       >
         <div className="grid">
           <Card className="card">
             <div className="row between wrap" style={{ marginBottom: 10 }}>
-              <SectionTitle>キッチンキュー</SectionTitle>
+              <SectionTitle>メニュー</SectionTitle>
               <div className="row wrap">
                 <button type="button" className="ghost-btn" onClick={undo}>
                   取り消し
@@ -394,19 +424,57 @@ export default function KitchenPage() {
               </div>
             </div>
 
-            <div className="queue-grid">
-              {queues.length === 0 && (
-                <div className="muted">現在キューはありません</div>
+            <div className="kitchen-menus-grid">
+              {orderedMenus.length === 0 && (
+                <div className="muted">担当メニューがありません</div>
               )}
-              {queues.map((queue) => {
+              {orderedMenus.map((menu) => {
                 const currentElapsed =
-                  queue.oldestQueuedSeconds + elapsedSinceFetchSec;
+                  menu.oldestQueuedSeconds + elapsedSinceFetchSec;
                 const tone = queueTone(currentElapsed);
-                const pickerOpen = pickerMenuId === queue.menuId;
+                const pickerOpen = pickerMenuId === menu.menuId;
+                const capPickerOpen = capPickerMenuId === menu.menuId;
+                const capValue = menu.dailyOrderCap;
+                const remaining = menu.remainingUntilCap;
 
                 return (
-                  <div key={queue.menuId} className={`queue-card ${tone}`}>
-                    <div className="queue-menu-name">{queue.menuName}</div>
+                  <article
+                    key={menu.menuId}
+                    className={cn("queue-card kitchen-menu-tile", tone)}
+                  >
+                    <div className="row between wrap">
+                      <div>
+                        <div className="queue-menu-name">{menu.menuName}</div>
+                        <div className="muted text-xs">
+                          最古キュー:{" "}
+                          {menu.queuedCount > 0
+                            ? formatMss(currentElapsed)
+                            : "0:00"}
+                        </div>
+                      </div>
+                      <span className="badge">
+                        {labelOf(AVAILABILITY_LABEL, menu.availability)}
+                      </span>
+                    </div>
+
+                    <div className="kitchen-menu-stats">
+                      <div className="kitchen-stat">
+                        <span className="muted text-xs">現在キュー</span>
+                        <strong>{menu.queuedCount}</strong>
+                      </div>
+                      <div className="kitchen-stat">
+                        <span className="muted text-xs">本日累計</span>
+                        <strong>{menu.todayOrderCount}</strong>
+                      </div>
+                      <div className="kitchen-stat">
+                        <span className="muted text-xs">残り</span>
+                        <strong>{remaining == null ? "∞" : remaining}</strong>
+                      </div>
+                      <div className="kitchen-stat">
+                        <span className="muted text-xs">上限</span>
+                        <strong>{capValue == null ? "∞" : capValue}</strong>
+                      </div>
+                    </div>
 
                     {pickerOpen ? (
                       <div className="queue-picker">
@@ -426,11 +494,18 @@ export default function KitchenPage() {
                             className="ghost-btn"
                             onClick={() =>
                               setPickerQuantity((prev) =>
-                                Math.min(queue.queuedCount, prev + 1),
+                                Math.min(menu.queuedCount, prev + 1),
                               )
                             }
                           >
                             +
+                          </button>
+                          <button
+                            type="button"
+                            className="ghost-btn"
+                            onClick={() => setPickerQuantity(menu.queuedCount)}
+                          >
+                            最大
                           </button>
                         </div>
                         <div className="row wrap">
@@ -438,7 +513,7 @@ export default function KitchenPage() {
                             type="button"
                             disabled={busy}
                             onClick={() =>
-                              submitReady(queue.menuId, pickerQuantity)
+                              submitReady(menu.menuId, pickerQuantity)
                             }
                           >
                             提供可能にする
@@ -454,78 +529,157 @@ export default function KitchenPage() {
                         </div>
                       </div>
                     ) : (
-                      <>
-                        <div className="queue-count">{queue.queuedCount}</div>
-                        <div className="muted">
-                          最古: {formatMss(currentElapsed)}
-                        </div>
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => readyFromCard(queue)}
-                        >
-                          提供可能へ更新
-                        </button>
-                      </>
+                      <button
+                        type="button"
+                        disabled={busy || menu.queuedCount === 0}
+                        onClick={() => void readyFromCard(menu)}
+                      >
+                        提供可能へ更新
+                      </button>
                     )}
-                  </div>
+
+                    {capPickerOpen ? (
+                      <div className="queue-picker">
+                        <div className="row wrap">
+                          <button
+                            type="button"
+                            className="ghost-btn"
+                            onClick={() => setCapUnlimited(true)}
+                          >
+                            無制限
+                          </button>
+                          <button
+                            type="button"
+                            className="ghost-btn"
+                            onClick={() => {
+                              setCapUnlimited(false);
+                              setCapDraft((prev) => Math.max(1, prev - 10));
+                            }}
+                          >
+                            -10
+                          </button>
+                          <button
+                            type="button"
+                            className="ghost-btn"
+                            onClick={() => {
+                              setCapUnlimited(false);
+                              setCapDraft((prev) => Math.max(1, prev - 1));
+                            }}
+                          >
+                            -
+                          </button>
+                          <div className="stepper-count">
+                            {capUnlimited ? "∞" : capDraft}
+                          </div>
+                          <button
+                            type="button"
+                            className="ghost-btn"
+                            onClick={() => {
+                              setCapUnlimited(false);
+                              setCapDraft((prev) => Math.min(100000, prev + 1));
+                            }}
+                          >
+                            +
+                          </button>
+                          <button
+                            type="button"
+                            className="ghost-btn"
+                            onClick={() => {
+                              setCapUnlimited(false);
+                              setCapDraft((prev) =>
+                                Math.min(100000, prev + 10),
+                              );
+                            }}
+                          >
+                            +10
+                          </button>
+                        </div>
+                        <div className="row wrap">
+                          <Button
+                            type="button"
+                            disabled={capBusyMenuId === menu.menuId}
+                            onClick={() => void saveCap(menu)}
+                          >
+                            上限を保存
+                          </Button>
+                          <button
+                            type="button"
+                            className="ghost-btn"
+                            onClick={() => setCapPickerMenuId(null)}
+                          >
+                            閉じる
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        className="ghost-btn"
+                        onClick={() => openCapEditor(menu)}
+                      >
+                        上限を設定
+                      </button>
+                    )}
+
+                    <div className="menu-status-grid" style={{ marginTop: 8 }}>
+                      {AVAILABILITY_OPTIONS.map((status) => {
+                        const noCoverageForAvailable =
+                          (status === "AVAILABLE" ||
+                            status === "INCREASED_WAIT") &&
+                          !menu.hasActiveKitchenCoverage;
+                        const capBlockedStatus =
+                          menu.isCapReached &&
+                          (status === "AVAILABLE" ||
+                            status === "INCREASED_WAIT" ||
+                            status === "PAUSED");
+                        const disabled =
+                          availabilityBusyMenuId === menu.menuId ||
+                          capBlockedStatus;
+                        const active = menu.availability === status;
+
+                        return (
+                          <Button
+                            key={status}
+                            type="button"
+                            variant={active ? "default" : "outline"}
+                            disabled={disabled}
+                            className={cn(
+                              "h-8 px-2 text-[11px] font-semibold leading-none",
+                              (noCoverageForAvailable || capBlockedStatus) &&
+                                !active &&
+                                "opacity-50",
+                              active
+                                ? STATUS_BUTTON_ACTIVE_TONE[status]
+                                : "bg-background text-foreground hover:bg-muted",
+                            )}
+                            onClick={() => {
+                              if (noCoverageForAvailable) {
+                                notify({
+                                  level: "error",
+                                  message:
+                                    "現在対応できるキッチンがないため、販売中にできません",
+                                });
+                                return;
+                              }
+                              if (capBlockedStatus) {
+                                notify({
+                                  level: "error",
+                                  message:
+                                    "本日の上限に達しているため変更できません",
+                                });
+                                return;
+                              }
+                              void changeAvailability(menu, status);
+                            }}
+                          >
+                            {labelOf(AVAILABILITY_LABEL, status)}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  </article>
                 );
               })}
-            </div>
-          </Card>
-
-          <Card className="card">
-            <SectionTitle>担当メニューの提供状態</SectionTitle>
-            <div className="list">
-              {controllableMenus.length === 0 && (
-                <div className="muted">担当メニューがありません</div>
-              )}
-              {controllableMenus.map((menu) => (
-                <div key={menu.id} className="list-item">
-                  <div className="row between wrap">
-                    <strong>{menu.name}</strong>
-                  </div>
-                  <div className="menu-status-grid" style={{ marginTop: 8 }}>
-                    {AVAILABILITY_OPTIONS.map((status) => {
-                      const noCoverageForAvailable =
-                        (status === "AVAILABLE" ||
-                          status === "INCREASED_WAIT") &&
-                        !menu.hasActiveKitchenCoverage;
-                      const disabled = availabilityBusyMenuId === menu.id;
-                      const active = menu.availability === status;
-
-                      return (
-                        <Button
-                          key={status}
-                          type="button"
-                          variant={active ? "default" : "outline"}
-                          disabled={disabled}
-                          className={cn(
-                            "h-8 px-2 text-[11px] font-semibold leading-none",
-                            noCoverageForAvailable && !active && "opacity-50",
-                            active
-                              ? STATUS_BUTTON_ACTIVE_TONE[status]
-                              : "bg-background text-foreground hover:bg-muted",
-                          )}
-                          onClick={() => {
-                            if (noCoverageForAvailable) {
-                              notify({
-                                level: "error",
-                                message:
-                                  "現在対応できるキッチンがないため、販売中にできません",
-                              });
-                              return;
-                            }
-                            void changeAvailability(menu.id, status);
-                          }}
-                        >
-                          {labelOf(AVAILABILITY_LABEL, status)}
-                        </Button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
             </div>
           </Card>
         </div>

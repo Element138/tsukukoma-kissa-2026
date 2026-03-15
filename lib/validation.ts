@@ -72,6 +72,11 @@ export const kitchenMenuReadySchema = z.object({
   idempotencyKey: z.string().min(8).max(160)
 });
 
+export const kitchenMenuCapUpdateSchema = z.object({
+  menuId: z.string().uuid(),
+  dailyOrderCap: z.number().int().min(1).max(100000).nullable(),
+});
+
 export const serveItemSchema = z.object({
   orderItemId: z.string().uuid(),
   expectedItemStatus: z.enum(["READY"])
@@ -154,6 +159,9 @@ export const menuCreateSchema = z.object({
   priceJpy: z.number().int().min(0).max(100000),
   availability: z.enum(["AVAILABLE", "INCREASED_WAIT", "PAUSED", "SOLD_OUT"]),
   workloadSeconds: z.number().finite().min(0.1).max(7200),
+  dailyOrderCap: z.number().int().min(1).max(100000).nullable().optional(),
+  lowStockBadgeEnabled: z.boolean().optional(),
+  lowStockBadgeThreshold: z.number().int().min(0).max(100000).optional(),
   displayOrder: z.number().int().min(0).max(999),
   categoryId: z.string().uuid(),
   kitchenId: z.string().min(1).max(64),
@@ -170,6 +178,9 @@ export const menuUpdateSchema = z.object({
   priceJpy: z.number().int().min(0).max(100000).optional(),
   availability: z.enum(["AVAILABLE", "INCREASED_WAIT", "PAUSED", "SOLD_OUT"]).optional(),
   workloadSeconds: z.number().finite().min(0.1).max(7200).optional(),
+  dailyOrderCap: z.number().int().min(1).max(100000).nullable().optional(),
+  lowStockBadgeEnabled: z.boolean().optional(),
+  lowStockBadgeThreshold: z.number().int().min(0).max(100000).optional(),
   displayOrder: z.number().int().min(0).max(999).optional(),
   categoryId: z.string().uuid().optional(),
   kitchenId: z.string().min(1).max(64).optional(),
@@ -185,4 +196,8 @@ export const assignmentUpsertSchema = z.object({
   menuId: z.string().uuid(),
   kitchenId: z.string().min(1).max(64),
   enabled: z.boolean()
+});
+
+export const adminMenuCountResetSchema = z.object({
+  menuId: z.string().uuid(),
 });

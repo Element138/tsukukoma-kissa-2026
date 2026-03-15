@@ -6,6 +6,7 @@ import { fail, ok } from "@/lib/response";
 import { parseJson } from "@/lib/server/http";
 import { menuCreateSchema, menuUpdateSchema } from "@/lib/validation";
 import { writeAuditLog } from "@/lib/domain/audit";
+import { getMenuCapStates } from "@/lib/domain/menu-cap";
 import { withRouteTrace, traceError } from "@/lib/server/trace";
 import { AppError } from "@/lib/errors";
 import {
@@ -52,6 +53,9 @@ function isPosAvailabilityOnlyPatch(
     "allergensJson",
     "customBadgeText",
     "customBadgeColor",
+    "dailyOrderCap",
+    "lowStockBadgeEnabled",
+    "lowStockBadgeThreshold",
   ];
 
   return (
@@ -111,6 +115,13 @@ export async function GET(req: NextRequest) {
           orderBy: [{ menuId: "asc" }, { updatedAt: "desc" }],
         }),
       ]);
+      const capStateMap = await getMenuCapStates(
+        prisma,
+        menus.map((menu) => ({
+          menuId: menu.id,
+          dailyOrderCap: menu.dailyOrderCap ?? null,
+        })),
+      );
       trace("db.read.ok", {
         menuCount: menus.length,
         categoryCount: categories.length,
@@ -132,11 +143,19 @@ export async function GET(req: NextRequest) {
       }
 
       return ok({
-        menus: menus.map((menu) => ({
-          ...menu,
-          assignedKitchenId: assignedKitchenByMenuId.get(menu.id) ?? null,
-          hasActiveKitchenCoverage: coveredMenuIds.has(menu.id),
-        })),
+        menus: menus.map((menu) => {
+          const capState = capStateMap.get(menu.id);
+          const isCapReached = capState?.isCapReached ?? false;
+          return {
+            ...menu,
+            availability: isCapReached ? "SOLD_OUT" : menu.availability,
+            assignedKitchenId: assignedKitchenByMenuId.get(menu.id) ?? null,
+            hasActiveKitchenCoverage: coveredMenuIds.has(menu.id),
+            todayOrderCount: capState?.todayCount ?? 0,
+            remainingUntilCap: capState?.remainingUntilCap ?? null,
+            isCapReached,
+          };
+        }),
         categories,
       });
     } catch (error) {
@@ -178,6 +197,9 @@ export async function POST(req: NextRequest) {
             allergensJson: body.allergensJson ?? [],
             customBadgeText: body.customBadgeText ?? null,
             customBadgeColor: body.customBadgeColor ?? null,
+            dailyOrderCap: body.dailyOrderCap ?? null,
+            lowStockBadgeEnabled: body.lowStockBadgeEnabled ?? false,
+            lowStockBadgeThreshold: body.lowStockBadgeThreshold ?? 0,
           },
         });
 
@@ -329,10 +351,34 @@ export async function PATCH(req: NextRequest) {
           });
         }
 
+        const nextDailyOrderCap =
+          body.dailyOrderCap !== undefined
+            ? body.dailyOrderCap
+            : before.dailyOrderCap;
         const nextAvailability =
           body.isActive === false
             ? "PAUSED"
             : (body.availability ?? before.availability);
+        const capStateMap = await getMenuCapStates(tx, [
+          {
+            menuId: body.id,
+            dailyOrderCap: nextDailyOrderCap ?? null,
+          },
+        ]);
+        const capState = capStateMap.get(body.id);
+        if (
+          capState?.isCapReached &&
+          body.availability !== undefined &&
+          (body.availability === "AVAILABLE" ||
+            body.availability === "INCREASED_WAIT" ||
+            body.availability === "PAUSED")
+        ) {
+          throw new AppError(
+            409,
+            "MENU_CAP_REACHED",
+            "本日の上限に達しているため販売状態を変更できません",
+          );
+        }
         if (
           isAvailabilityWithCoverage(nextAvailability) &&
           !(await hasActiveCoverage(tx, body.id))
@@ -378,6 +424,9 @@ export async function PATCH(req: NextRequest) {
             allergensJson: body.allergensJson,
             customBadgeText: body.customBadgeText,
             customBadgeColor: body.customBadgeColor,
+            dailyOrderCap: body.dailyOrderCap,
+            lowStockBadgeEnabled: body.lowStockBadgeEnabled,
+            lowStockBadgeThreshold: body.lowStockBadgeThreshold,
           },
         });
 

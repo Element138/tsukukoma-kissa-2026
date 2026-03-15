@@ -1,7 +1,6 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
-import { partitionRealtimeChannels } from "@/lib/realtime";
 import { fail } from "@/lib/response";
 import { requireSession } from "@/lib/server/auth";
 import {
@@ -15,7 +14,7 @@ import type { RealtimeEnvelope } from "@/lib/realtime";
 export const dynamic = "force-dynamic";
 
 const HEARTBEAT_MS = 15_000;
-const POLL_MS = 1_000;
+const POLL_MS = 300;
 const ROTATE_MS = 55_000;
 const RETRY_MS = 2_000;
 
@@ -59,13 +58,9 @@ export async function GET(req: NextRequest) {
     const actor = await requireSession(req);
     const requested = normalizeRequestedChannels(req.nextUrl.searchParams.get("channels"));
     const allowed = authorizeRealtimeChannels(actor, requested);
-    const { sse: channels } = partitionRealtimeChannels(allowed);
+    const channels = allowed;
     if (channels.length === 0) {
-      throw new AppError(
-        400,
-        "SSE_CHANNEL_NOT_SUPPORTED",
-        "Requested channels are handled by Supabase Realtime"
-      );
+      throw new AppError(400, "CHANNELS_REQUIRED", "At least one realtime channel is required");
     }
 
     const initialCursor = parseCursor(req);

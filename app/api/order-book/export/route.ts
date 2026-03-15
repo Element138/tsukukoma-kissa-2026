@@ -29,6 +29,7 @@ export async function GET(req: NextRequest) {
           items: {
             select: {
               itemNameSnapshot: true,
+              servedAt: true,
             },
           },
         },
@@ -65,6 +66,7 @@ export async function GET(req: NextRequest) {
         "order_no",
         "created_at",
         "confirmed_at",
+        "completed_at",
         "fulfillment_type",
         "table_no",
         "party_size",
@@ -92,6 +94,15 @@ export async function GET(req: NextRequest) {
           order.orderNo,
           order.createdAt.toISOString(),
           order.confirmedAt?.toISOString() ?? "",
+          (() => {
+            const completedAtMs = Math.max(
+              0,
+              ...order.items
+                .map((item) => item.servedAt?.getTime() ?? 0)
+                .filter((value) => value > 0),
+            );
+            return completedAtMs > 0 ? new Date(completedAtMs).toISOString() : "";
+          })(),
           order.fulfillmentType,
           order.tableNo ?? "",
           order.partySize,

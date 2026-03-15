@@ -109,13 +109,13 @@ export function useRealtimeSubscription(options: UseRealtimeSubscriptionOptions)
   onResyncRef.current = onResync;
 
   const normalizedChannels = useMemo(() => normalizeChannels(channels), [channels]);
-  const { ops: opsChannels, sse: sseChannels } = useMemo(
+  const { ops: opsChannels } = useMemo(
     () => partitionRealtimeChannels(normalizedChannels),
     [normalizedChannels]
   );
   const channelKey = useMemo(() => normalizedChannels.join(","), [normalizedChannels]);
   const opsChannelKey = useMemo(() => opsChannels.join(","), [opsChannels]);
-  const sseChannelKey = useMemo(() => sseChannels.join(","), [sseChannels]);
+  const sseChannelKey = channelKey;
 
   useEffect(() => {
     if (!enabled || !channelKey) {

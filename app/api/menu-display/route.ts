@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
+import { getMenuCapStates } from "@/lib/domain/menu-cap";
 import { requireSession } from "@/lib/server/auth";
 import { fail, ok } from "@/lib/response";
 import { normalizeSpecifiedAllergens } from "@/lib/allergens";
@@ -23,6 +24,13 @@ export async function GET(req: NextRequest) {
         update: {},
       }),
     ]);
+    const capStateMap = await getMenuCapStates(
+      prisma,
+      menus.map((menu) => ({
+        menuId: menu.id,
+        dailyOrderCap: menu.dailyOrderCap ?? null,
+      })),
+    );
 
     const result = categories.map((cat) => ({
       id: cat.id,
@@ -30,16 +38,29 @@ export async function GET(req: NextRequest) {
       displayOrder: cat.displayOrder,
       menus: menus
         .filter((menu) => menu.categoryId === cat.id)
-        .map((menu) => ({
-          id: menu.id,
-          name: menu.name,
-          priceJpy: menu.priceJpy,
-          availability: menu.availability,
-          coverImageDataUrl: menu.coverImageDataUrl,
-          allergens: normalizeSpecifiedAllergens(menu.allergensJson),
-          customBadgeText: menu.customBadgeText,
-          customBadgeColor: menu.customBadgeColor,
-        })),
+        .map((menu) => {
+          const capState = capStateMap.get(menu.id);
+          const isCapReached = capState?.isCapReached ?? false;
+          const remainingUntilCap = capState?.remainingUntilCap ?? null;
+          const showLowStockBadge =
+            Boolean(menu.lowStockBadgeEnabled) &&
+            menu.dailyOrderCap != null &&
+            remainingUntilCap != null &&
+            remainingUntilCap <= menu.lowStockBadgeThreshold;
+
+          return {
+            id: menu.id,
+            name: menu.name,
+            priceJpy: menu.priceJpy,
+            availability: isCapReached ? "SOLD_OUT" : menu.availability,
+            coverImageDataUrl: menu.coverImageDataUrl,
+            allergens: normalizeSpecifiedAllergens(menu.allergensJson),
+            customBadgeText: menu.customBadgeText,
+            customBadgeColor: menu.customBadgeColor,
+            showLowStockBadge,
+            remainingUntilCap,
+          };
+        }),
     }));
 
     return ok({

@@ -119,6 +119,7 @@ export async function GET(req: NextRequest) {
         specialNote: order.specialNote,
         items: order.items.map((item) => ({
           id: item.id,
+          menuId: item.menuId,
           name: item.itemNameSnapshot,
           status: item.status,
           kitchenId: item.kitchenId,
@@ -127,7 +128,50 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    return ok({ orders: rows });
+    const menuCountsMap = new Map<
+      string,
+      {
+        menuId: string;
+        name: string;
+        total: number;
+        queued: number;
+        ready: number;
+        served: number;
+        canceled: number;
+      }
+    >();
+
+    for (const order of rows) {
+      for (const item of order.items) {
+        const key = item.menuId;
+        const existing = menuCountsMap.get(key) ?? {
+          menuId: item.menuId,
+          name: item.name,
+          total: 0,
+          queued: 0,
+          ready: 0,
+          served: 0,
+          canceled: 0,
+        };
+        existing.total += 1;
+        if (item.status === "QUEUED") {
+          existing.queued += 1;
+        } else if (item.status === "READY") {
+          existing.ready += 1;
+        } else if (item.status === "SERVED") {
+          existing.served += 1;
+        } else if (item.status === "CANCELED") {
+          existing.canceled += 1;
+        }
+        menuCountsMap.set(key, existing);
+      }
+    }
+
+    const menuCounts = [...menuCountsMap.values()].sort((a, b) =>
+      a.name.localeCompare(b.name, "ja"),
+    );
+
+    return ok({ orders: rows, menuCounts });
   } catch (error) {
     return fail(error);
   }

@@ -132,6 +132,9 @@ model Menu {
   priceJpy        Int
   availability    Availability            @default(AVAILABLE)
   workloadSeconds Float
+  dailyOrderCap   Int?
+  lowStockBadgeEnabled Boolean            @default(false)
+  lowStockBadgeThreshold Int              @default(0)
   displayOrder    Int?                    @default(0)
   coverImageDataUrl String?
   allergensJson   Json                    @default("[]")
@@ -145,6 +148,7 @@ model Menu {
   category        MenuCategory            @relation(fields: [categoryId], references: [id])
   assignments     MenuKitchenAssignment[]
   orderItems      OrderItem[]
+  dailyCounts     MenuDailyCount[]
 
   @@index([categoryId])
   @@index([availability, isActive])
@@ -161,6 +165,18 @@ model MenuKitchenAssignment {
 
   @@id([menuId, kitchenId])
   @@index([kitchenId, enabled])
+}
+
+model MenuDailyCount {
+  menuId     String
+  jstDate    String   @db.VarChar(10)
+  count      Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  menu       Menu     @relation(fields: [menuId], references: [id], onDelete: Cascade)
+
+  @@id([menuId, jstDate])
+  @@index([jstDate])
 }
 
 model Order {

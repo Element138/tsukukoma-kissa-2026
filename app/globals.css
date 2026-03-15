@@ -464,9 +464,14 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   border-color: #58b79b;
 }
 
-.badge.availability-paused {
+.badge.availability-increased_wait {
   color: #9f6800;
   border-color: #d4ae65;
+}
+
+.badge.availability-paused {
+  color: #9a4500;
+  border-color: #ddab7a;
 }
 
 .badge.availability-sold_out {
@@ -493,8 +498,12 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   background: #107954;
 }
 
-.status-btn.status-paused.active {
+.status-btn.status-increased_wait.active {
   background: #8f5c00;
+}
+
+.status-btn.status-paused.active {
+  background: #b85e13;
 }
 
 .status-btn.status-sold_out.active {
@@ -796,6 +805,19 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   font-weight: 700;
 }
 
+.menu-display-row-badge-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.menu-display-row-badge-low-stock {
+  border: 2px solid #b42318;
+  background: #fff;
+  color: #b42318;
+}
+
 .menu-display-row-text strong {
   font-size: clamp(1.45rem, 2.2vw, 2.3rem);
   line-height: 1.24;
@@ -947,6 +969,36 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 12px;
+}
+
+.kitchen-menus-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(540px, 1fr));
+}
+
+.kitchen-menu-tile {
+  gap: 12px;
+}
+
+.kitchen-menu-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.kitchen-stat {
+  border: 1px solid rgba(17, 31, 48, 0.14);
+  background: rgba(255, 255, 255, 0.76);
+  border-radius: 10px;
+  padding: 8px;
+  display: grid;
+  gap: 4px;
+}
+
+.kitchen-stat strong {
+  font-size: 1.25rem;
+  line-height: 1;
 }
 
 .queue-card {
@@ -1485,8 +1537,13 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   .menu-tile-grid,
   .menu-display-columns,
   .waiter-tile-grid,
-  .queue-grid {
+  .queue-grid,
+  .kitchen-menus-grid {
     grid-template-columns: 1fr;
+  }
+
+  .kitchen-menu-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .menu-display-scroll-viewport {

@@ -32,6 +32,7 @@ type OrderRow = {
   id: string;
   orderNo: number;
   createdAt: string;
+  confirmedAt: string | null;
   completedAt: string | null;
   fulfillmentType: "DINE_IN" | "TAKEOUT";
   tableNo: number | null;
@@ -43,11 +44,22 @@ type OrderRow = {
   specialNote: string | null;
   items: Array<{
     id: string;
+    menuId: string;
     name: string;
     status: string;
     kitchenId: string | null;
     kitchenName?: string;
   }>;
+};
+
+type MenuCountRow = {
+  menuId: string;
+  name: string;
+  total: number;
+  queued: number;
+  ready: number;
+  served: number;
+  canceled: number;
 };
 
 type BundledItem = {
@@ -129,6 +141,7 @@ export default function OrderBookPage() {
   const { notify } = useToast();
 
   const [orders, setOrders] = useState<OrderRow[]>([]);
+  const [menuCounts, setMenuCounts] = useState<MenuCountRow[]>([]);
   const [status, setStatus] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
   const [qOrderNo, setQOrderNo] = useState("");
@@ -151,10 +164,11 @@ export default function OrderBookPage() {
       if (paymentMethod) params.set("paymentMethod", paymentMethod);
       if (qOrderNo) params.set("orderNo", qOrderNo);
 
-      const data = await apiFetch<{ orders: OrderRow[] }>(
+      const data = await apiFetch<{ orders: OrderRow[]; menuCounts: MenuCountRow[] }>(
         `/api/order-book?${params.toString()}`,
       );
       setOrders(data.orders);
+      setMenuCounts(data.menuCounts);
     } catch (e) {
       notify({
         level: "error",
@@ -234,13 +248,15 @@ export default function OrderBookPage() {
   const rows = useMemo(() => {
     return orders.map((order) => {
       const createdMs = new Date(order.createdAt).getTime();
-      const completedMs = order.completedAt
-        ? new Date(order.completedAt).getTime()
-        : null;
-      const elapsedSec =
-        order.orderStatus === "COMPLETED" && completedMs
-          ? Math.max(0, Math.floor((completedMs - createdMs) / 1000))
-          : Math.max(0, Math.floor((tickNow - createdMs) / 1000));
+      const elapsedSec = Math.max(0, Math.floor((tickNow - createdMs) / 1000));
+      const confirmedLabel = order.confirmedAt
+        ? new Date(order.confirmedAt).toLocaleTimeString("ja-JP", {
+            hour12: false,
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          })
+        : "-";
 
       return {
         ...order,
@@ -248,7 +264,7 @@ export default function OrderBookPage() {
         bundledItems: bundleItems(order.items),
         elapsedLabel:
           order.orderStatus === "COMPLETED"
-            ? `提供完了まで ${formatMss(elapsedSec)}`
+            ? `確定時刻 ${confirmedLabel}`
             : `注文から ${formatMss(elapsedSec)}`,
       };
     });
@@ -361,6 +377,45 @@ export default function OrderBookPage() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+          </div>
+
+          <div className="card" style={{ marginBottom: 14 }}>
+            <div className="row between wrap" style={{ marginBottom: 8 }}>
+              <strong>品目別カウント（表示のみ）</strong>
+            </div>
+            <div className="table-scroll">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>メニュー</th>
+                    <th>合計</th>
+                    <th>キュー</th>
+                    <th>提供可</th>
+                    <th>提供済</th>
+                    <th>取消</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {menuCounts.map((item) => (
+                    <tr key={item.menuId}>
+                      <td>{item.name}</td>
+                      <td>{item.total}</td>
+                      <td>{item.queued}</td>
+                      <td>{item.ready}</td>
+                      <td>{item.served}</td>
+                      <td>{item.canceled}</td>
+                    </tr>
+                  ))}
+                  {menuCounts.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="muted">
+                        対象データがありません
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
             </div>
           </div>
 

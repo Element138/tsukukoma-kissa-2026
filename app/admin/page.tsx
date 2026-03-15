@@ -103,6 +103,12 @@ type Menu = {
   allergensJson: SpecifiedAllergenKey[];
   customBadgeText: string | null;
   customBadgeColor: string | null;
+  dailyOrderCap: number | null;
+  lowStockBadgeEnabled: boolean;
+  lowStockBadgeThreshold: number;
+  todayOrderCount: number;
+  remainingUntilCap: number | null;
+  isCapReached: boolean;
 };
 type MenuEdit = {
   name: string;
@@ -113,6 +119,9 @@ type MenuEdit = {
   allergens: SpecifiedAllergenKey[];
   customBadgeText: string;
   customBadgeColor: string;
+  dailyOrderCap: string;
+  lowStockBadgeEnabled: boolean;
+  lowStockBadgeThreshold: string;
 };
 type MenuDisplaySettings = {
   pageDisplaySeconds: number;
@@ -144,8 +153,8 @@ const STATUS_BUTTON_ACTIVE_TONE: Record<Menu["availability"], string> = {
   AVAILABLE:
     "border-emerald-700 bg-emerald-600 text-white hover:bg-emerald-700",
   INCREASED_WAIT:
-    "border-orange-700 bg-orange-500 text-white hover:bg-orange-600",
-  PAUSED: "border-amber-700 bg-amber-500 text-white hover:bg-amber-600",
+    "border-amber-700 bg-amber-500 text-white hover:bg-amber-600",
+  PAUSED: "border-orange-700 bg-orange-500 text-white hover:bg-orange-600",
   SOLD_OUT: "border-rose-700 bg-rose-600 text-white hover:bg-rose-700",
 };
 const BADGE_COLOR_HEX_REGEX = /^#[0-9a-fA-F]{6}$/;
@@ -310,6 +319,9 @@ function toMenuEdit(menu: Menu): MenuEdit {
     allergens: normalizeSpecifiedAllergens(menu.allergensJson),
     customBadgeText: menu.customBadgeText ?? "",
     customBadgeColor: menu.customBadgeColor ?? "#d97706",
+    dailyOrderCap: menu.dailyOrderCap == null ? "" : String(menu.dailyOrderCap),
+    lowStockBadgeEnabled: Boolean(menu.lowStockBadgeEnabled),
+    lowStockBadgeThreshold: String(menu.lowStockBadgeThreshold ?? 0),
   };
 }
 
@@ -496,6 +508,11 @@ export default function AdminPage() {
       const menuBadgeColor = menuBadgeText
         ? (menu.customBadgeColor ?? "").trim()
         : "";
+      const dailyOrderCap =
+        edit.dailyOrderCap.trim() === ""
+          ? null
+          : Number(edit.dailyOrderCap.trim());
+      const lowStockBadgeThreshold = Number(edit.lowStockBadgeThreshold.trim() || "0");
       return (
         edit.name !== menu.name ||
         Number(edit.priceJpy) !== menu.priceJpy ||
@@ -504,7 +521,10 @@ export default function AdminPage() {
         normalizedCover !== menuCover ||
         normalizedEditAllergens.join(",") !== normalizedMenuAllergens.join(",") ||
         editBadgeText !== menuBadgeText ||
-        editBadgeColor !== menuBadgeColor
+        editBadgeColor !== menuBadgeColor ||
+        dailyOrderCap !== (menu.dailyOrderCap ?? null) ||
+        edit.lowStockBadgeEnabled !== Boolean(menu.lowStockBadgeEnabled) ||
+        lowStockBadgeThreshold !== (menu.lowStockBadgeThreshold ?? 0)
       );
     });
 
@@ -801,6 +821,9 @@ export default function AdminPage() {
     allergens: SpecifiedAllergenKey[];
     customBadgeText: string;
     customBadgeColor: string;
+    dailyOrderCap: string;
+    lowStockBadgeEnabled: boolean;
+    lowStockBadgeThreshold: string;
   }) => {
     const trimmedName = params.name.trim();
     if (!trimmedName) {
@@ -828,6 +851,23 @@ export default function AdminPage() {
     if (customBadgeText && !BADGE_COLOR_HEX_REGEX.test(customBadgeColor)) {
       throw new Error("バッジ色は #RRGGBB 形式で入力してください");
     }
+    const dailyOrderCapRaw = params.dailyOrderCap.trim();
+    const dailyOrderCap =
+      dailyOrderCapRaw === ""
+        ? null
+        : toPositiveFiniteNumber(dailyOrderCapRaw, "日次上限", {
+            integer: true,
+            min: 1,
+            max: 100000,
+          });
+    const lowStockBadgeThreshold = toPositiveFiniteNumber(
+      params.lowStockBadgeThreshold.trim() || "0",
+      "在庫バッジ閾値",
+      { integer: true, min: 0, max: 100000 },
+    );
+    if (params.lowStockBadgeEnabled && dailyOrderCap == null) {
+      throw new Error("残数バッジを使う場合は日次上限を設定してください");
+    }
 
     return {
       name: trimmedName,
@@ -838,6 +878,9 @@ export default function AdminPage() {
       allergensJson: normalizedAllergens,
       customBadgeText: customBadgeText || null,
       customBadgeColor: customBadgeText ? customBadgeColor : null,
+      dailyOrderCap,
+      lowStockBadgeEnabled: params.lowStockBadgeEnabled,
+      lowStockBadgeThreshold,
     };
   };
 
@@ -1477,6 +1520,9 @@ export default function AdminPage() {
                               allergens: [],
                               customBadgeText: "",
                               customBadgeColor: "#d97706",
+                              dailyOrderCap: "",
+                              lowStockBadgeEnabled: false,
+                              lowStockBadgeThreshold: "0",
                             });
                           } catch (error) {
                             notifyError(error, "入力内容を確認してください");
@@ -1558,6 +1604,9 @@ export default function AdminPage() {
                             <strong className="text-sm">{menu.name}</strong>
                             <div className="mt-1 text-xs text-muted-foreground">
                               {fmtJpy(menu.priceJpy)} / {assignedKitchenLabel}
+                              {menu.dailyOrderCap != null
+                                ? ` / 本日 ${menu.todayOrderCount} (残り ${menu.remainingUntilCap ?? 0} / 上限 ${menu.dailyOrderCap})`
+                                : ` / 本日 ${menu.todayOrderCount}`}
                             </div>
                           </div>
                           <div
@@ -1569,8 +1618,14 @@ export default function AdminPage() {
                                 (status === "AVAILABLE" ||
                                   status === "INCREASED_WAIT") &&
                                 !menu.hasActiveKitchenCoverage;
+                              const capBlockedStatus =
+                                menu.isCapReached &&
+                                (status === "AVAILABLE" ||
+                                  status === "INCREASED_WAIT" ||
+                                  status === "PAUSED");
                               const disabled =
-                                menuAvailabilityBusyId === menu.id;
+                                menuAvailabilityBusyId === menu.id ||
+                                capBlockedStatus;
                               const active = menu.availability === status;
                               return (
                                 <Button
@@ -1580,7 +1635,9 @@ export default function AdminPage() {
                                   disabled={disabled}
                                   className={cn(
                                     "h-8 px-2 text-[11px] font-semibold leading-none",
-                                    noCoverage && !active && "opacity-50",
+                                    (noCoverage || capBlockedStatus) &&
+                                      !active &&
+                                      "opacity-50",
                                     active
                                       ? STATUS_BUTTON_ACTIVE_TONE[status]
                                       : "bg-background text-foreground hover:bg-muted",
@@ -1592,6 +1649,14 @@ export default function AdminPage() {
                                           level: "error",
                                           message:
                                             "現在対応できるキッチンがないため、販売中にできません",
+                                        });
+                                        return;
+                                      }
+                                      if (capBlockedStatus) {
+                                        notify({
+                                          level: "error",
+                                          message:
+                                            "本日の上限に達しているため変更できません",
                                         });
                                         return;
                                       }
@@ -1793,6 +1858,86 @@ export default function AdminPage() {
                             />
                           </label>
                         </div>
+                        <div className="grid gap-2 sm:grid-cols-3">
+                          <InputField
+                            label="日次上限 (空欄=無制限)"
+                            value={edit.dailyOrderCap}
+                            onChange={(value) =>
+                              setMenuEdits((prev) => ({
+                                ...prev,
+                                [menu.id]: {
+                                  ...edit,
+                                  dailyOrderCap: sanitizeIntegerInput(value),
+                                },
+                              }))
+                            }
+                            inputMode="numeric"
+                            placeholder="例: 120"
+                          />
+                          <label className="grid gap-0">
+                            <span className="text-[11px] font-medium leading-none text-muted-foreground">
+                              残数バッジ表示
+                            </span>
+                            <div className="mt-2">
+                              <Switch
+                                checked={edit.lowStockBadgeEnabled}
+                                onCheckedChange={(checked) =>
+                                  setMenuEdits((prev) => ({
+                                    ...prev,
+                                    [menu.id]: {
+                                      ...edit,
+                                      lowStockBadgeEnabled: checked,
+                                    },
+                                  }))
+                                }
+                              />
+                            </div>
+                          </label>
+                          <InputField
+                            label="残数バッジ閾値"
+                            value={edit.lowStockBadgeThreshold}
+                            onChange={(value) =>
+                              setMenuEdits((prev) => ({
+                                ...prev,
+                                [menu.id]: {
+                                  ...edit,
+                                  lowStockBadgeThreshold:
+                                    sanitizeIntegerInput(value),
+                                },
+                              }))
+                            }
+                            inputMode="numeric"
+                            placeholder="例: 10"
+                          />
+                        </div>
+                        <div className="row wrap">
+                          <span className="muted text-xs">
+                            本日のカウント: {menu.todayOrderCount}
+                            {menu.dailyOrderCap != null
+                              ? ` / 残り ${menu.remainingUntilCap ?? 0}`
+                              : ""}
+                          </span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              void runMutation({
+                                action: async () => {
+                                  await apiFetch("/api/admin/menus/reset-count", {
+                                    method: "POST",
+                                    body: JSON.stringify({ menuId: menu.id }),
+                                  });
+                                },
+                                successMessage: "本日のカウントをリセットしました",
+                                errorMessage:
+                                  "カウントのリセットに失敗しました",
+                              })
+                            }
+                          >
+                            カウントをリセット
+                          </Button>
+                        </div>
                         <div className="flex flex-wrap items-center gap-2 rounded-md border bg-card/70 p-2">
                           <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium">
                             画像をアップロード
@@ -1859,6 +2004,11 @@ export default function AdminPage() {
                                     allergens: edit.allergens,
                                     customBadgeText: edit.customBadgeText,
                                     customBadgeColor: edit.customBadgeColor,
+                                    dailyOrderCap: edit.dailyOrderCap,
+                                    lowStockBadgeEnabled:
+                                      edit.lowStockBadgeEnabled,
+                                    lowStockBadgeThreshold:
+                                      edit.lowStockBadgeThreshold,
                                   });
                                 } catch (error) {
                                   notifyError(
@@ -1894,6 +2044,15 @@ export default function AdminPage() {
                                       customBadgeColor:
                                         parsedInput.customBadgeColor ??
                                         "#d97706",
+                                      dailyOrderCap:
+                                        parsedInput.dailyOrderCap == null
+                                          ? ""
+                                          : String(parsedInput.dailyOrderCap),
+                                      lowStockBadgeEnabled:
+                                        parsedInput.lowStockBadgeEnabled,
+                                      lowStockBadgeThreshold: String(
+                                        parsedInput.lowStockBadgeThreshold,
+                                      ),
                                     },
                                   }));
                                 }

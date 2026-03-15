@@ -1,6 +1,7 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 import { now } from "@/lib/time";
 import { AppError } from "@/lib/errors";
+import { getMenuCapStates } from "@/lib/domain/menu-cap";
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
 
@@ -162,8 +163,15 @@ export async function updateMenusAvailabilityByKitchenCoverage(db: DbClient, men
       isActive: true,
       ...(targetMenuIds ? { id: { in: targetMenuIds } } : {})
     },
-    select: { id: true, availability: true }
+    select: { id: true, availability: true, dailyOrderCap: true }
   });
+  const capStateMap = await getMenuCapStates(
+    db,
+    menus.map((menu) => ({
+      menuId: menu.id,
+      dailyOrderCap: menu.dailyOrderCap ?? null,
+    })),
+  );
 
   const pauseIds: string[] = [];
   const availableIds: string[] = [];
@@ -173,7 +181,11 @@ export async function updateMenusAvailabilityByKitchenCoverage(db: DbClient, men
     if (!hasCoverage && (menu.availability === "AVAILABLE" || menu.availability === "INCREASED_WAIT")) {
       pauseIds.push(menu.id);
     }
-    if (hasCoverage && menu.availability === "PAUSED") {
+    if (
+      hasCoverage &&
+      menu.availability === "PAUSED" &&
+      !(capStateMap.get(menu.id)?.isCapReached ?? false)
+    ) {
       availableIds.push(menu.id);
     }
   }
