@@ -49,10 +49,7 @@ export async function GET(req: NextRequest) {
             kitchenActor: {
               select: {
                 id: true,
-                label: true,
-                actorType: true,
-                isActive: true,
-                kitchenEnabled: true
+                label: true
               }
             }
           }

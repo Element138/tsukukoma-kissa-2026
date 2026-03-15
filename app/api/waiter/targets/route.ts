@@ -42,6 +42,16 @@ export async function GET(req: NextRequest) {
         fulfillmentType: "TAKEOUT",
         orderStatus: {
           in: ["AWAITING_SERVING", "PREPARING"]
+        },
+        items: {
+          every: {
+            status: {
+              in: ["READY", "SERVED"]
+            }
+          },
+          some: {
+            status: "READY"
+          }
         }
       },
       select: {
@@ -62,21 +72,15 @@ export async function GET(req: NextRequest) {
       }
     });
 
-    const takeoutOrders = takeoutOrdersRaw
-      .filter((order) => {
-        const allReadyOrServed = order.items.every((i) => i.status === "READY" || i.status === "SERVED");
-        const hasReady = order.items.some((i) => i.status === "READY");
-        return allReadyOrServed && hasReady;
-      })
-      .map((order) => ({
-        id: order.id,
-        orderNo: order.orderNo,
-        createdAt: order.createdAt,
-        totalPriceJpy: order.totalPriceJpy,
-        itemCount: order.items.length,
-        itemNames: order.items.map((i) => i.itemNameSnapshot),
-        readyItemCount: order.items.filter((i) => i.status === "READY").length
-      }));
+    const takeoutOrders = takeoutOrdersRaw.map((order) => ({
+      id: order.id,
+      orderNo: order.orderNo,
+      createdAt: order.createdAt,
+      totalPriceJpy: order.totalPriceJpy,
+      itemCount: order.items.length,
+      itemNames: order.items.map((i) => i.itemNameSnapshot),
+      readyItemCount: order.items.filter((i) => i.status === "READY").length
+    }));
 
     return ok({
       dineInOrders: dineInOrdersRaw.map((order) => ({

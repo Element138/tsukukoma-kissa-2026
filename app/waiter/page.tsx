@@ -75,9 +75,11 @@ export default function WaiterPage() {
   const [takeoutOrders, setTakeoutOrders] = useState<TakeoutOrder[]>([]);
   const [tickNow, setTickNow] = useState(Date.now());
   const reloadInFlightRef = useRef(false);
+  const queuedReloadRef = useRef(false);
 
   const reload = async () => {
     if (reloadInFlightRef.current) {
+      queuedReloadRef.current = true;
       return;
     }
     reloadInFlightRef.current = true;
@@ -97,6 +99,10 @@ export default function WaiterPage() {
       });
     } finally {
       reloadInFlightRef.current = false;
+      if (queuedReloadRef.current) {
+        queuedReloadRef.current = false;
+        void reload();
+      }
     }
   };
 

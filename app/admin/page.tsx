@@ -425,6 +425,7 @@ export default function AdminPage() {
   const [didBootstrap, setDidBootstrap] = useState(false);
 
   const reloadInFlightRef = useRef(false);
+  const queuedReloadRef = useRef(false);
   const hasSettledWithoutUnsavedRef = useRef(false);
 
   const kitchenActors = useMemo(
@@ -525,7 +526,10 @@ export default function AdminPage() {
   ]);
 
   const reload = async () => {
-    if (reloadInFlightRef.current) return;
+    if (reloadInFlightRef.current) {
+      queuedReloadRef.current = true;
+      return;
+    }
     reloadInFlightRef.current = true;
     try {
       const [a, m, c, settings] = await Promise.all([
@@ -602,6 +606,10 @@ export default function AdminPage() {
       });
     } finally {
       reloadInFlightRef.current = false;
+      if (queuedReloadRef.current) {
+        queuedReloadRef.current = false;
+        void reload();
+      }
     }
   };
 

@@ -134,11 +134,13 @@ export default function OrderBookPage() {
   const [qOrderNo, setQOrderNo] = useState("");
   const [tickNow, setTickNow] = useState(Date.now());
   const reloadInFlightRef = useRef(false);
+  const queuedReloadRef = useRef(false);
   const statusSelectValue = status || "__ALL_STATUS__";
   const paymentMethodSelectValue = paymentMethod || "__ALL_PAYMENT__";
 
   const reload = async () => {
     if (reloadInFlightRef.current) {
+      queuedReloadRef.current = true;
       return;
     }
     reloadInFlightRef.current = true;
@@ -161,6 +163,10 @@ export default function OrderBookPage() {
       });
     } finally {
       reloadInFlightRef.current = false;
+      if (queuedReloadRef.current) {
+        queuedReloadRef.current = false;
+        void reload();
+      }
     }
   };
 
