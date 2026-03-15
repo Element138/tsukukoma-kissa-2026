@@ -432,9 +432,8 @@ export default function AdminPage() {
   const [newMenuPrice, setNewMenuPrice] = useState("500");
   const [newMenuCategoryId, setNewMenuCategoryId] = useState("");
   const [newMenuKitchenId, setNewMenuKitchenId] = useState("");
-  const [newMenuAvailability, setNewMenuAvailability] =
-    useState<Menu["availability"]>("PAUSED");
   const [newMenuCoverImageDataUrl, setNewMenuCoverImageDataUrl] = useState("");
+  const [newMenuCoverUploadBusy, setNewMenuCoverUploadBusy] = useState(false);
   const [newMenuAllergens, setNewMenuAllergens] = useState<SpecifiedAllergenKey[]>(
     [],
   );
@@ -1159,6 +1158,24 @@ export default function AdminPage() {
     }
   };
 
+  const uploadNewMenuCover = async (file: File) => {
+    setNewMenuCoverUploadBusy(true);
+    try {
+      const compressed = await compressMenuCoverFile(file);
+      const uploaded = await uploadMenuCoverFile(compressed);
+      setNewMenuCoverImageDataUrl(uploaded.url);
+      notify({ level: "success", message: "新規メニュー画像をアップロードしました" });
+    } catch (e) {
+      notify({
+        level: "error",
+        message:
+          e instanceof Error ? e.message : "新規メニュー画像のアップロードに失敗しました",
+      });
+    } finally {
+      setNewMenuCoverUploadBusy(false);
+    }
+  };
+
   if (loading || !session) return <LoadingScreen />;
 
   return (
@@ -1645,7 +1662,7 @@ export default function AdminPage() {
                   </AccordionTrigger>
                   <AccordionContent>
                     <div className="space-y-3">
-                      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                         <InputField
                           label="メニュー名"
                           value={newMenuName}
@@ -1699,35 +1716,46 @@ export default function AdminPage() {
                             </SelectContent>
                           </Select>
                         </label>
-                        <label className="grid gap-0">
-                          <span className="text-[11px] font-medium leading-none text-muted-foreground">
-                            販売状態
-                          </span>
-                          <Select
-                            value={newMenuAvailability}
-                            onValueChange={(value) =>
-                              setNewMenuAvailability(value as Menu["availability"])
-                            }
-                          >
-                            <SelectTrigger className="bg-background text-foreground">
-                              <SelectValue placeholder="販売状態" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {AVAILABILITY_OPTIONS.map((status) => (
-                                <SelectItem key={status} value={status}>
-                                  {labelOf(AVAILABILITY_LABEL, status)}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </label>
                       </div>
-                      <InputField
-                        label="画像URL (任意)"
-                        value={newMenuCoverImageDataUrl}
-                        onChange={setNewMenuCoverImageDataUrl}
-                        placeholder="https://..."
-                      />
+                      <div className="flex flex-wrap items-center gap-2 rounded-md border bg-card/70 p-2">
+                        <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium">
+                          {newMenuCoverUploadBusy
+                            ? "画像アップロード中..."
+                            : "画像をアップロード"}
+                          <input
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp"
+                            className="hidden"
+                            disabled={newMenuCoverUploadBusy}
+                            onChange={(event) => {
+                              const file = event.target.files?.[0];
+                              if (file) {
+                                void uploadNewMenuCover(file);
+                              }
+                              event.currentTarget.value = "";
+                            }}
+                          />
+                        </label>
+                        {newMenuCoverImageDataUrl ? (
+                          <>
+                            <span className="text-xs text-muted-foreground">
+                              画像アップロード済み
+                            </span>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setNewMenuCoverImageDataUrl("")}
+                            >
+                              画像を削除
+                            </Button>
+                          </>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            画像未設定（任意）
+                          </span>
+                        )}
+                      </div>
                       <div className="grid gap-2 rounded-md border bg-card/70 p-3">
                         <div className="text-xs font-semibold text-muted-foreground">
                           特定原材料（8品目）
@@ -1868,8 +1896,8 @@ export default function AdminPage() {
                                 await apiFetch("/api/admin/menus", {
                                   method: "POST",
                                   body: JSON.stringify({
-                                    ...parsedInput,
-                                    availability: newMenuAvailability,
+                                  ...parsedInput,
+                                    availability: "PAUSED",
                                     workloadSeconds:
                                       DEFAULT_MENU_WORKLOAD_SECONDS,
                                     displayOrder: nextDisplayOrder,
@@ -1884,7 +1912,6 @@ export default function AdminPage() {
                             if (saved) {
                               setNewMenuName("");
                               setNewMenuPrice("500");
-                              setNewMenuAvailability("PAUSED");
                               setNewMenuCoverImageDataUrl("");
                               setNewMenuAllergens([]);
                               setNewMenuCustomBadgeText("");
@@ -1898,6 +1925,7 @@ export default function AdminPage() {
                             !newMenuCategoryId ||
                             !newMenuKitchenId ||
                             !newMenuPrice ||
+                            newMenuCoverUploadBusy ||
                             kitchenActors.length === 0
                           }
                         >

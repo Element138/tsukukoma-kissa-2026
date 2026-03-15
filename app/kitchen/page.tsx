@@ -8,6 +8,7 @@ import { TerminalBanner } from "@/components/terminal-banner";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { LoadingScreen } from "@/components/loading-screen";
 import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
+import { useWakeLock } from "@/components/use-wake-lock";
 import { ACTOR_TYPE_LABEL, AVAILABILITY_LABEL, labelOf } from "@/lib/labels";
 import { useToast } from "@/components/toast";
 import { Card } from "@/components/ui/card";
@@ -88,6 +89,7 @@ function SectionTitle({ children }: { children: ReactNode }) {
 export default function KitchenPage() {
   const { loading, session } = useSession(["KITCHEN"]);
   const { notify } = useToast();
+  useWakeLock(Boolean(session));
 
   const [menus, setMenus] = useState<KitchenMenuRow[]>([]);
   const [myKitchen, setMyKitchen] = useState<KitchenActor | null>(null);
@@ -456,7 +458,7 @@ export default function KitchenPage() {
 
                     <div className="kitchen-menu-metrics">
                       <div className="kitchen-queued-big">
-                        未処理の注文 {menu.queuedCount} 品
+                        調理済みの注文 {menu.queuedCount} 品
                       </div>
                       <div className="kitchen-cap-inline">
                         <span className="kitchen-cap-summary">
@@ -467,13 +469,69 @@ export default function KitchenPage() {
                         <span className="kitchen-cap-remaining">
                           {remaining == null ? "" : remaining}
                         </span>
-                        <button
-                          type="button"
-                          className="ghost-btn kitchen-cap-edit-trigger"
-                          onClick={() => openCapEditor(menu)}
-                        >
-                          上限を変更
-                        </button>
+                        {capPickerOpen ? (
+                          <div className="kitchen-cap-editor-inline">
+                            <button
+                              type="button"
+                              className={cn(
+                                "ghost-btn kitchen-cap-inline-btn",
+                                capUnlimited && "active",
+                              )}
+                              onClick={() => setCapUnlimited(true)}
+                            >
+                              無制限
+                            </button>
+                            <button
+                              type="button"
+                              className="ghost-btn kitchen-cap-inline-btn"
+                              onClick={() => {
+                                setCapUnlimited(false);
+                                setCapDraft((prev) => Math.max(1, prev - 1));
+                              }}
+                            >
+                              -
+                            </button>
+                            <span className="kitchen-cap-inline-value">
+                              {capUnlimited ? "∞" : capDraft}
+                            </span>
+                            <button
+                              type="button"
+                              className="ghost-btn kitchen-cap-inline-btn"
+                              onClick={() => {
+                                setCapUnlimited(false);
+                                setCapDraft((prev) =>
+                                  Math.min(100000, prev + 1),
+                                );
+                              }}
+                            >
+                              +
+                            </button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="h-8 px-3 text-xs"
+                              disabled={capBusyMenuId === menu.menuId}
+                              onClick={() => void saveCap(menu)}
+                            >
+                              保存
+                            </Button>
+                            <button
+                              type="button"
+                              className="ghost-btn kitchen-cap-inline-btn"
+                              onClick={() => setCapPickerMenuId(null)}
+                            >
+                              閉じる
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            className="ghost-btn kitchen-cap-edit-trigger"
+                            onClick={() => openCapEditor(menu)}
+                          >
+                            上限を変更
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -538,81 +596,6 @@ export default function KitchenPage() {
                         提供可能へ更新
                       </button>
                     )}
-
-                    {capPickerOpen ? (
-                      <div className="queue-picker">
-                        <div className="row wrap">
-                          <button
-                            type="button"
-                            className="ghost-btn"
-                            onClick={() => setCapUnlimited(true)}
-                          >
-                            無制限
-                          </button>
-                          <button
-                            type="button"
-                            className="ghost-btn"
-                            onClick={() => {
-                              setCapUnlimited(false);
-                              setCapDraft((prev) => Math.max(1, prev - 10));
-                            }}
-                          >
-                            -10
-                          </button>
-                          <button
-                            type="button"
-                            className="ghost-btn"
-                            onClick={() => {
-                              setCapUnlimited(false);
-                              setCapDraft((prev) => Math.max(1, prev - 1));
-                            }}
-                          >
-                            -
-                          </button>
-                          <div className="stepper-count">
-                            {capUnlimited ? "∞" : capDraft}
-                          </div>
-                          <button
-                            type="button"
-                            className="ghost-btn"
-                            onClick={() => {
-                              setCapUnlimited(false);
-                              setCapDraft((prev) => Math.min(100000, prev + 1));
-                            }}
-                          >
-                            +
-                          </button>
-                          <button
-                            type="button"
-                            className="ghost-btn"
-                            onClick={() => {
-                              setCapUnlimited(false);
-                              setCapDraft((prev) =>
-                                Math.min(100000, prev + 10),
-                              );
-                            }}
-                          >
-                            +10
-                          </button>
-                        </div>
-                        <div className="row wrap">
-                          <Button
-                            type="button"
-                            disabled={capBusyMenuId === menu.menuId}
-                            onClick={() => void saveCap(menu)}
-                          >
-                            上限を保存
-                          </Button>
-                          <button
-                            type="button"
-                            className="ghost-btn"
-                            onClick={() => setCapPickerMenuId(null)}
-                          >
-                            閉じる
-                          </button>
-                        </div>
-                      </div>
-                    ) : null}
 
                     <div className="menu-status-grid" style={{ marginTop: 8 }}>
                       {AVAILABILITY_OPTIONS.map((status) => {

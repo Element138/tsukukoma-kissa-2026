@@ -3,7 +3,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/client";
-import { LogoPlaceholder } from "@/components/logo-placeholder";
 import { ACTOR_TYPE_LABEL, SESSION_FAILURE_LABEL, labelOf } from "@/lib/labels";
 import { routeByActorType } from "@/lib/routes";
 import { useToast } from "@/components/toast";
@@ -57,7 +56,17 @@ export default function LoginPage() {
       .catch((e) => setError(e instanceof Error ? e.message : "ログイン用アカウントの取得に失敗しました"));
   }, []);
 
-  const selectedActor = useMemo(() => actors.find((actor) => actor.id === selectedActorId) ?? null, [actors, selectedActorId]);
+  const selectedActor = useMemo(
+    () => actors.find((actor) => actor.id === selectedActorId) ?? null,
+    [actors, selectedActorId],
+  );
+  const actorTypeChips = useMemo(
+    () =>
+      [...new Set(actors.map((actor) => actor.actorType))].map((actorType) =>
+        labelOf(ACTOR_TYPE_LABEL, actorType),
+      ),
+    [actors],
+  );
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -85,52 +94,82 @@ export default function LoginPage() {
   };
 
   return (
-    <main>
-      <Card className="center-box card">
-        <div className="row between">
-          <div>
-            <h1 style={{ margin: 0 }}>KISSa Login</h1>
-            <p className="muted" style={{ margin: "6px 0 0" }}>
-              Smart Cafe Operation Console
-            </p>
+    <main className="login-page">
+      <div className="login-aura login-aura-one" aria-hidden />
+      <div className="login-aura login-aura-two" aria-hidden />
+      <div className="login-grid-overlay" aria-hidden />
+      <section className="login-stage">
+        <div className="login-hero">
+          <p className="login-eyebrow">KISSA TERMINAL</p>
+          <h1 className="login-title">Calm Shift, Sharp Service</h1>
+          <p className="login-description">
+            フロアもキッチンも、ひとつのリズムで。落ち着いたオペレーションを
+            このログインから始めましょう。
+          </p>
+          <div className="login-chip-row">
+            {actorTypeChips.map((chip) => (
+              <span key={chip} className="login-chip">
+                {chip}
+              </span>
+            ))}
           </div>
-          <LogoPlaceholder />
         </div>
 
-        <form onSubmit={onSubmit} style={{ marginTop: 16 }} className="grid">
-          <label>
-            アカウント
-            <Select value={selectedActorId} onValueChange={setSelectedActorId}>
-              <SelectTrigger className="bg-background text-foreground">
-                <SelectValue placeholder="アカウントを選択" />
-              </SelectTrigger>
-              <SelectContent>
-              {actors.map((actor) => (
-                <SelectItem key={actor.id} value={actor.id}>
-                  {`${actor.label} (${labelOf(ACTOR_TYPE_LABEL, actor.actorType)})`}
-                </SelectItem>
-              ))}
-              </SelectContent>
-            </Select>
-          </label>
+        <Card className="login-card">
+          <div className="login-card-head">
+            <p className="login-card-eyebrow">SIGN IN</p>
+            <h2 className="login-card-title">ようこそ</h2>
+            <p className="login-card-description">
+              アカウントを選び、パスワードを入力してください。
+            </p>
+          </div>
 
-          <label>
-            パスワード
-            <Input
-              type="password"
-              value={secret}
-              onChange={(e) => setSecret(e.target.value)}
-              placeholder={selectedActor ? `${selectedActor.label} のパスワード` : "パスワード"}
-            />
-          </label>
+          <form onSubmit={onSubmit} className="login-form">
+            <label className="login-field">
+              <span>アカウント</span>
+              <Select value={selectedActorId} onValueChange={setSelectedActorId}>
+                <SelectTrigger className="bg-background text-foreground">
+                  <SelectValue placeholder="アカウントを選択" />
+                </SelectTrigger>
+                <SelectContent>
+                  {actors.map((actor) => (
+                    <SelectItem key={actor.id} value={actor.id}>
+                      {`${actor.label} (${labelOf(ACTOR_TYPE_LABEL, actor.actorType)})`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </label>
 
-          <Button type="submit" disabled={busy || !selectedActorId}>
-            {busy ? "ログイン中..." : "ログイン"}
-          </Button>
-        </form>
+            <label className="login-field">
+              <span>パスワード</span>
+              <Input
+                type="password"
+                value={secret}
+                onChange={(e) => setSecret(e.target.value)}
+                placeholder="パスワードを入力"
+              />
+            </label>
 
-        {error && <div className="notice error">{error}</div>}
-      </Card>
+            {selectedActor && (
+              <p className="login-selected-role">
+                現在: {selectedActor.label} (
+                {labelOf(ACTOR_TYPE_LABEL, selectedActor.actorType)})
+              </p>
+            )}
+
+            <Button
+              type="submit"
+              disabled={busy || !selectedActorId}
+              className="login-submit-btn"
+            >
+              {busy ? "ログイン中..." : "ログイン"}
+            </Button>
+          </form>
+
+          {error && <div className="notice error">{error}</div>}
+        </Card>
+      </section>
     </main>
   );
 }

@@ -8,6 +8,7 @@ import { TerminalBanner } from "@/components/terminal-banner";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { ConfirmSlider } from "@/components/confirm-slider";
 import { LoadingScreen } from "@/components/loading-screen";
+import { useWakeLock } from "@/components/use-wake-lock";
 import {
   ACTOR_TYPE_LABEL,
   AVAILABILITY_LABEL,
@@ -110,6 +111,7 @@ function summarizeOrderErrorMessage(rawMessage: string) {
 export default function PosPage() {
   const { loading, session } = useSession(["POS"]);
   const { notify } = useToast();
+  useWakeLock(Boolean(session));
 
   const [menus, setMenus] = useState<MenuPayload | null>(null);
   const [cart, setCart] = useState<Record<string, number>>({});

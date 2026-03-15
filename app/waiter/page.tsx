@@ -8,6 +8,7 @@ import { TerminalBanner } from "@/components/terminal-banner";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { LoadingScreen } from "@/components/loading-screen";
 import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
+import { useWakeLock } from "@/components/use-wake-lock";
 import { useToast } from "@/components/toast";
 import { Card } from "@/components/ui/card";
 import { ACTOR_TYPE_LABEL, labelOf } from "@/lib/labels";
@@ -70,6 +71,7 @@ function bundleTakeoutItems(names: string[]) {
 export default function WaiterPage() {
   const { loading, session } = useSession(["WAITER"]);
   const { notify } = useToast();
+  useWakeLock(Boolean(session));
 
   const [dineInOrders, setDineInOrders] = useState<DineInOrder[]>([]);
   const [takeoutOrders, setTakeoutOrders] = useState<TakeoutOrder[]>([]);
