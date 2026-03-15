@@ -8,7 +8,6 @@ import { confirmOrderPayment } from "@/lib/domain/orders";
 import { openLateSuccessIncident } from "@/lib/domain/payment-incidents";
 import { writeAuditLog } from "@/lib/domain/audit";
 import { broadcastInvalidation, CHANNEL_GROUPS, kitchenChannel } from "@/lib/server/realtime-broadcast";
-import { AppError } from "@/lib/errors";
 
 const debugSchema = z.object({
   orderId: z.string().min(1),
@@ -19,11 +18,7 @@ const debugSchema = z.object({
 export async function POST(req: NextRequest) {
   try {
     await requireSession(req, { actorTypes: ["POS", "ADMIN"] });
-
     // TODO(debug): Remove this endpoint and related keyboard shortcut after payment-flow QA.
-    if (process.env.NODE_ENV === "production" && process.env.ALLOW_DEBUG_SHORTCUT !== "1") {
-      return fail(new AppError(403, "FORBIDDEN", "Debug callback simulation is disabled"));
-    }
 
     const body = await parseJson(req, debugSchema);
 
