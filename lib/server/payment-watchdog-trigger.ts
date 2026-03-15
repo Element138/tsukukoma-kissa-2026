@@ -15,7 +15,8 @@ export function triggerPaymentWatchdogBestEffort() {
   }
 
   lastWatchdogStartedAt = nowMs;
-  watchdogInFlight = runPaymentWatchdog(prisma)
+  watchdogInFlight = prisma
+    .$transaction((tx) => runPaymentWatchdog(tx))
     .then(() => undefined)
     .catch((error) => {
       console.warn("payment watchdog best-effort run failed", error);

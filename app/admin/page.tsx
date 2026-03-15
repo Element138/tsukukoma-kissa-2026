@@ -1060,7 +1060,7 @@ export default function AdminPage() {
         setPageDisplaySecondsDraft(String(data.settings.pageDisplaySeconds));
       }
 
-      notify({ level: "success", message: "未保存の変更をすべて保存しました" });
+      notify({ level: "success", message: "変更をすべて保存しました" });
       await reload();
     } catch (error) {
       notifyError(error, "一括保存に失敗しました");
@@ -1837,7 +1837,7 @@ export default function AdminPage() {
                       </div>
                       <div className="grid gap-2 sm:grid-cols-2">
                         <InputField
-                          label="日次上限 (空欄=無制限)"
+                          label="日次注文上限 (空欄で無制限)"
                           value={newMenuDailyOrderCap}
                           onChange={(value) =>
                             setNewMenuDailyOrderCap(sanitizeIntegerInput(value))
@@ -1846,7 +1846,7 @@ export default function AdminPage() {
                           placeholder="例: 120"
                         />
                         <InputField
-                          label="残数バッジ閾値 (空欄=無制限)"
+                          label="販促バッジを表示する残数閾値 (空欄で常時非表示)"
                           value={newMenuLowStockBadgeThreshold}
                           onChange={(value) =>
                             setNewMenuLowStockBadgeThreshold(
@@ -1854,7 +1854,7 @@ export default function AdminPage() {
                             )
                           }
                           inputMode="numeric"
-                          placeholder="例: 10 / 空欄で無制限"
+                          placeholder="例: 10"
                         />
                       </div>
                       <div className="flex justify-end">

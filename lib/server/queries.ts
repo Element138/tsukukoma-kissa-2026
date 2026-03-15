@@ -59,7 +59,7 @@ export async function listQueuedItemsOnInactiveKitchens(db: PrismaClient | Prism
       ],
       order: {
         orderStatus: {
-          notIn: ["COMPLETED", "CANCELED"]
+          notIn: ["COMPLETED", "FAILED", "CANCELED"]
         }
       }
     },

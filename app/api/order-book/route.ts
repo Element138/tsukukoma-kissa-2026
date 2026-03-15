@@ -83,8 +83,8 @@ export async function GET(req: NextRequest) {
     });
 
     filtered.sort((a, b) => {
-      const aOpen = a.orderStatus !== "COMPLETED";
-      const bOpen = b.orderStatus !== "COMPLETED";
+      const aOpen = a.orderStatus !== "COMPLETED" && a.orderStatus !== "FAILED" && a.orderStatus !== "CANCELED";
+      const bOpen = b.orderStatus !== "COMPLETED" && b.orderStatus !== "FAILED" && b.orderStatus !== "CANCELED";
       if (aOpen !== bOpen) {
         return aOpen ? -1 : 1;
       }
@@ -140,6 +140,10 @@ export async function GET(req: NextRequest) {
     >();
 
     for (const order of rows) {
+      if (order.orderStatus === "FAILED" || order.orderStatus === "CANCELED") {
+        continue;
+      }
+
       for (const item of order.items) {
         const key = item.menuId;
         const existing = menuCountsMap.get(key) ?? {
@@ -196,7 +200,40 @@ export async function GET(req: NextRequest) {
       })
       .sort((a, b) => a.name.localeCompare(b.name, "ja"));
 
-    return ok({ orders: rows, menuCounts });
+    const incidents = await prisma.paymentIncident.findMany({
+      where: {
+        dismissedAt: null
+      },
+      select: {
+        id: true,
+        orderId: true,
+        messageJa: true,
+        createdAt: true,
+        order: {
+          select: {
+            orderNo: true,
+            createdByActorId: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: "desc"
+      },
+      take: 50
+    });
+
+    return ok({
+      orders: rows,
+      menuCounts,
+      incidents: incidents.map((incident) => ({
+        id: incident.id,
+        orderId: incident.orderId,
+        orderNo: incident.order.orderNo,
+        responsiblePosActorId: incident.order.createdByActorId,
+        messageJa: incident.messageJa,
+        createdAt: incident.createdAt
+      }))
+    });
   } catch (error) {
     return fail(error);
   }

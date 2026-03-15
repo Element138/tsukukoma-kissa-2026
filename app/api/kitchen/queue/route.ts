@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
           status: "QUEUED",
           order: {
             confirmedAt: { not: null },
-            orderStatus: { notIn: ["COMPLETED", "CANCELED"] },
+            orderStatus: { notIn: ["COMPLETED", "FAILED", "CANCELED"] },
           },
         },
         select: {

@@ -563,7 +563,7 @@ export default function KitchenPage() {
                             className="ghost-btn"
                             onClick={() => setPickerQuantity(menu.queuedCount)}
                           >
-                            最大
+                            全て
                           </button>
                         </div>
                         <div className="row wrap">

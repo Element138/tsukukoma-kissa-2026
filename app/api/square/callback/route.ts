@@ -4,18 +4,31 @@ import { fail } from "@/lib/response";
 import { verifySquareCallbackSignature } from "@/lib/domain/square";
 import { confirmOrderPayment } from "@/lib/domain/orders";
 import { broadcastInvalidation, CHANNEL_GROUPS, kitchenChannel } from "@/lib/server/realtime-broadcast";
+import { openLateSuccessIncident } from "@/lib/domain/payment-incidents";
+import { writeAuditLog } from "@/lib/domain/audit";
+
+function normalizeSquareResult(value: unknown): "SUCCESS" | "FAILED" {
+  if (value === true) {
+    return "SUCCESS";
+  }
+  const text = String(value ?? "").trim().toUpperCase();
+  if (text === "SUCCESS" || text === "OK") {
+    return "SUCCESS";
+  }
+  return "FAILED";
+}
 
 function parseSquarePayload(text: string, url: URL) {
   try {
     const parsed = JSON.parse(text);
     return {
       orderId: parsed.state || parsed.orderId,
-      result: parsed.success === true || parsed.result === "SUCCESS" ? "SUCCESS" : "FAILED",
+      result: normalizeSquareResult(parsed.result ?? parsed.status ?? parsed.success),
       squareTransactionId: parsed.transaction_id || parsed.squareTransactionId
     } as const;
   } catch {
     const orderId = url.searchParams.get("state") || url.searchParams.get("orderId");
-    const result = url.searchParams.get("result") === "SUCCESS" ? "SUCCESS" : "FAILED";
+    const result = normalizeSquareResult(url.searchParams.get("result") || url.searchParams.get("status"));
     const squareTransactionId = url.searchParams.get("transaction_id") || undefined;
     return {
       orderId,
@@ -43,12 +56,64 @@ async function applySquareCallback(payload: { orderId: string | null; result: "S
     where: { id: payload.orderId },
     select: {
       id: true,
-      confirmedAt: true
+      orderNo: true,
+      createdByActorId: true,
+      confirmedAt: true,
+      paymentStatus: true
     }
   });
+  if (!existing) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: {
+          code: "ORDER_NOT_FOUND",
+          message: "対象の注文が見つかりません"
+        }
+      },
+      { status: 404 }
+    );
+  }
 
-  if (existing?.confirmedAt) {
+  if (existing.confirmedAt) {
     return NextResponse.json({ ok: true, data: { alreadyProcessed: true } }, { status: 200 });
+  }
+  if (payload.result === "FAILED" && existing.paymentStatus === "FAILED") {
+    return NextResponse.json({ ok: true, data: { alreadyProcessed: true } }, { status: 200 });
+  }
+
+  if (payload.result === "SUCCESS" && existing.paymentStatus === "FAILED") {
+    const incident = await prisma.$transaction(async (tx) => {
+      const created = await openLateSuccessIncident(tx, {
+        orderId: existing.id,
+        orderNo: existing.orderNo,
+        responsiblePosActorId: existing.createdByActorId,
+        squareTransactionId: payload.squareTransactionId ?? null
+      });
+
+      await writeAuditLog(tx, {
+        actorId: null,
+        actorType: null,
+        actionType: "LATE_SUCCESS_CALLBACK_IGNORED",
+        entityType: "payment_incident",
+        entityId: created.id,
+        orderId: existing.id,
+        afterJson: {
+          orderNo: existing.orderNo,
+          responsiblePosActorId: existing.createdByActorId,
+          squareTransactionId: payload.squareTransactionId ?? null
+        },
+        result: "SUCCESS"
+      });
+
+      await broadcastInvalidation(tx, CHANNEL_GROUPS.ORDER_FLOW, "orders", "payment_incident");
+      return created;
+    });
+
+    return NextResponse.json(
+      { ok: true, data: { ignoredLateSuccess: true, incidentId: incident.id } },
+      { status: 200 }
+    );
   }
 
   await prisma.$transaction(async (tx) => {

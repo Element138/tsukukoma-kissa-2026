@@ -11,8 +11,13 @@ export function deriveOrderStatus(params: {
   canceledAt: Date | null;
   confirmedAt: Date | null;
 }): OrderStatus {
-  if (params.canceledAt || params.paymentStatus === "CANCELED") {
-    return "CANCELED";
+  // Keep legacy canceled rows in FAILED terminal state.
+  if (
+    params.paymentStatus === "FAILED" ||
+    params.paymentStatus === "CANCELED" ||
+    Boolean(params.canceledAt)
+  ) {
+    return "FAILED";
   }
 
   if (!params.confirmedAt) {

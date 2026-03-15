@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
     const dineInOrdersRaw = await prisma.order.findMany({
       where: {
         fulfillmentType: "DINE_IN",
-        orderStatus: { notIn: ["COMPLETED", "CANCELED"] },
+        orderStatus: { notIn: ["COMPLETED", "FAILED", "CANCELED"] },
         items: {
           some: {
             status: "READY"

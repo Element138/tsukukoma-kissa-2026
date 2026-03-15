@@ -624,7 +624,6 @@ export default function MenuDisplayPage() {
       )}
 
       <DashboardShell
-        eyebrow="MENU"
         title="メニュー"
         fancyHeader
         className={
@@ -681,7 +680,7 @@ export default function MenuDisplayPage() {
                     const showLowStockBadge = menu.showLowStockBadge;
                     const lowStockLabel =
                       menu.remainingUntilCap != null
-                        ? `残り ${menu.remainingUntilCap}`
+                        ? `残り ${menu.remainingUntilCap} 個`
                         : "残り -";
 
                     return (

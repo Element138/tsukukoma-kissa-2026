@@ -161,12 +161,12 @@ export default function AuditPage() {
           <div className="row between wrap" style={{ marginBottom: 12 }}>
             {/* <h1 style={{ margin: 0 }}>監査ログ</h1> */}
             <div className="row wrap">
+              <Link href="/admin" className="btn-link ghost-btn">
+                戻る
+              </Link>
               <a href="/api/audit/export" className="btn-link ghost-btn">
                 CSV出力
               </a>
-              <Link href="/admin" className="btn-link ghost-btn">
-                管理画面へ戻る
-              </Link>
             </div>
           </div>
 

@@ -32,7 +32,12 @@ export async function serveDineInItem(
   assert(item, 404, "ITEM_NOT_FOUND", "Item not found");
   assert(item.order.fulfillmentType === "DINE_IN", 400, "NOT_DINE_IN", "Item is not dine-in");
   assert(item.status === "READY", 409, "ITEM_NOT_READY", "Only ready item can be served");
-  assert(item.order.orderStatus !== "CANCELED", 409, "ORDER_CANCELED", "Order canceled");
+  assert(
+    item.order.orderStatus !== "FAILED" && item.order.orderStatus !== "CANCELED",
+    409,
+    "ORDER_FAILED",
+    "Order failed"
+  );
 
   const changed = await db.orderItem.updateMany({
     where: {
@@ -105,7 +110,12 @@ export async function serveReadyItemsForOrder(
   });
 
   assert(order, 404, "ORDER_NOT_FOUND", "Order not found");
-  assert(order.orderStatus !== "CANCELED", 409, "ORDER_CANCELED", "Order canceled");
+  assert(
+    order.orderStatus !== "FAILED" && order.orderStatus !== "CANCELED",
+    409,
+    "ORDER_FAILED",
+    "Order failed"
+  );
   assert(order.items.length > 0, 409, "ORDER_EMPTY", "Order has no items");
 
   const readyItemIds = order.items.filter((i) => i.status === "READY").map((i) => i.id);

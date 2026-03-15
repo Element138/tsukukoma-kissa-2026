@@ -47,6 +47,7 @@ enum OrderStatus {
   PREPARING
   AWAITING_SERVING
   COMPLETED
+  FAILED
   CANCELED
 }
 
@@ -76,6 +77,10 @@ enum PaymentSkipReasonType {
   OTHER
 }
 
+enum PaymentIncidentType {
+  LATE_SUCCESS_AFTER_FAILED
+}
+
 model Actor {
   id                  String                  @id @db.VarChar(64)
   actorType           ActorType
@@ -96,6 +101,7 @@ model Actor {
   kitchenOrderItems   OrderItem[]             @relation("KitchenActorOrderItems")
   undoOperations      UndoOperation[]
   auditLogs           AuditLog[]              @relation("AuditActor")
+  dismissedPaymentIncidents PaymentIncident[] @relation("PaymentIncidentDismissedBy")
 
   @@index([actorType])
   @@index([actorType, isActive, kitchenEnabled])
@@ -206,6 +212,7 @@ model Order {
   createdBy              Actor                 @relation("OrderCreatedBy", fields: [createdByActorId], references: [id])
   items                  OrderItem[]
   auditLogs              AuditLog[]
+  paymentIncidents       PaymentIncident[]
 
   @@index([createdAt])
   @@index([orderStatus, createdAt])
@@ -295,4 +302,20 @@ model AppSetting {
   menuDisplayPageSeconds Int      @default(18)
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
+}
+
+model PaymentIncident {
+  id                String              @id @default(cuid())
+  orderId           String
+  incidentType      PaymentIncidentType
+  messageJa         String              @db.VarChar(400)
+  detailsJson       Json?
+  createdAt         DateTime            @default(now())
+  dismissedAt       DateTime?
+  dismissedByActorId String?            @db.VarChar(64)
+  order             Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  dismissedBy       Actor?              @relation("PaymentIncidentDismissedBy", fields: [dismissedByActorId], references: [id], onDelete: SetNull)
+
+  @@index([orderId, createdAt])
+  @@index([dismissedAt, createdAt])
 }

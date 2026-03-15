@@ -21,7 +21,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ orderI
         reasonText: body.reasonText
       });
 
-      await broadcastInvalidation(tx, CHANNEL_GROUPS.ORDER_FLOW, "orders", "order_canceled");
+      await broadcastInvalidation(tx, CHANNEL_GROUPS.ORDER_FLOW, "orders", "order_failed");
       return updated;
     });
 

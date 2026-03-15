@@ -1511,6 +1511,12 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   background: #ecfff5;
 }
 
+.order-status-failed {
+  color: #7f1d1d;
+  border-color: #dd9494;
+  background: #fff1f1;
+}
+
 .order-status-canceled {
   color: #666;
   border-color: #bbb;

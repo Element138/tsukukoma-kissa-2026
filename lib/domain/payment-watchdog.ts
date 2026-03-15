@@ -1,11 +1,22 @@
 import { Prisma, PrismaClient } from "@prisma/client";
-import { now, secondsFromNow } from "@/lib/time";
+import { now } from "@/lib/time";
 import { writeAuditLog } from "@/lib/domain/audit";
 import { broadcastInvalidation, CHANNEL_GROUPS } from "@/lib/server/realtime-broadcast";
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
+const PAYMENT_WATCHDOG_LOCK_KEY = 809_941_253;
 
 export async function runPaymentWatchdog(db: DbClient) {
+  const lock = await db.$queryRaw<Array<{ acquired: boolean }>>`
+    SELECT pg_try_advisory_xact_lock(${PAYMENT_WATCHDOG_LOCK_KEY}) AS acquired
+  `;
+  if (!lock[0]?.acquired) {
+    return {
+      paymentFailed: 0,
+      cleanedAwaiting: 0
+    };
+  }
+
   const current = now();
 
   const awaitingTimeouts = await db.order.findMany({
@@ -24,17 +35,25 @@ export async function runPaymentWatchdog(db: DbClient) {
   });
 
   for (const order of awaitingTimeouts) {
-    await db.order.update({
-      where: { id: order.id },
+    const changed = await db.order.updateMany({
+      where: {
+        id: order.id,
+        paymentStatus: "AWAITING",
+        confirmedAt: null
+      },
       data: {
         paymentStatus: "FAILED",
-        autoCancelDeadlineAt: secondsFromNow(60),
+        orderStatus: "FAILED",
         paymentAwaitDeadlineAt: null,
+        autoCancelDeadlineAt: null,
         lastMutationVersion: {
           increment: 1
         }
       }
     });
+    if (changed.count !== 1) {
+      continue;
+    }
 
     await writeAuditLog(db, {
       actorId: null,
@@ -47,61 +66,12 @@ export async function runPaymentWatchdog(db: DbClient) {
     });
   }
 
-  const failedTimeouts = await db.order.findMany({
-    where: {
-      paymentStatus: "FAILED",
-      confirmedAt: null,
-      canceledAt: null,
-      autoCancelDeadlineAt: {
-        lte: current
-      }
-    },
-    select: {
-      id: true
-    }
-  });
-
-  for (const order of failedTimeouts) {
-    await db.order.update({
-      where: { id: order.id },
-      data: {
-        canceledAt: now(),
-        paymentStatus: "CANCELED",
-        orderStatus: "CANCELED",
-        autoCancelDeadlineAt: null,
-        lastMutationVersion: {
-          increment: 1
-        }
-      }
-    });
-
-    await db.orderItem.updateMany({
-      where: {
-        orderId: order.id,
-        status: "QUEUED"
-      },
-      data: {
-        status: "CANCELED"
-      }
-    });
-
-    await writeAuditLog(db, {
-      actorId: null,
-      actorType: null,
-      actionType: "PAYMENT_TIMEOUT_CANCELED",
-      entityType: "order",
-      entityId: order.id,
-      orderId: order.id,
-      result: "SUCCESS"
-    });
-  }
-
-  if (awaitingTimeouts.length > 0 || failedTimeouts.length > 0) {
+  if (awaitingTimeouts.length > 0) {
     await broadcastInvalidation(db, CHANNEL_GROUPS.ORDER_FLOW, "orders", "payment_watchdog");
   }
 
   return {
     paymentFailed: awaitingTimeouts.length,
-    autoCanceled: failedTimeouts.length
+    cleanedAwaiting: awaitingTimeouts.length
   };
 }

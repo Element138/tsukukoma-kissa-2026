@@ -61,6 +61,15 @@ type MenuCountRow = {
   toCap: number | null;
 };
 
+type PaymentIncidentRow = {
+  id: string;
+  orderId: string;
+  orderNo: number;
+  responsiblePosActorId: string;
+  messageJa: string;
+  createdAt: string;
+};
+
 type BundledItem = {
   key: string;
   name: string;
@@ -86,6 +95,8 @@ function orderStatusClass(orderStatus: string) {
       return "order-status-awaiting";
     case "COMPLETED":
       return "order-status-completed";
+    case "FAILED":
+      return "order-status-failed";
     case "CANCELED":
       return "order-status-canceled";
     default:
@@ -94,7 +105,7 @@ function orderStatusClass(orderStatus: string) {
 }
 
 function orderAgeClass(orderStatus: string, elapsedSec: number) {
-  if (orderStatus === "COMPLETED" || orderStatus === "CANCELED") {
+  if (orderStatus === "COMPLETED" || orderStatus === "FAILED" || orderStatus === "CANCELED") {
     return "";
   }
   if (elapsedSec >= 600) {
@@ -141,6 +152,7 @@ export default function OrderBookPage() {
 
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [menuCounts, setMenuCounts] = useState<MenuCountRow[]>([]);
+  const [incidents, setIncidents] = useState<PaymentIncidentRow[]>([]);
   const [status, setStatus] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
   const [qOrderNo, setQOrderNo] = useState("");
@@ -166,9 +178,11 @@ export default function OrderBookPage() {
       const data = await apiFetch<{
         orders: OrderRow[];
         menuCounts: MenuCountRow[];
+        incidents: PaymentIncidentRow[];
       }>(`/api/order-book?${params.toString()}`);
       setOrders(data.orders);
       setMenuCounts(data.menuCounts);
+      setIncidents(data.incidents ?? []);
     } catch (e) {
       notify({
         level: "error",
@@ -241,6 +255,21 @@ export default function OrderBookPage() {
         level: "error",
         message:
           e instanceof Error ? e.message : "レシート再印刷に失敗しました",
+      });
+    }
+  };
+
+  const dismissIncident = async (incidentId: string) => {
+    try {
+      await apiFetch(`/api/order-book/incidents/${incidentId}/dismiss`, {
+        method: "POST",
+      });
+      setIncidents((prev) => prev.filter((row) => row.id !== incidentId));
+      notify({ level: "success", message: "異常通知を確認済みにしました" });
+    } catch (e) {
+      notify({
+        level: "error",
+        message: e instanceof Error ? e.message : "異常通知の更新に失敗しました",
       });
     }
   };
@@ -348,8 +377,8 @@ export default function OrderBookPage() {
                     <SelectItem value="COMPLETED">
                       {labelOf(ORDER_STATUS_LABEL, "COMPLETED")}
                     </SelectItem>
-                    <SelectItem value="CANCELED">
-                      {labelOf(ORDER_STATUS_LABEL, "CANCELED")}
+                    <SelectItem value="FAILED">
+                      {labelOf(ORDER_STATUS_LABEL, "FAILED")}
                     </SelectItem>
                   </SelectContent>
                 </Select>
@@ -419,6 +448,46 @@ export default function OrderBookPage() {
               </table>
             </div>
           </div>
+
+          {incidents.length > 0 && (
+            <div
+              className="card"
+              style={{
+                marginBottom: 14,
+                borderColor: "#dd9494",
+                background: "#fff1f1",
+              }}
+            >
+              <div className="row between wrap" style={{ marginBottom: 8 }}>
+                <strong style={{ color: "#7f1d1d" }}>
+                  重要: 決済矛盾の要確認注文
+                </strong>
+              </div>
+              <div className="list">
+                {incidents.map((incident) => (
+                  <div key={incident.id} className="notice error" style={{ margin: 0 }}>
+                    <div style={{ color: "#7f1d1d", fontWeight: 700 }}>
+                      注文 #{incident.orderNo}
+                    </div>
+                    <div>{incident.messageJa}</div>
+                    <div className="row between wrap" style={{ marginTop: 8 }}>
+                      <span className="muted">
+                        担当POS: {incident.responsiblePosActorId} /{" "}
+                        {new Date(incident.createdAt).toLocaleString("ja-JP")}
+                      </span>
+                      <button
+                        type="button"
+                        className="ghost-btn"
+                        onClick={() => void dismissIncident(incident.id)}
+                      >
+                        確認済みにする
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="list">
             {rows.map((order) => (
@@ -499,6 +568,7 @@ export default function OrderBookPage() {
                   </button>
                   {canEditNote &&
                     order.orderStatus !== "COMPLETED" &&
+                    order.orderStatus !== "FAILED" &&
                     order.orderStatus !== "CANCELED" && (
                       <button
                         type="button"

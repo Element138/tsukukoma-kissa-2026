@@ -7,6 +7,7 @@ import { requireSession } from "@/lib/server/auth";
 import { orderCreateSchema } from "@/lib/validation";
 import { parseJson } from "@/lib/server/http";
 import { createOrderAtPaymentStart } from "@/lib/domain/orders";
+import { runPaymentWatchdog } from "@/lib/domain/payment-watchdog";
 import { createSquareAppSwitchRequest } from "@/lib/domain/square";
 import { broadcastInvalidation, CHANNEL_GROUPS, kitchenChannel } from "@/lib/server/realtime-broadcast";
 import { triggerPaymentWatchdogBestEffort } from "@/lib/server/payment-watchdog-trigger";
@@ -85,6 +86,8 @@ export async function POST(req: NextRequest) {
     const body = await parseJson(req, orderCreateSchema);
 
     const result = await prisma.$transaction(async (tx) => {
+      await runPaymentWatchdog(tx);
+
       const created = await createOrderAtPaymentStart(tx, {
         actorId: actor.actorId,
         actorType: actor.actorType,

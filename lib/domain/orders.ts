@@ -14,6 +14,7 @@ import { reserveMenuDailyCountsForOrder } from "@/lib/domain/menu-cap";
 import { now, secondsFromNow } from "@/lib/time";
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
+const SQUARE_AWAIT_TIMEOUT_SECONDS = 330;
 
 type OrderEvent = {
   type: string;
@@ -40,6 +41,27 @@ async function appendOrderEvent(db: DbClient, orderId: string, event: OrderEvent
     where: { id: orderId },
     data: {
       events: [...events, event] as Prisma.InputJsonValue
+    }
+  });
+}
+
+export async function findOpenSquareAwaitingOrderForPos(db: DbClient, actorId: string) {
+  return db.order.findFirst({
+    where: {
+      createdByActorId: actorId,
+      paymentMethod: "SQUARE",
+      paymentStatus: "AWAITING",
+      confirmedAt: null
+    },
+    select: {
+      id: true,
+      orderNo: true,
+      createdAt: true,
+      paymentAwaitDeadlineAt: true,
+      totalPriceJpy: true
+    },
+    orderBy: {
+      createdAt: "desc"
     }
   });
 }
@@ -143,6 +165,15 @@ export async function createOrderAtPaymentStart(
     return { order: duplicate, duplicated: true };
   }
 
+  const awaiting = await findOpenSquareAwaitingOrderForPos(db, params.actorId);
+  if (awaiting) {
+    throw new AppError(
+      409,
+      "POS_AWAITING_ORDER",
+      `注文 #${awaiting.orderNo} のSquare決済結果を待機中です。先に決済を完了または失敗させてください。`
+    );
+  }
+
   const menuIds = [...new Set(params.payload.items.map((x) => x.menuId))];
   const menus = await db.menu.findMany({
     where: {
@@ -223,8 +254,11 @@ export async function createOrderAtPaymentStart(
       paymentSkipReasonType: params.payload.paymentSkipReasonType ?? null,
       paymentSkipReasonText: params.payload.paymentSkipReasonText ?? null,
       totalPriceJpy,
-      paymentAwaitDeadlineAt: params.payload.paymentMethod === "SQUARE" ? secondsFromNow(60) : null,
-      autoCancelDeadlineAt: params.payload.paymentMethod === "SQUARE" ? secondsFromNow(120) : null,
+      paymentAwaitDeadlineAt:
+        params.payload.paymentMethod === "SQUARE"
+          ? secondsFromNow(SQUARE_AWAIT_TIMEOUT_SECONDS)
+          : null,
+      autoCancelDeadlineAt: null,
       items: {
         createMany: {
           data: expanded.map((item) => ({
@@ -302,8 +336,9 @@ export async function confirmOrderPayment(
       where: { id: params.orderId },
       data: {
         paymentStatus: "FAILED",
+        orderStatus: "FAILED",
         paymentAwaitDeadlineAt: null,
-        autoCancelDeadlineAt: secondsFromNow(60),
+        autoCancelDeadlineAt: null,
         lastMutationVersion: {
           increment: 1
         }
@@ -431,12 +466,11 @@ export async function cancelPendingOrder(
   assert(order.confirmedAt === null, 409, "ALREADY_CONFIRMED", "Confirmed order cannot be canceled");
   assert(order.orderStatus === "PENDING", 409, "INVALID_STATUS", "Only pending order can be canceled");
 
-  const canceled = await db.order.update({
+  const failed = await db.order.update({
     where: { id: params.orderId },
     data: {
-      canceledAt: now(),
-      paymentStatus: "CANCELED",
-      orderStatus: "CANCELED",
+      paymentStatus: "FAILED",
+      orderStatus: "FAILED",
       paymentAwaitDeadlineAt: null,
       autoCancelDeadlineAt: null,
       lastMutationVersion: {
@@ -459,7 +493,7 @@ export async function cancelPendingOrder(
   });
 
   await appendOrderEvent(db, params.orderId, {
-    type: "ORDER_CANCELED",
+    type: "ORDER_FAILED",
     at: now().toISOString(),
     actorId: params.actorId,
     detail: {
@@ -470,7 +504,7 @@ export async function cancelPendingOrder(
   await writeAuditLog(db, {
     actorId: params.actorId,
     actorType: params.actorType,
-    actionType: "ORDER_CANCELED",
+    actionType: "ORDER_FAILED",
     entityType: "order",
     entityId: params.orderId,
     orderId: params.orderId,
@@ -478,7 +512,7 @@ export async function cancelPendingOrder(
     result: "SUCCESS"
   });
 
-  return canceled;
+  return failed;
 }
 
 export async function markOrderSpecialNote(
@@ -492,7 +526,7 @@ export async function markOrderSpecialNote(
 ) {
   const order = await db.order.findUnique({ where: { id: params.orderId } });
   assert(order, 404, "ORDER_NOT_FOUND", "Order not found");
-  assert(order.orderStatus !== "COMPLETED" && order.orderStatus !== "CANCELED", 409, "ORDER_LOCKED", "Cannot edit note");
+  assert(order.orderStatus !== "COMPLETED" && order.orderStatus !== "FAILED", 409, "ORDER_LOCKED", "Cannot edit note");
 
   const updated = await db.order.update({
     where: { id: params.orderId },

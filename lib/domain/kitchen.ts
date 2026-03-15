@@ -61,7 +61,12 @@ export async function markKitchenItemReady(
   assert(item, 404, "ITEM_NOT_FOUND", "Item not found");
   assert(item.status === "QUEUED", 409, "ITEM_NOT_QUEUED", "Only queued item can be marked ready");
   assert(item.kitchenId === params.kitchenId, 403, "KITCHEN_MISMATCH", "Kitchen can operate only own kitchen items");
-  assert(item.order.orderStatus !== "CANCELED", 409, "ORDER_CANCELED", "Order canceled");
+  assert(
+    item.order.orderStatus !== "FAILED" && item.order.orderStatus !== "CANCELED",
+    409,
+    "ORDER_FAILED",
+    "Order failed"
+  );
 
   const updatedCount = await db.orderItem.updateMany({
     where: {
@@ -156,7 +161,7 @@ export async function markKitchenMenuItemsReady(
       status: "QUEUED",
       order: {
         confirmedAt: { not: null },
-        orderStatus: { notIn: ["COMPLETED", "CANCELED"] }
+        orderStatus: { notIn: ["COMPLETED", "FAILED", "CANCELED"] }
       }
     },
     include: {
