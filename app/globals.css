@@ -777,7 +777,7 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
 .menu-display-row-text {
   padding: 12px 14px;
   display: grid;
-  align-content: start;
+  align-content: center;
   gap: 8px;
 }
 

@@ -20,8 +20,8 @@ function resolveExtension(contentType: string) {
 export async function POST(req: NextRequest) {
   try {
     await requireSession(req, { actorTypes: ["ADMIN"] });
-
-    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
+    if (!blobToken) {
       throw new AppError(
         500,
         "BLOB_TOKEN_MISSING",
@@ -54,14 +54,22 @@ export async function POST(req: NextRequest) {
 
     const ext = resolveExtension(file.type);
     const pathname = `menu-covers/${crypto.randomUUID()}.${ext}`;
-
-    const uploaded = await put(pathname, file, {
-      access: "public",
-      contentType: file.type,
-      addRandomSuffix: false,
-    });
-
-    return ok({ url: uploaded.url, pathname: uploaded.pathname });
+    try {
+      const uploaded = await put(pathname, file, {
+        token: blobToken,
+        access: "public",
+        contentType: file.type,
+        addRandomSuffix: false,
+      });
+      return ok({ url: uploaded.url, pathname: uploaded.pathname });
+    } catch (error) {
+      console.error("menu cover upload to Vercel Blob failed", error);
+      throw new AppError(
+        502,
+        "BLOB_UPLOAD_FAILED",
+        error instanceof Error ? error.message : "Blob upload failed",
+      );
+    }
   } catch (error) {
     return fail(error);
   }
