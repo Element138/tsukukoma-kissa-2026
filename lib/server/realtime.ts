@@ -91,9 +91,21 @@ export async function publishRealtimeEvent(db: DbClient, input: RealtimeEventInp
 }
 
 export async function publishRealtimeEvents(db: DbClient, inputs: RealtimeEventInput[]) {
-  for (const input of inputs) {
-    await publishRealtimeEvent(db, input);
+  if (inputs.length === 0) {
+    return;
   }
+
+  for (const input of inputs) {
+    assertRealtimeInput(input);
+  }
+
+  await db.realtimeEvent.createMany({
+    data: inputs.map((input) => ({
+      channel: input.channel,
+      eventType: input.eventType,
+      payload: asRealtimePayload(input.payload)
+    }))
+  });
 }
 
 export async function publishBulkInvalidation(

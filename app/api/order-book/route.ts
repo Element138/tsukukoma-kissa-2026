@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireSession } from "@/lib/server/auth";
 import { fail, ok } from "@/lib/response";
-import { runPaymentWatchdog } from "@/lib/domain/payment-watchdog";
+import { triggerPaymentWatchdogBestEffort } from "@/lib/server/payment-watchdog-trigger";
 import { parseAgeRangesToCounts } from "@/lib/age-groups";
 
 const querySchema = z.object({
@@ -24,7 +24,7 @@ const querySchema = z.object({
 export async function GET(req: NextRequest) {
   try {
     await requireSession(req, { actorTypes: ["POS", "KITCHEN", "WAITER", "ADMIN"] });
-    await runPaymentWatchdog(prisma);
+    triggerPaymentWatchdogBestEffort();
 
     const query = querySchema.parse(Object.fromEntries(req.nextUrl.searchParams.entries()));
 

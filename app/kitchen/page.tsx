@@ -114,28 +114,47 @@ export default function KitchenPage() {
   const [queueFetchedAt, setQueueFetchedAt] = useState(Date.now());
 
   const reloadInFlightRef = useRef(false);
+  const queuedReloadModeRef = useRef<"all" | "queue" | null>(null);
 
-  const reload = async () => {
+  const reload = async (mode: "all" | "queue" = "all") => {
     if (!session || reloadInFlightRef.current) {
+      if (session && reloadInFlightRef.current) {
+        if (queuedReloadModeRef.current !== "all") {
+          queuedReloadModeRef.current = mode === "all" ? "all" : queuedReloadModeRef.current ?? "queue";
+        }
+      }
       return;
     }
     reloadInFlightRef.current = true;
 
     try {
-      const [queue, actorPayload, menuPayload] = await Promise.all([
-        apiFetch<{ queues: QueueMenu[] }>("/api/kitchen/queue"),
-        apiFetch<{ actors: KitchenActor[] }>("/api/admin/actors"),
-        apiFetch<AdminMenuPayload>("/api/admin/menus"),
-      ]);
+      const tasks: Promise<void>[] = [];
 
-      setQueues(queue.queues);
-      setQueueFetchedAt(Date.now());
-      setMyKitchen(
-        actorPayload.actors.find(
-          (actor) => actor.id === session.actor.actorId,
-        ) ?? null,
+      tasks.push(
+        apiFetch<{ queues: QueueMenu[] }>("/api/kitchen/queue").then((queue) => {
+          setQueues(queue.queues);
+          setQueueFetchedAt(Date.now());
+        }),
       );
-      setMenus(menuPayload.menus.filter((menu) => menu.isActive));
+
+      if (mode === "all") {
+        tasks.push(
+          Promise.all([
+            apiFetch<{ actors: KitchenActor[] }>("/api/admin/actors"),
+            apiFetch<AdminMenuPayload>("/api/admin/menus"),
+          ]).then(([actorPayload, menuPayload]) => {
+            setMyKitchen(
+              actorPayload.actors.find(
+                (actor) => actor.id === session.actor.actorId,
+              ) ?? null,
+            );
+            setMenus(menuPayload.menus.filter((menu) => menu.isActive));
+          }),
+        );
+      }
+
+      await Promise.all(tasks);
+
     } catch (e) {
       notify({
         level: "error",
@@ -144,6 +163,11 @@ export default function KitchenPage() {
       });
     } finally {
       reloadInFlightRef.current = false;
+      const queuedMode = queuedReloadModeRef.current;
+      queuedReloadModeRef.current = null;
+      if (queuedMode) {
+        void reload(queuedMode);
+      }
     }
   };
 
@@ -151,7 +175,7 @@ export default function KitchenPage() {
     if (!session) {
       return;
     }
-    void reload();
+    void reload("all");
   }, [session]);
 
   useEffect(() => {
@@ -164,11 +188,15 @@ export default function KitchenPage() {
     channels: session
       ? ["orders", "menus", "actors", `kitchen:${session.actor.actorId}`]
       : ["orders"],
-    onEvent: () => {
-      void reload();
+    onEvent: (event) => {
+      if (event.channel === "orders" || event.channel.startsWith("kitchen:")) {
+        void reload("queue");
+        return;
+      }
+      void reload("all");
     },
     onResync: () => {
-      void reload();
+      void reload("all");
     },
   });
 

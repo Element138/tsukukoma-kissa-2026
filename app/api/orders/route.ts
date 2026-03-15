@@ -7,9 +7,9 @@ import { requireSession } from "@/lib/server/auth";
 import { orderCreateSchema } from "@/lib/validation";
 import { parseJson } from "@/lib/server/http";
 import { createOrderAtPaymentStart } from "@/lib/domain/orders";
-import { runPaymentWatchdog } from "@/lib/domain/payment-watchdog";
 import { createSquareAppSwitchRequest } from "@/lib/domain/square";
 import { broadcastInvalidation, CHANNEL_GROUPS, kitchenChannel } from "@/lib/server/realtime-broadcast";
+import { triggerPaymentWatchdogBestEffort } from "@/lib/server/payment-watchdog-trigger";
 
 const querySchema = z.object({
   q: z.string().optional(),
@@ -24,7 +24,7 @@ const querySchema = z.object({
 export async function GET(req: NextRequest) {
   try {
     await requireSession(req);
-    await runPaymentWatchdog(prisma);
+    triggerPaymentWatchdogBestEffort();
 
 
     const query = querySchema.parse(Object.fromEntries(req.nextUrl.searchParams.entries()));
