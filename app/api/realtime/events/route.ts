@@ -1,5 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
+import { AppError } from "@/lib/errors";
+import { partitionRealtimeChannels } from "@/lib/realtime";
 import { fail } from "@/lib/response";
 import { requireSession } from "@/lib/server/auth";
 import {
@@ -56,7 +58,15 @@ export async function GET(req: NextRequest) {
   try {
     const actor = await requireSession(req);
     const requested = normalizeRequestedChannels(req.nextUrl.searchParams.get("channels"));
-    const channels = authorizeRealtimeChannels(actor, requested);
+    const allowed = authorizeRealtimeChannels(actor, requested);
+    const { sse: channels } = partitionRealtimeChannels(allowed);
+    if (channels.length === 0) {
+      throw new AppError(
+        400,
+        "SSE_CHANNEL_NOT_SUPPORTED",
+        "Requested channels are handled by Supabase Realtime"
+      );
+    }
 
     const initialCursor = parseCursor(req);
     const bounds = await getRealtimeBounds(prisma, channels);

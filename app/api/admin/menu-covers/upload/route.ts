@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
     try {
       const uploaded = await put(pathname, file, {
         token: blobToken,
-        access: "private",
+        access: "public",
         contentType: file.type,
         addRandomSuffix: false,
       });

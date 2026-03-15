@@ -32,10 +32,19 @@ Set these in Vercel Project Settings -> Environment Variables:
 - `DATABASE_URL` (runtime/pool URL)
 - `DIRECT_URL` (direct DB URL for Prisma migrate)
 - `SESSION_SECRET`
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_JWT_SECRET`
 - `SQUARE_APP_ID`
 - `SQUARE_CALLBACK_URL`
 - `SQUARE_CALLBACK_SIGNING_KEY`
 - `CRON_SECRET` (optional, recommended)
+
+## Realtime transport (ops channels)
+
+- `orders`, `waiter`, `menus`, and `kitchen:{id}` are delivered via Supabase Realtime.
+- `categories`, `actors`, `assignments`, `audit` continue to use SSE in this phase.
+- Apply Prisma migrations so `RealtimeEvent` RLS policy and publication wiring are installed.
 
 ## Vercel deployment bootstrap
 
