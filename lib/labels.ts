@@ -1,14 +1,14 @@
 ﻿export const ACTOR_TYPE_LABEL: Record<string, string> = {
   POS: "POS",
   KITCHEN: "キッチン",
-  WAITER: "配膳",
+  WAITER: "ウェイター",
   MENU_DISPLAY: "メニュー表示",
   ADMIN: "管理",
 };
 
 export const AVAILABILITY_LABEL: Record<string, string> = {
   AVAILABLE: "販売中",
-  INCREASED_WAIT: "調理待ち",
+  INCREASED_WAIT: "待ち長し",
   PAUSED: "販売停止中",
   SOLD_OUT: "売り切れ",
 };
@@ -41,9 +41,9 @@ export const ORDER_STATUS_LABEL: Record<string, string> = {
 };
 
 export const ORDER_ITEM_STATUS_LABEL: Record<string, string> = {
-  QUEUED: "キュー",
-  READY: "提供可",
-  SERVED: "提供済",
+  QUEUED: "調理待ち",
+  READY: "提供待ち",
+  SERVED: "提供済み",
   CANCELED: "取消",
 };
 

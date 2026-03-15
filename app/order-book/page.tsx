@@ -392,10 +392,10 @@ export default function OrderBookPage() {
                 <thead>
                   <tr>
                     <th>メニュー</th>
-                    <th>注文済 (キュー+提供可+提供済)</th>
-                    <th>キュー</th>
+                    <th>注文済み</th>
+                    <th>うち調理待ち</th>
                     <th>上限</th>
-                    <th>上限まで</th>
+                    <th>上限まで残り</th>
                   </tr>
                 </thead>
                 <tbody>

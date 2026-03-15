@@ -46,8 +46,8 @@ const ERROR_MESSAGE_JA: Record<string, string> = {
   UNDO_NOT_FOUND: "取り消し対象が見つかりません",
   UNDO_TARGET_MISSING: "取り消し対象が見つかりません",
 
-  ITEM_NOT_QUEUED: "キュー中の品目のみ操作できます",
-  ITEM_NOT_READY: "提供可能な品目のみ操作できます",
+  ITEM_NOT_QUEUED: "調理待ちの品目のみ操作できます",
+  ITEM_NOT_READY: "提供待ちの品目のみ操作できます",
   ITEM_CONFLICT: "品目の状態が変わったため操作できません",
   KITCHEN_MISMATCH: "このキッチンでは操作できません",
   KITCHEN_INACTIVE: "対象キッチンは稼働していません",
@@ -71,7 +71,8 @@ const ERROR_MESSAGE_JA: Record<string, string> = {
   UNDO_TARGET_CHANGED: "対象が変更されたため取り消しできません",
   UNDO_CONFLICT: "取り消し対象の状態が変化したため実行できません",
 
-  DB_NOT_MIGRATED: "データベース初期化が未完了です。マイグレーションを実行してください",
+  DB_NOT_MIGRATED:
+    "データベース初期化が未完了です。マイグレーションを実行してください",
   DB_SCHEMA_MISMATCH: "データベース構成がアプリと一致していません",
   DB_POOL_TIMEOUT:
     "データベース接続が混雑しています。時間をおいて再試行してください",
@@ -217,11 +218,7 @@ export function fail(error: unknown) {
   }
 
   if (error instanceof Prisma.PrismaClientUnknownRequestError) {
-    return errorResponse(
-      503,
-      "DB_TIMEOUT",
-      "Database operation timed out",
-    );
+    return errorResponse(503, "DB_TIMEOUT", "Database operation timed out");
   }
 
   if (isEnvMissingDbUrl(error)) {

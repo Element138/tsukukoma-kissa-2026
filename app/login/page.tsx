@@ -9,7 +9,13 @@ import { useToast } from "@/components/toast";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type LoginActor = {
   id: string;
@@ -41,7 +47,11 @@ export default function LoginPage() {
     notify({
       id: "login-reason",
       level: "warning",
-      message: labelOf(SESSION_FAILURE_LABEL, logoutReason, "ログアウトしました")
+      message: labelOf(
+        SESSION_FAILURE_LABEL,
+        logoutReason,
+        "ログアウトしました",
+      ),
     });
   }, [logoutReason, notify]);
 
@@ -53,7 +63,13 @@ export default function LoginPage() {
           setSelectedActorId((prev) => prev || data.actors[0]!.id);
         }
       })
-      .catch((e) => setError(e instanceof Error ? e.message : "ログイン用アカウントの取得に失敗しました"));
+      .catch((e) =>
+        setError(
+          e instanceof Error
+            ? e.message
+            : "ログイン用アカウントの取得に失敗しました",
+        ),
+      );
   }, []);
 
   const selectedActor = useMemo(
@@ -79,13 +95,17 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      const data = await apiFetch<{ actorId: string; actorType: string }>("/api/auth/login", {
-        method: "POST",
-        body: JSON.stringify({ actorId: selectedActorId, secret })
-      });
+      const data = await apiFetch<{ actorId: string; actorType: string }>(
+        "/api/auth/login",
+        {
+          method: "POST",
+          body: JSON.stringify({ actorId: selectedActorId, secret }),
+        },
+      );
       router.push(routeByActorType(data.actorType));
     } catch (err) {
-      const message = err instanceof Error ? err.message : "ログインに失敗しました";
+      const message =
+        err instanceof Error ? err.message : "ログインに失敗しました";
       setError(message);
       notify({ level: "error", message });
     } finally {
@@ -100,12 +120,8 @@ export default function LoginPage() {
       <div className="login-grid-overlay" aria-hidden />
       <section className="login-stage">
         <div className="login-hero">
-          <p className="login-eyebrow">KISSA TERMINAL</p>
-          <h1 className="login-title">Calm Shift, Sharp Service</h1>
-          <p className="login-description">
-            フロアもキッチンも、ひとつのリズムで。落ち着いたオペレーションを
-            このログインから始めましょう。
-          </p>
+          <p className="login-eyebrow">75期 喫茶</p>
+          <h1 className="login-title">KISSaターミナル</h1>
           <div className="login-chip-row">
             {actorTypeChips.map((chip) => (
               <span key={chip} className="login-chip">
@@ -123,11 +139,13 @@ export default function LoginPage() {
               アカウントを選び、パスワードを入力してください。
             </p>
           </div>
-
           <form onSubmit={onSubmit} className="login-form">
             <label className="login-field">
               <span>アカウント</span>
-              <Select value={selectedActorId} onValueChange={setSelectedActorId}>
+              <Select
+                value={selectedActorId}
+                onValueChange={setSelectedActorId}
+              >
                 <SelectTrigger className="bg-background text-foreground">
                   <SelectValue placeholder="アカウントを選択" />
                 </SelectTrigger>
@@ -151,13 +169,6 @@ export default function LoginPage() {
               />
             </label>
 
-            {selectedActor && (
-              <p className="login-selected-role">
-                現在: {selectedActor.label} (
-                {labelOf(ACTOR_TYPE_LABEL, selectedActor.actorType)})
-              </p>
-            )}
-
             <Button
               type="submit"
               disabled={busy || !selectedActorId}
@@ -166,10 +177,10 @@ export default function LoginPage() {
               {busy ? "ログイン中..." : "ログイン"}
             </Button>
           </form>
-
           {error && <div className="notice error">{error}</div>}
         </Card>
       </section>
+      <span className="text-muted-foreground text-sm">© 2026 Sasuke Kondo</span>
     </main>
   );
 }

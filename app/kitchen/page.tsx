@@ -213,7 +213,7 @@ export default function KitchenPage() {
 
       notify({
         level: "success",
-        message: `${result.markedReadyCount} 件を提供可能に更新しました（対象注文 ${result.affectedOrderCount} 件）`,
+        message: `${result.markedReadyCount} 個を調理済みに更新しました`,
       });
 
       setPickerMenuId(null);
@@ -223,7 +223,7 @@ export default function KitchenPage() {
       notify({
         level: "error",
         message:
-          e instanceof Error ? e.message : "提供可能への更新に失敗しました",
+          e instanceof Error ? e.message : "調理済みへの更新に失敗しました",
       });
     } finally {
       setBusy(false);
@@ -250,7 +250,7 @@ export default function KitchenPage() {
       );
       notify({
         level: "success",
-        message: `取り消しました（${data.result.revertedItemCount} 件）`,
+        message: `取り消しました（${data.result.revertedItemCount} 個）`,
       });
       await reload("menus");
     } catch (e) {
@@ -404,7 +404,7 @@ export default function KitchenPage() {
         <div className="grid">
           <Card className="card">
             <div className="row between wrap" style={{ marginBottom: 10 }}>
-              <SectionTitle>メニュー</SectionTitle>
+              <SectionTitle>キッチンビュー</SectionTitle>
               <div className="row wrap">
                 <button type="button" className="ghost-btn" onClick={undo}>
                   取り消し
@@ -458,16 +458,15 @@ export default function KitchenPage() {
 
                     <div className="kitchen-menu-metrics">
                       <div className="kitchen-queued-big">
-                        調理済みの注文 {menu.queuedCount} 品
+                        {menu.queuedCount}
                       </div>
+                      {" 個調理待ち"}
                       <div className="kitchen-cap-inline">
                         <span className="kitchen-cap-summary">
-                          本日 {menu.todayOrderCount}{" "}
-                          {capValue == null ? "" : " / " + capValue + " "}
-                          品注文済
-                        </span>
-                        <span className="kitchen-cap-remaining">
-                          {remaining == null ? "" : remaining}
+                          本日 {menu.todayOrderCount} 個注文済み
+                          {capValue == null
+                            ? ""
+                            : "（上限 " + capValue + " 個）"}
                         </span>
                         {capPickerOpen ? (
                           <div className="kitchen-cap-editor-inline">
@@ -575,7 +574,7 @@ export default function KitchenPage() {
                               submitReady(menu.menuId, pickerQuantity)
                             }
                           >
-                            提供可能にする
+                            調理済みにする
                           </button>
                           <button
                             type="button"
@@ -593,7 +592,7 @@ export default function KitchenPage() {
                         disabled={busy || menu.queuedCount === 0}
                         onClick={() => void readyFromCard(menu)}
                       >
-                        提供可能へ更新
+                        調理済みにする
                       </button>
                     )}
 

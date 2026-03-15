@@ -153,8 +153,7 @@ const AVAILABILITY_OPTIONS: Array<Menu["availability"]> = [
 const STATUS_BUTTON_ACTIVE_TONE: Record<Menu["availability"], string> = {
   AVAILABLE:
     "border-emerald-700 bg-emerald-600 text-white hover:bg-emerald-700",
-  INCREASED_WAIT:
-    "border-amber-700 bg-amber-500 text-white hover:bg-amber-600",
+  INCREASED_WAIT: "border-amber-700 bg-amber-500 text-white hover:bg-amber-600",
   PAUSED: "border-orange-700 bg-orange-500 text-white hover:bg-orange-600",
   SOLD_OUT: "border-rose-700 bg-rose-600 text-white hover:bg-rose-700",
 };
@@ -181,7 +180,8 @@ function loadImageFromObjectUrl(objectUrl: string) {
     const image = new Image();
     image.decoding = "async";
     image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("画像ファイルを読み込めませんでした"));
+    image.onerror = () =>
+      reject(new Error("画像ファイルを読み込めませんでした"));
     image.src = objectUrl;
   });
 }
@@ -237,14 +237,10 @@ async function compressMenuCoverFile(file: File): Promise<File> {
       );
 
       if (compressedBlob.size <= MAX_MENU_COVER_FILE_BYTES) {
-        return new File(
-          [compressedBlob],
-          replaceExtensionWithWebp(file.name),
-          {
-            type: MENU_COVER_OUTPUT_TYPE,
-            lastModified: Date.now(),
-          },
-        );
+        return new File([compressedBlob], replaceExtensionWithWebp(file.name), {
+          type: MENU_COVER_OUTPUT_TYPE,
+          lastModified: Date.now(),
+        });
       }
 
       if (quality > MENU_COVER_MIN_QUALITY) {
@@ -270,16 +266,16 @@ async function uploadMenuCoverFile(file: File): Promise<MenuCoverUploadData> {
     body: formData,
   });
 
-  const payload = (await response.json().catch(() => null)) as
-    | {
-        ok?: boolean;
-        data?: MenuCoverUploadData;
-        error?: { message?: string };
-      }
-    | null;
+  const payload = (await response.json().catch(() => null)) as {
+    ok?: boolean;
+    data?: MenuCoverUploadData;
+    error?: { message?: string };
+  } | null;
 
   if (!response.ok || !payload?.ok || !payload.data?.url) {
-    throw new Error(payload?.error?.message ?? "画像アップロードに失敗しました");
+    throw new Error(
+      payload?.error?.message ?? "画像アップロードに失敗しました",
+    );
   }
 
   return payload.data;
@@ -434,9 +430,9 @@ export default function AdminPage() {
   const [newMenuKitchenId, setNewMenuKitchenId] = useState("");
   const [newMenuCoverImageDataUrl, setNewMenuCoverImageDataUrl] = useState("");
   const [newMenuCoverUploadBusy, setNewMenuCoverUploadBusy] = useState(false);
-  const [newMenuAllergens, setNewMenuAllergens] = useState<SpecifiedAllergenKey[]>(
-    [],
-  );
+  const [newMenuAllergens, setNewMenuAllergens] = useState<
+    SpecifiedAllergenKey[]
+  >([]);
   const [newMenuCustomBadgeText, setNewMenuCustomBadgeText] = useState("");
   const [newMenuCustomBadgeColor, setNewMenuCustomBadgeColor] =
     useState("#d97706");
@@ -515,7 +511,9 @@ export default function AdminPage() {
       }
       const normalizedCover = edit.coverImageDataUrl.trim();
       const menuCover = menu.coverImageDataUrl ?? "";
-      const normalizedEditAllergens = normalizeSpecifiedAllergens(edit.allergens);
+      const normalizedEditAllergens = normalizeSpecifiedAllergens(
+        edit.allergens,
+      );
       const normalizedMenuAllergens = normalizeSpecifiedAllergens(
         menu.allergensJson,
       );
@@ -534,7 +532,8 @@ export default function AdminPage() {
           ? LOW_STOCK_BADGE_THRESHOLD_UNLIMITED
           : Number(edit.lowStockBadgeThreshold.trim());
       const menuLowStockBadgeThreshold =
-        (menu.lowStockBadgeThreshold ?? 0) >= LOW_STOCK_BADGE_THRESHOLD_UNLIMITED
+        (menu.lowStockBadgeThreshold ?? 0) >=
+        LOW_STOCK_BADGE_THRESHOLD_UNLIMITED
           ? LOW_STOCK_BADGE_THRESHOLD_UNLIMITED
           : (menu.lowStockBadgeThreshold ?? 0);
       return (
@@ -543,7 +542,8 @@ export default function AdminPage() {
         edit.categoryId !== menu.categoryId ||
         edit.kitchenId !== (menu.assignedKitchenId ?? "") ||
         normalizedCover !== menuCover ||
-        normalizedEditAllergens.join(",") !== normalizedMenuAllergens.join(",") ||
+        normalizedEditAllergens.join(",") !==
+          normalizedMenuAllergens.join(",") ||
         editBadgeText !== menuBadgeText ||
         editBadgeColor !== menuBadgeColor ||
         dailyOrderCap !== (menu.dailyOrderCap ?? null) ||
@@ -862,14 +862,13 @@ export default function AdminPage() {
           });
     const lowStockBadgeThresholdRaw = params.lowStockBadgeThreshold.trim();
     const lowStockBadgeEnabled = lowStockBadgeThresholdRaw !== "";
-    const lowStockBadgeThreshold =
-      !lowStockBadgeEnabled
-        ? LOW_STOCK_BADGE_THRESHOLD_UNLIMITED
-        : toPositiveFiniteNumber(lowStockBadgeThresholdRaw, "在庫バッジ閾値", {
-            integer: true,
-            min: 0,
-            max: LOW_STOCK_BADGE_THRESHOLD_UNLIMITED,
-          });
+    const lowStockBadgeThreshold = !lowStockBadgeEnabled
+      ? LOW_STOCK_BADGE_THRESHOLD_UNLIMITED
+      : toPositiveFiniteNumber(lowStockBadgeThresholdRaw, "在庫バッジ閾値", {
+          integer: true,
+          min: 0,
+          max: LOW_STOCK_BADGE_THRESHOLD_UNLIMITED,
+        });
     if (lowStockBadgeEnabled && dailyOrderCap == null) {
       throw new Error("残数バッジを使う場合は日次上限を設定してください");
     }
@@ -958,7 +957,9 @@ export default function AdminPage() {
         );
         const editBadgeText = edit.customBadgeText.trim();
         const menuBadgeText = (menu.customBadgeText ?? "").trim();
-        const editBadgeColor = editBadgeText ? edit.customBadgeColor.trim() : "";
+        const editBadgeColor = editBadgeText
+          ? edit.customBadgeColor.trim()
+          : "";
         const menuBadgeColor = menuBadgeText
           ? (menu.customBadgeColor ?? "").trim()
           : "";
@@ -1036,7 +1037,9 @@ export default function AdminPage() {
         if (!categoryUpdate.nextName) {
           throw new Error("カテゴリ名を入力してください");
         }
-        await patchCategory(categoryUpdate.id, { name: categoryUpdate.nextName });
+        await patchCategory(categoryUpdate.id, {
+          name: categoryUpdate.nextName,
+        });
       }
 
       for (const menuUpdate of menuUpdates) {
@@ -1107,12 +1110,7 @@ export default function AdminPage() {
       });
       return;
     }
-  }, [
-    clearByPrefix,
-    didBootstrap,
-    hasUnsavedChanges,
-    notify,
-  ]);
+  }, [clearByPrefix, didBootstrap, hasUnsavedChanges, notify]);
 
   const moveMenu = async (menu: Menu, direction: -1 | 1) => {
     const siblingMenus = activeMenus.filter(
@@ -1164,12 +1162,17 @@ export default function AdminPage() {
       const compressed = await compressMenuCoverFile(file);
       const uploaded = await uploadMenuCoverFile(compressed);
       setNewMenuCoverImageDataUrl(uploaded.url);
-      notify({ level: "success", message: "新規メニュー画像をアップロードしました" });
+      notify({
+        level: "success",
+        message: "新規メニュー画像をアップロードしました",
+      });
     } catch (e) {
       notify({
         level: "error",
         message:
-          e instanceof Error ? e.message : "新規メニュー画像のアップロードに失敗しました",
+          e instanceof Error
+            ? e.message
+            : "新規メニュー画像のアップロードに失敗しました",
       });
     } finally {
       setNewMenuCoverUploadBusy(false);
@@ -1246,7 +1249,7 @@ export default function AdminPage() {
                             <SelectContent>
                               <SelectItem value="POS">POS</SelectItem>
                               <SelectItem value="KITCHEN">キッチン</SelectItem>
-                              <SelectItem value="WAITER">配膳</SelectItem>
+                              <SelectItem value="WAITER">ウェイター</SelectItem>
                               <SelectItem value="MENU_DISPLAY">
                                 メニュー表示
                               </SelectItem>
@@ -1819,7 +1822,9 @@ export default function AdminPage() {
                           <Input
                             type="color"
                             value={
-                              BADGE_COLOR_HEX_REGEX.test(newMenuCustomBadgeColor)
+                              BADGE_COLOR_HEX_REGEX.test(
+                                newMenuCustomBadgeColor,
+                              )
                                 ? newMenuCustomBadgeColor
                                 : "#d97706"
                             }
@@ -1896,7 +1901,7 @@ export default function AdminPage() {
                                 await apiFetch("/api/admin/menus", {
                                   method: "POST",
                                   body: JSON.stringify({
-                                  ...parsedInput,
+                                    ...parsedInput,
                                     availability: "PAUSED",
                                     workloadSeconds:
                                       DEFAULT_MENU_WORKLOAD_SECONDS,
@@ -1941,8 +1946,9 @@ export default function AdminPage() {
                 {activeMenus.map((menu) => {
                   const edit = menuEdits[menu.id] ?? toMenuEdit(menu);
                   const assignedKitchenLabel =
-                    kitchenActors.find((row) => row.id === menu.assignedKitchenId)
-                      ?.label ?? "未設定";
+                    kitchenActors.find(
+                      (row) => row.id === menu.assignedKitchenId,
+                    )?.label ?? "未設定";
                   const sameCategoryMenus = activeMenus.filter(
                     (row) => row.categoryId === menu.categoryId,
                   );
@@ -2115,7 +2121,10 @@ export default function AdminPage() {
                               </SelectTrigger>
                               <SelectContent>
                                 {kitchenActors.map((kitchen) => (
-                                  <SelectItem key={kitchen.id} value={kitchen.id}>
+                                  <SelectItem
+                                    key={kitchen.id}
+                                    value={kitchen.id}
+                                  >
                                     {kitchen.label}
                                   </SelectItem>
                                 ))}
@@ -2146,11 +2155,14 @@ export default function AdminPage() {
                                   )}
                                   onClick={() =>
                                     setMenuEdits((prev) => {
-                                      const current = normalizeSpecifiedAllergens(
-                                        prev[menu.id]?.allergens ??
-                                          edit.allergens,
-                                      );
-                                      const next = current.includes(allergen.key)
+                                      const current =
+                                        normalizeSpecifiedAllergens(
+                                          prev[menu.id]?.allergens ??
+                                            edit.allergens,
+                                        );
+                                      const next = current.includes(
+                                        allergen.key,
+                                      )
                                         ? current.filter(
                                             (row) => row !== allergen.key,
                                           )
@@ -2201,7 +2213,9 @@ export default function AdminPage() {
                             <Input
                               type="color"
                               value={
-                                BADGE_COLOR_HEX_REGEX.test(edit.customBadgeColor)
+                                BADGE_COLOR_HEX_REGEX.test(
+                                  edit.customBadgeColor,
+                                )
                                   ? edit.customBadgeColor
                                   : "#d97706"
                               }
@@ -2272,12 +2286,16 @@ export default function AdminPage() {
                               }
                               void runMutation({
                                 action: async () => {
-                                  await apiFetch("/api/admin/menus/reset-count", {
-                                    method: "POST",
-                                    body: JSON.stringify({ menuId: menu.id }),
-                                  });
+                                  await apiFetch(
+                                    "/api/admin/menus/reset-count",
+                                    {
+                                      method: "POST",
+                                      body: JSON.stringify({ menuId: menu.id }),
+                                    },
+                                  );
                                 },
-                                successMessage: "本日のカウントをリセットしました",
+                                successMessage:
+                                  "本日のカウントをリセットしました",
                                 errorMessage:
                                   "カウントのリセットに失敗しました",
                               });

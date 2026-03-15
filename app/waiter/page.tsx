@@ -65,7 +65,7 @@ function bundleTakeoutItems(names: string[]) {
   }
   return [...counts.entries()]
     .sort((a, b) => a[0].localeCompare(b[0], "ja"))
-    .map(([name, count]) => `${count}x ${name}`);
+    .map(([name, count]) => `${count} × ${name}`);
 }
 
 export default function WaiterPage() {
@@ -97,7 +97,9 @@ export default function WaiterPage() {
       notify({
         level: "error",
         message:
-          e instanceof Error ? e.message : "配膳データの取得に失敗しました",
+          e instanceof Error
+            ? e.message
+            : "ウェイターデータの取得に失敗しました",
       });
     } finally {
       reloadInFlightRef.current = false;
@@ -228,13 +230,13 @@ export default function WaiterPage() {
       <DashboardShell
         eyebrow="LIVE TERMINAL"
         title={`${labelOf(ACTOR_TYPE_LABEL, session.actor.actorType)} · ${session.actor.label}`}
-        subtitle="配膳待ちを優先順で処理"
+        subtitle="提供待ちを優先順で処理"
         hideHeader
       >
         <div className="grid">
           <Card className="card">
             <div className="row between wrap" style={{ marginBottom: 10 }}>
-              <SectionTitle>配膳ビュー</SectionTitle>
+              <SectionTitle>ウェイタービュー</SectionTitle>
               <div className="row wrap">
                 <button type="button" className="ghost-btn" onClick={undo}>
                   取り消し
@@ -248,7 +250,7 @@ export default function WaiterPage() {
             <h3 style={{ margin: "6px 0 10px" }}>店内</h3>
             <div className="waiter-tile-grid">
               {dineInTiles.length === 0 && (
-                <div className="muted">配膳待ちはありません</div>
+                <div className="muted">提供待ちはありません</div>
               )}
               {dineInTiles.map((order) => {
                 const tone = queueTone(order.elapsedSeconds);
@@ -310,7 +312,7 @@ export default function WaiterPage() {
             <h3 style={{ margin: "14px 0 10px" }}>持ち帰り</h3>
             <div className="waiter-tile-grid">
               {takeoutTiles.length === 0 && (
-                <div className="muted">配膳待ちの持ち帰り注文はありません</div>
+                <div className="muted">提供待ちの持ち帰り注文はありません</div>
               )}
               {takeoutTiles.map((order) => (
                 <article

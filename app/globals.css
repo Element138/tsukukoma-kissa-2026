@@ -843,7 +843,7 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
 
 .menu-display-row-status {
   font-size: clamp(1.2rem, 1.8vw, 1.8rem);
-  font-weight: 900;
+  font-weight: 700;
   letter-spacing: 0.02em;
 }
 
@@ -943,17 +943,14 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(
-      rgba(22, 70, 100, 0.08) 1px,
-      transparent 1px
-    ),
-    linear-gradient(
-      90deg,
-      rgba(22, 70, 100, 0.08) 1px,
-      transparent 1px
-    );
+    linear-gradient(rgba(22, 70, 100, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(22, 70, 100, 0.08) 1px, transparent 1px);
   background-size: 34px 34px;
-  mask-image: radial-gradient(circle at center, rgba(0, 0, 0, 0.65), transparent 84%);
+  mask-image: radial-gradient(
+    circle at center,
+    rgba(0, 0, 0, 0.65),
+    transparent 84%
+  );
   pointer-events: none;
 }
 
@@ -971,7 +968,11 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   height: 420px;
   left: -140px;
   top: -110px;
-  background: radial-gradient(circle, rgba(17, 172, 160, 0.44), rgba(17, 172, 160, 0));
+  background: radial-gradient(
+    circle,
+    rgba(17, 172, 160, 0.44),
+    rgba(17, 172, 160, 0)
+  );
 }
 
 .login-aura-two {
@@ -980,7 +981,11 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   right: -110px;
   bottom: -150px;
   animation-delay: -5s;
-  background: radial-gradient(circle, rgba(225, 127, 20, 0.42), rgba(225, 127, 20, 0));
+  background: radial-gradient(
+    circle,
+    rgba(225, 127, 20, 0.42),
+    rgba(225, 127, 20, 0)
+  );
 }
 
 .login-stage {
@@ -997,8 +1002,11 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   position: relative;
   border-radius: 26px;
   padding: clamp(20px, 3vw, 34px);
-  background:
-    linear-gradient(165deg, rgba(8, 62, 76, 0.95) 0%, rgba(11, 95, 103, 0.94) 100%);
+  background: linear-gradient(
+    165deg,
+    rgba(8, 62, 76, 0.95) 0%,
+    rgba(11, 95, 103, 0.94) 100%
+  );
   color: #f4fcff;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
   display: grid;
@@ -1014,13 +1022,17 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   right: -60px;
   bottom: -70px;
   border-radius: 999px;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0));
+  background: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.24),
+    rgba(255, 255, 255, 0)
+  );
 }
 
 .login-eyebrow {
   margin: 0;
   font-size: 0.74rem;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.18em;
   color: rgba(219, 246, 255, 0.9);
 }
@@ -1030,7 +1042,7 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   font-size: clamp(2rem, 4vw, 3.35rem);
   line-height: 1.04;
   letter-spacing: 0.01em;
-  font-weight: 900;
+  font-weight: 400;
 }
 
 .login-description {
