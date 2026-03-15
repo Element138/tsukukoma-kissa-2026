@@ -162,8 +162,7 @@ const PRIORITY_KEEP_TERMS = [
 const escapeRegExp = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const PRIORITY_KEEP_TERM_REGEX = new RegExp(
-  PRIORITY_KEEP_TERMS
-    .map((term) => escapeRegExp(term))
+  PRIORITY_KEEP_TERMS.map((term) => escapeRegExp(term))
     .sort((a, b) => b.length - a.length)
     .join("|"),
   "g",
@@ -287,7 +286,8 @@ export default function MenuDisplayPage() {
   const { notify, clearByPrefix } = useToast();
 
   const [categories, setCategories] = useState<DisplayCategory[]>([]);
-  const [settings, setSettings] = useState<MenuDisplaySettings>(DEFAULT_SETTINGS);
+  const [settings, setSettings] =
+    useState<MenuDisplaySettings>(DEFAULT_SETTINGS);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [pageIndex, setPageIndex] = useState(0);
   const [isPageFading, setIsPageFading] = useState(false);
@@ -307,7 +307,10 @@ export default function MenuDisplayPage() {
   const viewportRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const trackRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  const categoryPages = useMemo(() => splitCategoryPages(categories), [categories]);
+  const categoryPages = useMemo(
+    () => splitCategoryPages(categories),
+    [categories],
+  );
   const activePage = categoryPages[pageIndex] ?? [];
   const shouldFadeBetweenPages = categories.length > 3;
   const pageStructureSignature = useMemo(
@@ -345,7 +348,9 @@ export default function MenuDisplayPage() {
     const currentLayout = categoryLayoutSignature(currentCategories);
     const nextLayout = categoryLayoutSignature(payload.categories);
     const nextSettings = payload.settings ?? DEFAULT_SETTINGS;
-    const nextPageDisplayMs = resolvePageDisplayMs(nextSettings.pageDisplaySeconds);
+    const nextPageDisplayMs = resolvePageDisplayMs(
+      nextSettings.pageDisplaySeconds,
+    );
 
     setSettings(nextSettings);
     pendingCycleDurationMsRef.current = nextPageDisplayMs;
@@ -366,7 +371,10 @@ export default function MenuDisplayPage() {
     }
 
     pendingCategorySnapshotRef.current = payload.categories;
-    const merged = mergeMenusIntoCurrentLayout(currentCategories, payload.categories);
+    const merged = mergeMenusIntoCurrentLayout(
+      currentCategories,
+      payload.categories,
+    );
     categoriesRef.current = merged;
     setCategories(merged);
   };
@@ -384,7 +392,8 @@ export default function MenuDisplayPage() {
     } catch (e) {
       notify({
         level: "error",
-        message: e instanceof Error ? e.message : "メニュー表示の更新に失敗しました",
+        message:
+          e instanceof Error ? e.message : "メニュー表示の更新に失敗しました",
       });
     } finally {
       reloadInFlightRef.current = false;
@@ -555,12 +564,7 @@ export default function MenuDisplayPage() {
         animation.cancel();
       }
     };
-  }, [
-    cycleTick,
-    pageIndex,
-    pageStructureSignature,
-    shouldFadeBetweenPages,
-  ]);
+  }, [cycleTick, pageIndex, pageStructureSignature, shouldFadeBetweenPages]);
 
   useRealtimeSubscription({
     enabled: Boolean(session),
@@ -672,7 +676,8 @@ export default function MenuDisplayPage() {
                     const allergenNotice = formatAllergenNotice(menu.allergens);
                     const hasAllergenWarning = menu.allergens.length > 0;
                     const badgeText = menu.customBadgeText?.trim() ?? "";
-                    const badgeColor = menu.customBadgeColor?.trim() || "#d97706";
+                    const badgeColor =
+                      menu.customBadgeColor?.trim() || "#d97706";
                     const showLowStockBadge = menu.showLowStockBadge;
                     const lowStockLabel =
                       menu.remainingUntilCap != null
@@ -684,7 +689,7 @@ export default function MenuDisplayPage() {
                         key={menu.id}
                         className={`menu-display-row ${hasImage ? "has-image" : "no-image"} ${unavailable ? "unavailable" : ""}`}
                         style={
-                          badgeText
+                          badgeText && !unavailable
                             ? ({
                                 borderColor: badgeColor,
                                 borderWidth: "3px",

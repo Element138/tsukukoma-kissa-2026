@@ -213,7 +213,7 @@ export default function KitchenPage() {
 
       notify({
         level: "success",
-        message: `${result.markedReadyCount} 個を調理済みに更新しました`,
+        message: `${result.markedReadyCount} 個を調理済みにしました`,
       });
 
       setPickerMenuId(null);
