@@ -438,7 +438,7 @@ export default function PosPage() {
               {selectedItems.map((item) => (
                 <div key={item.id} className="list-item row between">
                   <div>
-                    {item.name} x {item.quantity}
+                    {item.name} × {item.quantity}
                   </div>
                   <strong>{fmtJpy(item.priceJpy * item.quantity)}</strong>
                 </div>

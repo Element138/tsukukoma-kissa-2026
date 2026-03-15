@@ -285,10 +285,7 @@ export default function OrderBookPage() {
               >
                 更新
               </button>
-              <a
-                href="/api/order-book/export"
-                className="btn-link ghost-btn"
-              >
+              <a href="/api/order-book/export" className="btn-link ghost-btn">
                 CSV出力 (注文別)
               </a>
             </div>
@@ -399,18 +396,21 @@ export default function OrderBookPage() {
                 )}
                 <div className="muted" style={{ marginTop: 8 }}>
                   年齢構成:
-                  {AGE_GROUPS.map((group) => (
-                    <span key={group.key} style={{ marginLeft: 8 }}>
-                      {group.label} {order.ageGroupCounts[group.key] ?? 0}
-                    </span>
-                  ))}
+                  <span>
+                    {AGE_GROUPS.map(
+                      (group) =>
+                        group.label +
+                        " × " +
+                        (order.ageGroupCounts[group.key] ?? 0),
+                    ).join(" / ")}
+                  </span>
                 </div>
 
                 <div className="list" style={{ marginTop: 10 }}>
                   {order.bundledItems.map((item) => (
                     <div key={item.key} className="list-item row between wrap">
                       <div>
-                        <strong>{item.count}x</strong> {item.name}
+                        <strong>{item.count} × </strong> {item.name}
                         <span
                           className={`badge ${item.status === "READY" ? "ready" : item.status === "SERVED" ? "served" : "queued"}`}
                           style={{ marginLeft: 8 }}

@@ -118,7 +118,21 @@ type MenuDisplaySettings = {
   pageDisplaySeconds: number;
 };
 
+type MenuCoverUploadData = {
+  url: string;
+};
+
 const MAX_MENU_COVER_FILE_BYTES = 1_000_000;
+const MENU_COVER_OUTPUT_TYPE = "image/webp";
+const MENU_COVER_INITIAL_QUALITY = 0.9;
+const MENU_COVER_MIN_QUALITY = 0.5;
+const MENU_COVER_SCALE_FACTOR = 0.82;
+const MENU_COVER_MAX_ATTEMPTS = 12;
+const MENU_COVER_SUPPORTED_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+]);
 
 const AVAILABILITY_OPTIONS: Array<Menu["availability"]> = [
   "AVAILABLE",
@@ -156,6 +170,123 @@ function sanitizeDecimalInput(value: string) {
     return whole;
   }
   return `${whole}.${fractionParts.join("")}`;
+}
+
+function replaceExtensionWithWebp(filename: string) {
+  const trimmed = filename.trim();
+  if (!trimmed) {
+    return "menu-cover.webp";
+  }
+  return trimmed.replace(/\.[^.]+$/, "") + ".webp";
+}
+
+function loadImageFromObjectUrl(objectUrl: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.decoding = "async";
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("画像ファイルを読み込めませんでした"));
+    image.src = objectUrl;
+  });
+}
+
+function canvasToBlob(
+  canvas: HTMLCanvasElement,
+  contentType: string,
+  quality: number,
+) {
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          reject(new Error("画像圧縮に失敗しました"));
+          return;
+        }
+        resolve(blob);
+      },
+      contentType,
+      quality,
+    );
+  });
+}
+
+async function compressMenuCoverFile(file: File): Promise<File> {
+  if (!MENU_COVER_SUPPORTED_TYPES.has(file.type)) {
+    throw new Error("PNG / JPEG / WebP 形式の画像を選択してください");
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = await loadImageFromObjectUrl(objectUrl);
+    let scale = 1;
+    let quality = MENU_COVER_INITIAL_QUALITY;
+
+    for (let attempt = 0; attempt < MENU_COVER_MAX_ATTEMPTS; attempt += 1) {
+      const width = Math.max(1, Math.floor(image.naturalWidth * scale));
+      const height = Math.max(1, Math.floor(image.naturalHeight * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+
+      const context = canvas.getContext("2d");
+      if (!context) {
+        throw new Error("画像処理の初期化に失敗しました");
+      }
+
+      context.drawImage(image, 0, 0, width, height);
+      const compressedBlob = await canvasToBlob(
+        canvas,
+        MENU_COVER_OUTPUT_TYPE,
+        quality,
+      );
+
+      if (compressedBlob.size <= MAX_MENU_COVER_FILE_BYTES) {
+        return new File(
+          [compressedBlob],
+          replaceExtensionWithWebp(file.name),
+          {
+            type: MENU_COVER_OUTPUT_TYPE,
+            lastModified: Date.now(),
+          },
+        );
+      }
+
+      if (quality > MENU_COVER_MIN_QUALITY) {
+        quality = Math.max(MENU_COVER_MIN_QUALITY, quality - 0.1);
+      } else {
+        scale *= MENU_COVER_SCALE_FACTOR;
+        quality = MENU_COVER_INITIAL_QUALITY;
+      }
+    }
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+
+  throw new Error("画像を 1MB 以下に圧縮できませんでした");
+}
+
+async function uploadMenuCoverFile(file: File): Promise<MenuCoverUploadData> {
+  const formData = new FormData();
+  formData.set("file", file, file.name);
+
+  const response = await fetch("/api/admin/menu-covers/upload", {
+    method: "POST",
+    body: formData,
+  });
+
+  const payload = (await response.json().catch(() => null)) as
+    | {
+        ok?: boolean;
+        data?: MenuCoverUploadData;
+        error?: { message?: string };
+      }
+    | null;
+
+  if (!response.ok || !payload?.ok || !payload.data?.url) {
+    throw new Error(payload?.error?.message ?? "画像アップロードに失敗しました");
+  }
+
+  return payload.data;
 }
 
 function toPositiveFiniteNumber(
@@ -827,38 +958,16 @@ export default function AdminPage() {
     });
   };
 
-  const readFileAsDataUrl = (file: File) =>
-    new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onerror = () =>
-        reject(new Error("画像ファイルを読み込めませんでした"));
-      reader.onload = () => {
-        if (typeof reader.result !== "string") {
-          reject(new Error("画像データの変換に失敗しました"));
-          return;
-        }
-        resolve(reader.result);
-      };
-      reader.readAsDataURL(file);
-    });
-
   const uploadMenuCover = async (menu: Menu, file: File) => {
-    if (file.size > MAX_MENU_COVER_FILE_BYTES) {
-      notify({
-        level: "error",
-        message: "画像サイズは 1MB 以下にしてください",
-      });
-      return;
-    }
-
     try {
-      const dataUrl = await readFileAsDataUrl(file);
-      await patchMenu(menu.id, { coverImageDataUrl: dataUrl });
+      const compressed = await compressMenuCoverFile(file);
+      const uploaded = await uploadMenuCoverFile(compressed);
+      await patchMenu(menu.id, { coverImageDataUrl: uploaded.url });
       setMenuEdits((prev) => ({
         ...prev,
         [menu.id]: {
           ...(prev[menu.id] ?? toMenuEdit(menu)),
-          coverImageDataUrl: dataUrl,
+          coverImageDataUrl: uploaded.url,
         },
       }));
       notify({ level: "success", message: "メニュー画像を更新しました" });
@@ -1726,7 +1835,7 @@ export default function AdminPage() {
                             画像をアップロード
                             <input
                               type="file"
-                              accept="image/png,image/jpeg,image/webp,image/gif"
+                              accept="image/png,image/jpeg,image/webp"
                               className="hidden"
                               onChange={(e) => {
                                 const file = e.target.files?.[0];
