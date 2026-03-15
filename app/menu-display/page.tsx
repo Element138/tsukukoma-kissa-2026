@@ -8,7 +8,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { loadDefaultJapaneseParser } from "budoux";
 import { apiFetch, fmtJpy } from "@/lib/client";
 import { useSession } from "@/components/use-session";
 import { TerminalBanner } from "@/components/terminal-banner";
@@ -50,6 +49,129 @@ const DEFAULT_SETTINGS: MenuDisplaySettings = {
   pageDisplaySeconds: 18,
 };
 const PAGE_FADE_MS = 750;
+const PRIORITY_KEEP_TERMS = [
+  "コーヒー",
+  "ラテ",
+  "カフェ",
+  "エスプレッソ",
+  "アメリカーノ",
+  "カプチーノ",
+  "モカ",
+  "マキアート",
+  "フラッペ",
+  "スムージー",
+  "シェイク",
+  "ティー",
+  "ミルクティー",
+  "レモネード",
+  "ソーダ",
+  "ジュース",
+  "ココア",
+  "抹茶",
+  "ほうじ茶",
+  "紅茶",
+  "緑茶",
+  "ゆず",
+  "レモン",
+  "いちご",
+  "ストロベリー",
+  "ブルーベリー",
+  "ラズベリー",
+  "マンゴー",
+  "ピーチ",
+  "バナナ",
+  "メロン",
+  "パイナップル",
+  "オレンジ",
+  "アップル",
+  "グレープ",
+  "ミルク",
+  "豆乳",
+  "クリーム",
+  "ホイップ",
+  "チョコ",
+  "チョコレート",
+  "キャラメル",
+  "ハニー",
+  "メープル",
+  "シロップ",
+  "バター",
+  "チーズ",
+  "クリームチーズ",
+  "カスタード",
+  "ヨーグルト",
+  "ケーキ",
+  "タルト",
+  "パイ",
+  "マフィン",
+  "スコーン",
+  "ドーナツ",
+  "プリン",
+  "ゼリー",
+  "パフェ",
+  "パンケーキ",
+  "ワッフル",
+  "クレープ",
+  "クッキー",
+  "ブラウニー",
+  "フィナンシェ",
+  "マドレーヌ",
+  "シフォン",
+  "ロールケーキ",
+  "ショートケーキ",
+  "パン",
+  "食パン",
+  "トースト",
+  "クロワッサン",
+  "デニッシュ",
+  "ベーグル",
+  "バゲット",
+  "サンド",
+  "サンドイッチ",
+  "ホットサンド",
+  "バーガー",
+  "トルティーヤ",
+  "ピザ",
+  "キッシュ",
+  "たまご",
+  "エッグ",
+  "ベーコン",
+  "ハム",
+  "ソーセージ",
+  "チキン",
+  "ツナ",
+  "サーモン",
+  "アボカド",
+  "トマト",
+  "レタス",
+  "ポテト",
+  "コーン",
+  "きのこ",
+  "あんこ",
+  "粒あん",
+  "こしあん",
+  "きなこ",
+  "黒蜜",
+  "団子",
+  "もち",
+  "大福",
+  "わらび餅",
+];
+const escapeRegExp = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const PRIORITY_KEEP_TERM_REGEX = new RegExp(
+  PRIORITY_KEEP_TERMS
+    .map((term) => escapeRegExp(term))
+    .sort((a, b) => b.length - a.length)
+    .join("|"),
+  "g",
+);
+const LONG_KATAKANA_REGEX = /[ァ-ヶー]{6,}/g;
+
+type RenderChunk = {
+  text: string;
+  keepTogether: boolean;
+};
 
 function resolvePageDisplayMs(pageDisplaySeconds: number | undefined) {
   const safeSeconds =
@@ -106,10 +228,61 @@ function splitLongKatakanaChunk(chunk: string) {
   return tokens;
 }
 
+function splitByPriorityTerms(text: string) {
+  const chunks: RenderChunk[] = [];
+  const matcher = new RegExp(PRIORITY_KEEP_TERM_REGEX.source, "g");
+  let cursor = 0;
+
+  for (const match of text.matchAll(matcher)) {
+    const start = match.index ?? 0;
+    if (start > cursor) {
+      chunks.push({ text: text.slice(cursor, start), keepTogether: false });
+    }
+    chunks.push({ text: match[0], keepTogether: true });
+    cursor = start + match[0].length;
+  }
+
+  if (cursor < text.length) {
+    chunks.push({ text: text.slice(cursor), keepTogether: false });
+  }
+
+  return chunks;
+}
+
+function splitChunkByLongKatakana(chunk: string) {
+  const parts: RenderChunk[] = [];
+  const matcher = new RegExp(LONG_KATAKANA_REGEX.source, "g");
+  let cursor = 0;
+
+  for (const match of chunk.matchAll(matcher)) {
+    const start = match.index ?? 0;
+    if (start > cursor) {
+      parts.push({ text: chunk.slice(cursor, start), keepTogether: false });
+    }
+    for (const token of splitLongKatakanaChunk(match[0])) {
+      parts.push({ text: token, keepTogether: false });
+    }
+    cursor = start + match[0].length;
+  }
+
+  if (cursor < chunk.length) {
+    parts.push({ text: chunk.slice(cursor), keepTogether: false });
+  }
+
+  return parts;
+}
+
+function buildRenderChunks(text: string) {
+  return splitByPriorityTerms(text)
+    .flatMap((chunk) =>
+      chunk.keepTogether ? [chunk] : splitChunkByLongKatakana(chunk.text),
+    )
+    .filter((chunk) => chunk.text.length > 0);
+}
+
 export default function MenuDisplayPage() {
   const { loading, session } = useSession(["MENU_DISPLAY"]);
   const { notify } = useToast();
-  const parser = useMemo(() => loadDefaultJapaneseParser(), []);
 
   const [categories, setCategories] = useState<DisplayCategory[]>([]);
   const [settings, setSettings] = useState<MenuDisplaySettings>(DEFAULT_SETTINGS);
@@ -280,14 +453,15 @@ export default function MenuDisplayPage() {
         const animation = track.animate(
           [
             { transform: "translateY(0px)", offset: 0 },
-            { transform: "translateY(0px)", offset: 0.2 },
-            { transform: `translateY(${-overflowPx * 0.08}px)`, offset: 0.32 },
-            { transform: `translateY(${-overflowPx}px)`, offset: 0.82 },
-            { transform: `translateY(${-overflowPx}px)`, offset: 1 },
+            { transform: "translateY(0px)", offset: 0.16 },
+            { transform: `translateY(${-overflowPx}px)`, offset: 0.62 },
+            { transform: `translateY(${-overflowPx}px)`, offset: 0.78 },
+            { transform: "translateY(0px)", offset: 0.98 },
+            { transform: "translateY(0px)", offset: 1 },
           ],
           {
             duration: pageDisplayMs,
-            easing: "cubic-bezier(0.28, 0.08, 0.24, 1)",
+            easing: "linear",
             iterations: 1,
             fill: "both",
           },
@@ -414,31 +588,15 @@ export default function MenuDisplayPage() {
 
   const columnCount = Math.min(3, Math.max(1, activePage.length));
 
-  const renderBudouX = (text: string) => {
-    const chunks = parser
-      .parse(text)
-      .flatMap((chunk) => {
-        const regex = /[ァ-ヶー]{6,}/g;
-        const parts: string[] = [];
-        let cursor = 0;
-        for (const match of chunk.matchAll(regex)) {
-          const start = match.index ?? 0;
-          if (start > cursor) {
-            parts.push(chunk.slice(cursor, start));
-          }
-          parts.push(...splitLongKatakanaChunk(match[0]));
-          cursor = start + match[0].length;
-        }
-        if (cursor < chunk.length) {
-          parts.push(chunk.slice(cursor));
-        }
-        return parts.length > 0 ? parts : [chunk];
-      })
-      .filter((chunk) => chunk.length > 0);
-
+  const renderDisplayText = (text: string) => {
+    const chunks = buildRenderChunks(text);
     return chunks.map((chunk, index) => (
       <Fragment key={index}>
-        {chunk}
+        {chunk.keepTogether ? (
+          <span className="menu-display-keep-term">{chunk.text}</span>
+        ) : (
+          chunk.text
+        )}
         {index < chunks.length - 1 ? <wbr /> : null}
       </Fragment>
     ));
@@ -483,7 +641,7 @@ export default function MenuDisplayPage() {
           {activePage.map((category) => (
             <section key={category.id} className="menu-display-category">
               <header className="menu-display-category-header">
-                <h2>{renderBudouX(category.name)}</h2>
+                <h2>{renderDisplayText(category.name)}</h2>
               </header>
               <div
                 className="menu-display-scroll-viewport"
@@ -513,7 +671,7 @@ export default function MenuDisplayPage() {
                     return (
                       <article
                         key={menu.id}
-                        className={`menu-display-row ${unavailable ? "unavailable" : ""}`}
+                        className={`menu-display-row ${hasImage ? "has-image" : "no-image"} ${unavailable ? "unavailable" : ""}`}
                         style={
                           badgeText
                             ? ({
@@ -532,7 +690,7 @@ export default function MenuDisplayPage() {
                               {badgeText}
                             </span>
                           ) : null}
-                          <strong>{renderBudouX(menu.name)}</strong>
+                          <strong>{renderDisplayText(menu.name)}</strong>
                           <div
                             className={`menu-display-row-allergen ${hasAllergenWarning ? "has-allergen" : "none"}`}
                           >
@@ -555,17 +713,15 @@ export default function MenuDisplayPage() {
                             </div>
                           )}
                         </div>
-                        <div
-                          className={`menu-display-row-image-wrap ${hasImage ? "" : "is-empty"}`}
-                        >
-                          {hasImage ? (
+                        {hasImage ? (
+                          <div className="menu-display-row-image-wrap">
                             <img
                               src={imageSrc ?? undefined}
                               alt={`${menu.name} の画像`}
                               className="menu-display-row-image"
                             />
-                          ) : null}
-                        </div>
+                          </div>
+                        ) : null}
                       </article>
                     );
                   })}
