@@ -311,7 +311,7 @@ export default function OrderBookPage() {
                 更新
               </button>
               <a href="/api/order-book/export" className="btn-link ghost-btn">
-                CSV出力 (注文別)
+                CSV出力
               </a>
             </div>
           </div>
@@ -393,7 +393,7 @@ export default function OrderBookPage() {
                   <tr>
                     <th>メニュー</th>
                     <th>注文済み</th>
-                    <th>うち調理待ち</th>
+                    <th>(うち調理待ち)</th>
                     <th>上限</th>
                     <th>上限まで残り</th>
                   </tr>
@@ -457,7 +457,7 @@ export default function OrderBookPage() {
                   </div>
                 )}
                 <div className="muted" style={{ marginTop: 8 }}>
-                  年齢構成:
+                  {"年齢構成: "}
                   <span>
                     {AGE_GROUPS.map(
                       (group) =>

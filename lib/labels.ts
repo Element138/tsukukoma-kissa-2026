@@ -3,7 +3,7 @@
   KITCHEN: "キッチン",
   WAITER: "ウェイター",
   MENU_DISPLAY: "メニュー表示",
-  ADMIN: "管理",
+  ADMIN: "管理者",
 };
 
 export const AVAILABILITY_LABEL: Record<string, string> = {

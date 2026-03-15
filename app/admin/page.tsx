@@ -1373,7 +1373,7 @@ export default function AdminPage() {
                         {actor.actorType === "KITCHEN" && (
                           <label className="ml-1 inline-flex items-center gap-2 rounded-md border px-2 py-1 text-xs">
                             <span className="text-muted-foreground">
-                              オーダーを受け付ける
+                              注文を受け付ける
                             </span>
                             <Switch
                               checked={actor.kitchenEnabled}
@@ -1390,10 +1390,10 @@ export default function AdminPage() {
                                     });
                                   },
                                   successMessage: checked
-                                    ? "オーダーを受け付けるようにしました"
-                                    : "オーダーを受け付けないようにしました",
+                                    ? "注文を受け付けるようにしました"
+                                    : "注文を受け付けないようにしました",
                                   errorMessage:
-                                    "オーダー受付状態の更新に失敗しました",
+                                    "注文受付状態の更新に失敗しました",
                                 })
                               }
                             />

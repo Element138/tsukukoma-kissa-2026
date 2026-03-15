@@ -277,17 +277,15 @@ export default function KitchenPage() {
       notify({
         level: "success",
         message: nextEnabled
-          ? "オーダーを受け付けるようにしました"
-          : "オーダーを受け付けないようにしました",
+          ? "注文を受け付けるようにしました"
+          : "注文を受け付けないようにしました",
       });
       await reload("all");
     } catch (e) {
       notify({
         level: "error",
         message:
-          e instanceof Error
-            ? e.message
-            : "オーダー受付状態の更新に失敗しました",
+          e instanceof Error ? e.message : "注文受付状態の更新に失敗しました",
       });
     }
   };
@@ -411,7 +409,7 @@ export default function KitchenPage() {
                 </button>
                 <label className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs">
                   <span className="text-muted-foreground">
-                    オーダーを受け付ける
+                    注文を受け付ける
                   </span>
                   <Switch
                     checked={Boolean(myKitchen?.kitchenEnabled)}
@@ -457,16 +455,18 @@ export default function KitchenPage() {
                     </div>
 
                     <div className="kitchen-menu-metrics">
-                      <div className="kitchen-queued-big">
-                        {menu.queuedCount}
+                      <div>
+                        <div className="kitchen-queued-big">
+                          {menu.queuedCount}
+                        </div>
+                        個調理待ち
                       </div>
-                      {" 個調理待ち"}
                       <div className="kitchen-cap-inline">
                         <span className="kitchen-cap-summary">
                           本日 {menu.todayOrderCount} 個注文済み
                           {capValue == null
                             ? ""
-                            : "（上限 " + capValue + " 個）"}
+                            : " / 上限 " + capValue + " 個"}
                         </span>
                         {capPickerOpen ? (
                           <div className="kitchen-cap-editor-inline">
