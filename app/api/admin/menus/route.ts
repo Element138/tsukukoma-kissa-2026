@@ -1,4 +1,5 @@
-﻿import { NextRequest } from "next/server";
+import { NextRequest } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireSession } from "@/lib/server/auth";
 import { fail, ok } from "@/lib/response";
@@ -7,30 +8,44 @@ import { menuCreateSchema, menuUpdateSchema } from "@/lib/validation";
 import { writeAuditLog } from "@/lib/domain/audit";
 import { withRouteTrace, traceError } from "@/lib/server/trace";
 import { AppError } from "@/lib/errors";
-import { broadcastInvalidation, CHANNEL_GROUPS } from "@/lib/server/realtime-broadcast";
+import {
+  broadcastInvalidation,
+  CHANNEL_GROUPS,
+} from "@/lib/server/realtime-broadcast";
 
-async function hasActiveCoverage(menuId: string) {
-  const count = await prisma.menuKitchenAssignment.count({
+type DbClient = typeof prisma | Prisma.TransactionClient;
+
+async function hasActiveCoverage(db: DbClient, menuId: string) {
+  const count = await db.menuKitchenAssignment.count({
     where: {
       menuId,
       enabled: true,
       kitchenActor: {
         actorType: "KITCHEN",
         isActive: true,
-        kitchenEnabled: true
-      }
-    }
+        kitchenEnabled: true,
+      },
+    },
   });
   return count > 0;
 }
 
-function isPosAvailabilityOnlyPatch(body: ReturnType<typeof menuUpdateSchema.parse>) {
+function isAvailabilityWithCoverage(
+  availability: "AVAILABLE" | "INCREASED_WAIT" | "PAUSED" | "SOLD_OUT",
+) {
+  return availability === "AVAILABLE" || availability === "INCREASED_WAIT";
+}
+
+function isPosAvailabilityOnlyPatch(
+  body: ReturnType<typeof menuUpdateSchema.parse>,
+) {
   const editableKeys: Array<keyof typeof body> = [
     "name",
     "priceJpy",
     "workloadSeconds",
     "displayOrder",
     "categoryId",
+    "kitchenId",
     "isActive",
     "showLeadTime",
     "coverImageDataUrl",
@@ -39,52 +54,90 @@ function isPosAvailabilityOnlyPatch(body: ReturnType<typeof menuUpdateSchema.par
     "customBadgeColor",
   ];
 
-  return editableKeys.every((key) => body[key] === undefined) && body.availability !== undefined;
+  return (
+    editableKeys.every((key) => body[key] === undefined) &&
+    body.availability !== undefined
+  );
+}
+
+async function assertKitchenActor(tx: Prisma.TransactionClient, kitchenId: string) {
+  const kitchenActor = await tx.actor.findUnique({
+    where: { id: kitchenId },
+    select: {
+      id: true,
+      actorType: true,
+    },
+  });
+  if (!kitchenActor || kitchenActor.actorType !== "KITCHEN") {
+    throw new AppError(
+      400,
+      "INVALID_KITCHEN_ACTOR",
+      "kitchenId must reference a KITCHEN actor",
+    );
+  }
 }
 
 export async function GET(req: NextRequest) {
   return withRouteTrace(req, "admin/menus.GET", async (trace) => {
     try {
       trace("auth.start");
-      await requireSession(req, { actorTypes: ["ADMIN", "KITCHEN", "POS", "MENU_DISPLAY"] });
+      await requireSession(req, {
+        actorTypes: ["ADMIN", "KITCHEN", "POS", "MENU_DISPLAY"],
+      });
       trace("auth.ok");
 
       trace("db.read.start");
-      const [menus, categories, activeAssignments] = await Promise.all([
+      const [menus, categories, enabledAssignments] = await Promise.all([
         prisma.menu.findMany({
-          orderBy: [
-            { displayOrder: "asc" },
-            { name: "asc" },
-          ]
+          orderBy: [{ displayOrder: "asc" }, { name: "asc" }],
         }),
         prisma.menuCategory.findMany({
           where: { isActive: true },
-          orderBy: { displayOrder: "asc" }
+          orderBy: { displayOrder: "asc" },
         }),
         prisma.menuKitchenAssignment.findMany({
-          where: {
-            enabled: true,
-            kitchenActor: {
-              actorType: "KITCHEN",
-              isActive: true,
-              kitchenEnabled: true
-            }
-          },
+          where: { enabled: true },
           select: {
-            menuId: true
-          }
-        })
+            menuId: true,
+            kitchenId: true,
+            kitchenActor: {
+              select: {
+                actorType: true,
+                isActive: true,
+                kitchenEnabled: true,
+              },
+            },
+          },
+          orderBy: [{ menuId: "asc" }, { updatedAt: "desc" }],
+        }),
       ]);
-      trace("db.read.ok", { menuCount: menus.length, categoryCount: categories.length });
+      trace("db.read.ok", {
+        menuCount: menus.length,
+        categoryCount: categories.length,
+      });
 
-      const coveredMenuIds = new Set(activeAssignments.map((row) => row.menuId));
+      const assignedKitchenByMenuId = new Map<string, string>();
+      const coveredMenuIds = new Set<string>();
+      for (const assignment of enabledAssignments) {
+        if (!assignedKitchenByMenuId.has(assignment.menuId)) {
+          assignedKitchenByMenuId.set(assignment.menuId, assignment.kitchenId);
+        }
+        if (
+          assignment.kitchenActor.actorType === "KITCHEN" &&
+          assignment.kitchenActor.isActive &&
+          assignment.kitchenActor.kitchenEnabled
+        ) {
+          coveredMenuIds.add(assignment.menuId);
+        }
+      }
 
       return ok({
         menus: menus.map((menu) => ({
           ...menu,
-          hasActiveKitchenCoverage: coveredMenuIds.has(menu.id)
+          assignedKitchenId: assignedKitchenByMenuId.get(menu.id) ?? null,
+          hasActiveKitchenCoverage: coveredMenuIds.has(menu.id),
         })),
-        categories
+        categories,
       });
     } catch (error) {
       traceError(trace, "error", error);
@@ -102,10 +155,16 @@ export async function POST(req: NextRequest) {
 
       trace("parseJson.start");
       const body = await parseJson(req, menuCreateSchema);
-      trace("parseJson.ok", { name: body.name, categoryId: body.categoryId });
+      trace("parseJson.ok", {
+        name: body.name,
+        categoryId: body.categoryId,
+        kitchenId: body.kitchenId,
+      });
 
       trace("tx.create.start");
       const menu = await prisma.$transaction(async (tx) => {
+        await assertKitchenActor(tx, body.kitchenId);
+
         const created = await tx.menu.create({
           data: {
             name: body.name,
@@ -119,8 +178,49 @@ export async function POST(req: NextRequest) {
             allergensJson: body.allergensJson ?? [],
             customBadgeText: body.customBadgeText ?? null,
             customBadgeColor: body.customBadgeColor ?? null,
-          }
+          },
         });
+
+        await tx.menuKitchenAssignment.upsert({
+          where: {
+            menuId_kitchenId: {
+              menuId: created.id,
+              kitchenId: body.kitchenId,
+            },
+          },
+          create: {
+            menuId: created.id,
+            kitchenId: body.kitchenId,
+            enabled: true,
+          },
+          update: {
+            enabled: true,
+          },
+        });
+
+        await tx.menuKitchenAssignment.updateMany({
+          where: {
+            menuId: created.id,
+            kitchenId: {
+              not: body.kitchenId,
+            },
+            enabled: true,
+          },
+          data: {
+            enabled: false,
+          },
+        });
+
+        if (
+          isAvailabilityWithCoverage(created.availability) &&
+          !(await hasActiveCoverage(tx, created.id))
+        ) {
+          throw new AppError(
+            409,
+            "NO_ACTIVE_KITCHEN",
+            "Cannot set AVAILABLE/INCREASED_WAIT without an active kitchen assignment",
+          );
+        }
 
         await writeAuditLog(tx, {
           actorId: actor.actorId,
@@ -128,11 +228,19 @@ export async function POST(req: NextRequest) {
           actionType: "MENU_CREATED",
           entityType: "menu",
           entityId: created.id,
-          afterJson: created,
-          result: "SUCCESS"
+          afterJson: {
+            ...created,
+            kitchenId: body.kitchenId,
+          },
+          result: "SUCCESS",
         });
 
-        await broadcastInvalidation(tx, CHANNEL_GROUPS.MENUS, "menus", "menu_created");
+        await broadcastInvalidation(
+          tx,
+          [...CHANNEL_GROUPS.MENUS, ...CHANNEL_GROUPS.ASSIGNMENTS],
+          "menus",
+          "menu_created",
+        );
         return created;
       });
       trace("tx.create.ok", { menuId: menu.id });
@@ -157,7 +265,11 @@ export async function PATCH(req: NextRequest) {
       trace("parseJson.ok", { menuId: body.id });
 
       if (actor.actorType === "POS" && !isPosAvailabilityOnlyPatch(body)) {
-        throw new AppError(403, "FORBIDDEN", "POS can only update menu availability");
+        throw new AppError(
+          403,
+          "FORBIDDEN",
+          "POS can only update menu availability",
+        );
       }
 
       const before = await prisma.menu.findUnique({ where: { id: body.id } });
@@ -166,22 +278,72 @@ export async function PATCH(req: NextRequest) {
       }
 
       if (!before.isActive) {
-        throw new AppError(409, "MENU_DELETED", "Deleted menu cannot be edited");
+        throw new AppError(
+          409,
+          "MENU_DELETED",
+          "Deleted menu cannot be edited",
+        );
       }
 
       if (body.isActive === true) {
-        throw new AppError(409, "MENU_DELETE_PERMANENT", "Deleted menu cannot be restored");
-      }
-
-      if (body.availability === "AVAILABLE") {
-        const covered = await hasActiveCoverage(body.id);
-        if (!covered) {
-          throw new AppError(409, "NO_ACTIVE_KITCHEN", "Cannot set AVAILABLE without active kitchen assignment");
-        }
+        throw new AppError(
+          409,
+          "MENU_DELETE_PERMANENT",
+          "Deleted menu cannot be restored",
+        );
       }
 
       trace("tx.update.start");
       const menu = await prisma.$transaction(async (tx) => {
+        if (body.kitchenId !== undefined) {
+          await assertKitchenActor(tx, body.kitchenId);
+
+          await tx.menuKitchenAssignment.upsert({
+            where: {
+              menuId_kitchenId: {
+                menuId: body.id,
+                kitchenId: body.kitchenId,
+              },
+            },
+            create: {
+              menuId: body.id,
+              kitchenId: body.kitchenId,
+              enabled: true,
+            },
+            update: {
+              enabled: true,
+            },
+          });
+
+          await tx.menuKitchenAssignment.updateMany({
+            where: {
+              menuId: body.id,
+              kitchenId: {
+                not: body.kitchenId,
+              },
+              enabled: true,
+            },
+            data: {
+              enabled: false,
+            },
+          });
+        }
+
+        const nextAvailability =
+          body.isActive === false
+            ? "PAUSED"
+            : (body.availability ?? before.availability);
+        if (
+          isAvailabilityWithCoverage(nextAvailability) &&
+          !(await hasActiveCoverage(tx, body.id))
+        ) {
+          throw new AppError(
+            409,
+            "NO_ACTIVE_KITCHEN",
+            "Cannot set AVAILABLE/INCREASED_WAIT without an active kitchen assignment",
+          );
+        }
+
         let shiftedMenuCount = 0;
         if (body.isActive === false && before.displayOrder != null) {
           const shifted = await tx.menu.updateMany({
@@ -216,7 +378,7 @@ export async function PATCH(req: NextRequest) {
             allergensJson: body.allergensJson,
             customBadgeText: body.customBadgeText,
             customBadgeColor: body.customBadgeColor,
-          }
+          },
         });
 
         const actionType =
@@ -240,10 +402,15 @@ export async function PATCH(req: NextRequest) {
                   shiftedMenuCount,
                 }
               : updated,
-          result: "SUCCESS"
+          result: "SUCCESS",
         });
 
-        await broadcastInvalidation(tx, CHANNEL_GROUPS.MENUS, "menus", "menu_updated");
+        await broadcastInvalidation(
+          tx,
+          [...CHANNEL_GROUPS.MENUS, ...CHANNEL_GROUPS.ASSIGNMENTS],
+          "menus",
+          "menu_updated",
+        );
         return updated;
       });
       trace("tx.update.ok", { menuId: menu.id });

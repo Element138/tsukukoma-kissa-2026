@@ -147,7 +147,7 @@ export async function createOrderAtPaymentStart(
     where: {
       id: { in: menuIds },
       isActive: true,
-      availability: "AVAILABLE"
+      availability: { in: ["AVAILABLE", "INCREASED_WAIT"] }
     },
     select: {
       id: true,

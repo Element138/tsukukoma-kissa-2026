@@ -8,6 +8,7 @@
 
 export const AVAILABILITY_LABEL: Record<string, string> = {
   AVAILABLE: "販売中",
+  INCREASED_WAIT: "調理待ち",
   PAUSED: "販売停止中",
   SOLD_OUT: "売り切れ",
 };

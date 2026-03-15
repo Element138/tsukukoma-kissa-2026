@@ -42,7 +42,7 @@ type MenuPayload = {
     id: string;
     name: string;
     priceJpy: number;
-    availability: "AVAILABLE" | "PAUSED" | "SOLD_OUT";
+    availability: "AVAILABLE" | "INCREASED_WAIT" | "PAUSED" | "SOLD_OUT";
     isActive: boolean;
     categoryId: string;
     displayOrder: number;
@@ -55,17 +55,22 @@ type MenuPayload = {
   }>;
 };
 
-const AVAILABILITY_OPTIONS: Array<"AVAILABLE" | "PAUSED" | "SOLD_OUT"> = [
+const AVAILABILITY_OPTIONS: Array<
+  "AVAILABLE" | "INCREASED_WAIT" | "PAUSED" | "SOLD_OUT"
+> = [
   "AVAILABLE",
+  "INCREASED_WAIT",
   "PAUSED",
   "SOLD_OUT",
 ];
 const STATUS_BUTTON_ACTIVE_TONE: Record<
-  "AVAILABLE" | "PAUSED" | "SOLD_OUT",
+  "AVAILABLE" | "INCREASED_WAIT" | "PAUSED" | "SOLD_OUT",
   string
 > = {
   AVAILABLE:
     "border-emerald-700 bg-emerald-600 text-white hover:bg-emerald-700",
+  INCREASED_WAIT:
+    "border-orange-700 bg-orange-500 text-white hover:bg-orange-600",
   PAUSED: "border-amber-700 bg-amber-500 text-white hover:bg-amber-600",
   SOLD_OUT: "border-rose-700 bg-rose-600 text-white hover:bg-rose-700",
 };
@@ -181,7 +186,11 @@ export default function PosPage() {
     if (!menu) {
       return;
     }
-    if (delta > 0 && menu.availability !== "AVAILABLE") {
+    if (
+      delta > 0 &&
+      menu.availability !== "AVAILABLE" &&
+      menu.availability !== "INCREASED_WAIT"
+    ) {
       return;
     }
 
@@ -209,14 +218,17 @@ export default function PosPage() {
 
   const updateMenuAvailability = async (
     menuId: string,
-    next: "AVAILABLE" | "PAUSED" | "SOLD_OUT",
+    next: "AVAILABLE" | "INCREASED_WAIT" | "PAUSED" | "SOLD_OUT",
   ) => {
     const menu = menuList.find((row) => row.id === menuId);
     if (!menu) {
       return;
     }
 
-    if (next === "AVAILABLE" && !menu.hasActiveKitchenCoverage) {
+    if (
+      (next === "AVAILABLE" || next === "INCREASED_WAIT") &&
+      !menu.hasActiveKitchenCoverage
+    ) {
       notify({
         level: "error",
         message: "現在対応できるキッチンがないため、販売中にできません",
@@ -349,7 +361,9 @@ export default function PosPage() {
             <div className="menu-tile-grid">
               {menuList.map((menu) => {
                 const qty = cart[menu.id] ?? 0;
-                const unavailable = menu.availability !== "AVAILABLE";
+                const unavailable =
+                  menu.availability !== "AVAILABLE" &&
+                  menu.availability !== "INCREASED_WAIT";
                 return (
                   <div
                     key={menu.id}
@@ -388,7 +402,8 @@ export default function PosPage() {
                     <div className="menu-status-grid">
                       {AVAILABILITY_OPTIONS.map((option) => {
                         const noCoverageForAvailable =
-                          option === "AVAILABLE" &&
+                          (option === "AVAILABLE" ||
+                            option === "INCREASED_WAIT") &&
                           !menu.hasActiveKitchenCoverage;
                         const disabled = menuAvailabilityBusyId === menu.id;
                         const active = menu.availability === option;

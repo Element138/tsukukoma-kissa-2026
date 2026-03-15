@@ -348,7 +348,7 @@ export async function updateMenuAvailabilityByKitchen(
     actorId: string;
     kitchenId: string;
     menuId: string;
-    availability: "AVAILABLE" | "PAUSED" | "SOLD_OUT";
+    availability: "AVAILABLE" | "INCREASED_WAIT" | "PAUSED" | "SOLD_OUT";
   }
 ) {
   const assignment = await db.menuKitchenAssignment.findFirst({

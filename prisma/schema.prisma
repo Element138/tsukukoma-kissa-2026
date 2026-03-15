@@ -18,6 +18,7 @@ enum ActorType {
 
 enum Availability {
   AVAILABLE
+  INCREASED_WAIT
   PAUSED
   SOLD_OUT
 }

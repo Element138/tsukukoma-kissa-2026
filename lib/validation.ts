@@ -97,7 +97,7 @@ export const kitchenReassignSchema = z.object({
 
 export const availabilityUpdateSchema = z.object({
   menuId: z.string().uuid(),
-  availability: z.enum(["AVAILABLE", "PAUSED", "SOLD_OUT"])
+  availability: z.enum(["AVAILABLE", "INCREASED_WAIT", "PAUSED", "SOLD_OUT"])
 });
 
 export const actorCreateSchema = z
@@ -152,10 +152,11 @@ const badgeColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 export const menuCreateSchema = z.object({
   name: z.string().min(1).max(120),
   priceJpy: z.number().int().min(0).max(100000),
-  availability: z.enum(["AVAILABLE", "PAUSED", "SOLD_OUT"]),
+  availability: z.enum(["AVAILABLE", "INCREASED_WAIT", "PAUSED", "SOLD_OUT"]),
   workloadSeconds: z.number().finite().min(0.1).max(7200),
   displayOrder: z.number().int().min(0).max(999),
   categoryId: z.string().uuid(),
+  kitchenId: z.string().min(1).max(64),
   showLeadTime: z.boolean().optional(),
   coverImageDataUrl: z.string().max(2_000_000).nullable().optional(),
   allergensJson: menuAllergensSchema.optional(),
@@ -167,10 +168,11 @@ export const menuUpdateSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1).max(120).optional(),
   priceJpy: z.number().int().min(0).max(100000).optional(),
-  availability: z.enum(["AVAILABLE", "PAUSED", "SOLD_OUT"]).optional(),
+  availability: z.enum(["AVAILABLE", "INCREASED_WAIT", "PAUSED", "SOLD_OUT"]).optional(),
   workloadSeconds: z.number().finite().min(0.1).max(7200).optional(),
   displayOrder: z.number().int().min(0).max(999).optional(),
   categoryId: z.string().uuid().optional(),
+  kitchenId: z.string().min(1).max(64).optional(),
   isActive: z.boolean().optional(),
   showLeadTime: z.boolean().optional(),
   coverImageDataUrl: z.string().max(2_000_000).nullable().optional(),

@@ -35,17 +35,10 @@ type AdminMenuPayload = {
   menus: Array<{
     id: string;
     name: string;
-    availability: "AVAILABLE" | "PAUSED" | "SOLD_OUT";
+    availability: "AVAILABLE" | "INCREASED_WAIT" | "PAUSED" | "SOLD_OUT";
     isActive: boolean;
+    assignedKitchenId: string | null;
     hasActiveKitchenCoverage: boolean;
-  }>;
-};
-
-type AssignmentPayload = {
-  assignments: Array<{
-    menuId: string;
-    kitchenId: string;
-    enabled: boolean;
   }>;
 };
 
@@ -74,17 +67,22 @@ function queueTone(seconds: number) {
   return "safe";
 }
 
-const AVAILABILITY_OPTIONS: Array<"AVAILABLE" | "PAUSED" | "SOLD_OUT"> = [
+const AVAILABILITY_OPTIONS: Array<
+  "AVAILABLE" | "INCREASED_WAIT" | "PAUSED" | "SOLD_OUT"
+> = [
   "AVAILABLE",
+  "INCREASED_WAIT",
   "PAUSED",
   "SOLD_OUT",
 ];
 const STATUS_BUTTON_ACTIVE_TONE: Record<
-  "AVAILABLE" | "PAUSED" | "SOLD_OUT",
+  "AVAILABLE" | "INCREASED_WAIT" | "PAUSED" | "SOLD_OUT",
   string
 > = {
   AVAILABLE:
     "border-emerald-700 bg-emerald-600 text-white hover:bg-emerald-700",
+  INCREASED_WAIT:
+    "border-orange-700 bg-orange-500 text-white hover:bg-orange-600",
   PAUSED: "border-amber-700 bg-amber-500 text-white hover:bg-amber-600",
   SOLD_OUT: "border-rose-700 bg-rose-600 text-white hover:bg-rose-700",
 };
@@ -105,9 +103,6 @@ export default function KitchenPage() {
   const [myKitchen, setMyKitchen] = useState<KitchenActor | null>(null);
   const [busy, setBusy] = useState(false);
   const [menus, setMenus] = useState<AdminMenuPayload["menus"]>([]);
-  const [assignments, setAssignments] = useState<
-    AssignmentPayload["assignments"]
-  >([]);
   const [availabilityBusyMenuId, setAvailabilityBusyMenuId] = useState<
     string | null
   >(null);
@@ -127,13 +122,11 @@ export default function KitchenPage() {
     reloadInFlightRef.current = true;
 
     try {
-      const [queue, actorPayload, menuPayload, assignmentPayload] =
-        await Promise.all([
-          apiFetch<{ queues: QueueMenu[] }>("/api/kitchen/queue"),
-          apiFetch<{ actors: KitchenActor[] }>("/api/admin/actors"),
-          apiFetch<AdminMenuPayload>("/api/admin/menus"),
-          apiFetch<AssignmentPayload>("/api/admin/assignments"),
-        ]);
+      const [queue, actorPayload, menuPayload] = await Promise.all([
+        apiFetch<{ queues: QueueMenu[] }>("/api/kitchen/queue"),
+        apiFetch<{ actors: KitchenActor[] }>("/api/admin/actors"),
+        apiFetch<AdminMenuPayload>("/api/admin/menus"),
+      ]);
 
       setQueues(queue.queues);
       setQueueFetchedAt(Date.now());
@@ -143,7 +136,6 @@ export default function KitchenPage() {
         ) ?? null,
       );
       setMenus(menuPayload.menus.filter((menu) => menu.isActive));
-      setAssignments(assignmentPayload.assignments);
     } catch (e) {
       notify({
         level: "error",
@@ -180,23 +172,15 @@ export default function KitchenPage() {
     },
   });
 
-  const myMenuIds = useMemo(() => {
+  const controllableMenus = useMemo(() => {
     if (!session) {
-      return new Set<string>();
+      return [] as AdminMenuPayload["menus"];
     }
 
-    return new Set(
-      assignments
-        .filter((row) => row.kitchenId === session.actor.actorId && row.enabled)
-        .map((row) => row.menuId),
-    );
-  }, [assignments, session]);
-
-  const controllableMenus = useMemo(() => {
     return menus
-      .filter((menu) => myMenuIds.has(menu.id))
+      .filter((menu) => menu.assignedKitchenId === session.actor.actorId)
       .sort((a, b) => a.name.localeCompare(b.name, "ja"));
-  }, [menus, myMenuIds]);
+  }, [menus, session]);
 
   const submitReady = async (menuId: string, quantity: number) => {
     setBusy(true);
@@ -296,14 +280,17 @@ export default function KitchenPage() {
 
   const changeAvailability = async (
     menuId: string,
-    availability: "AVAILABLE" | "PAUSED" | "SOLD_OUT",
+    availability: "AVAILABLE" | "INCREASED_WAIT" | "PAUSED" | "SOLD_OUT",
   ) => {
     const menu = controllableMenus.find((row) => row.id === menuId);
     if (!menu) {
       return;
     }
 
-    if (availability === "AVAILABLE" && !menu.hasActiveKitchenCoverage) {
+    if (
+      (availability === "AVAILABLE" || availability === "INCREASED_WAIT") &&
+      !menu.hasActiveKitchenCoverage
+    ) {
       notify({
         level: "error",
         message: "現在対応できるキッチンがないため、販売中にできません",
@@ -473,7 +460,8 @@ export default function KitchenPage() {
                   <div className="menu-status-grid" style={{ marginTop: 8 }}>
                     {AVAILABILITY_OPTIONS.map((status) => {
                       const noCoverageForAvailable =
-                        status === "AVAILABLE" &&
+                        (status === "AVAILABLE" ||
+                          status === "INCREASED_WAIT") &&
                         !menu.hasActiveKitchenCoverage;
                       const disabled = availabilityBusyMenuId === menu.id;
                       const active = menu.availability === status;

@@ -2,20 +2,6 @@ import { Prisma, PrismaClient } from "@prisma/client";
 import { now } from "@/lib/time";
 import { AppError } from "@/lib/errors";
 
-function chooseKitchenIdByWorkload(workloads: Map<string, number>, candidates: string[]): string {
-  let best = Number.POSITIVE_INFINITY;
-  for (const c of candidates) {
-    const score = workloads.get(c) ?? 0;
-    if (score < best) {
-      best = score;
-    }
-  }
-
-  const tied = candidates.filter((c) => (workloads.get(c) ?? 0) === best);
-  const idx = Math.floor(Math.random() * tied.length);
-  return tied[idx] as string;
-}
-
 type DbClient = PrismaClient | Prisma.TransactionClient;
 
 function activeKitchenActorWhere() {
@@ -35,8 +21,7 @@ export async function assignUnassignedItemsForOrder(db: DbClient, orderId: strin
     },
     select: {
       id: true,
-      menuId: true,
-      workloadSecondsSnapshot: true
+      menuId: true
     }
   });
 
@@ -54,37 +39,21 @@ export async function assignUnassignedItemsForOrder(db: DbClient, orderId: strin
     select: {
       menuId: true,
       kitchenId: true
-    }
-  });
-
-  const assignmentMap = new Map<string, string[]>();
-  for (const row of assignments) {
-    const arr = assignmentMap.get(row.menuId) ?? [];
-    arr.push(row.kitchenId);
-    assignmentMap.set(row.menuId, arr);
-  }
-
-  const queuedLoadsRaw = await db.orderItem.groupBy({
-    by: ["kitchenId"],
-    where: {
-      kitchenId: { not: null },
-      status: "QUEUED"
     },
-    _sum: {
-      workloadSecondsSnapshot: true
-    }
+    orderBy: [{ menuId: "asc" }, { updatedAt: "desc" }]
   });
 
-  const workloads = new Map<string, number>();
-  for (const row of queuedLoadsRaw) {
-    if (row.kitchenId) {
-      workloads.set(row.kitchenId, row._sum.workloadSecondsSnapshot ?? 0);
+  const assignmentMap = new Map<string, string>();
+  for (const row of assignments) {
+    if (assignmentMap.has(row.menuId)) {
+      continue;
     }
+    assignmentMap.set(row.menuId, row.kitchenId);
   }
 
   for (const item of pendingItems) {
-    const candidates = assignmentMap.get(item.menuId) ?? [];
-    if (candidates.length === 0) {
+    const kitchenId = assignmentMap.get(item.menuId);
+    if (!kitchenId) {
       throw new AppError(
         409,
         "NO_ACTIVE_KITCHEN",
@@ -92,13 +61,10 @@ export async function assignUnassignedItemsForOrder(db: DbClient, orderId: strin
       );
     }
 
-    const chosen = chooseKitchenIdByWorkload(workloads, candidates);
-    workloads.set(chosen, (workloads.get(chosen) ?? 0) + item.workloadSecondsSnapshot);
-
     await db.orderItem.update({
       where: { id: item.id },
       data: {
-        kitchenId: chosen,
+        kitchenId,
         kitchenAssignedAt: now()
       }
     });
@@ -204,7 +170,7 @@ export async function updateMenusAvailabilityByKitchenCoverage(db: DbClient, men
 
   for (const menu of menus) {
     const hasCoverage = coveredMenus.has(menu.id);
-    if (!hasCoverage && menu.availability === "AVAILABLE") {
+    if (!hasCoverage && (menu.availability === "AVAILABLE" || menu.availability === "INCREASED_WAIT")) {
       pauseIds.push(menu.id);
     }
     if (hasCoverage && menu.availability === "PAUSED") {

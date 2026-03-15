@@ -29,8 +29,7 @@ type DisplayCategory = {
     id: string;
     name: string;
     priceJpy: number;
-    availability: "AVAILABLE" | "PAUSED" | "SOLD_OUT";
-    leadTimeSecondsP75_30m: number | null;
+    availability: "AVAILABLE" | "INCREASED_WAIT" | "PAUSED" | "SOLD_OUT";
     coverImageDataUrl: string | null;
     allergens: SpecifiedAllergenKey[];
     customBadgeText: string | null;
@@ -58,13 +57,6 @@ function resolvePageDisplayMs(pageDisplaySeconds: number | undefined) {
       ? (pageDisplaySeconds as number)
       : DEFAULT_SETTINGS.pageDisplaySeconds;
   return Math.max(6000, Math.floor(safeSeconds * 1000));
-}
-
-function formatEta(seconds: number | null, forcePlaceholder: boolean) {
-  if (seconds == null) {
-    return forcePlaceholder ? "-- 分" : null;
-  }
-  return `${Math.max(1, Math.ceil(seconds / 60))} 分`;
 }
 
 function splitCategoryPages(categories: DisplayCategory[]) {
@@ -125,7 +117,6 @@ export default function MenuDisplayPage() {
   const [pageIndex, setPageIndex] = useState(0);
   const [isPageFading, setIsPageFading] = useState(false);
   const [cycleTick, setCycleTick] = useState(0);
-  const [forceShowEtaDebug, setForceShowEtaDebug] = useState(false);
 
   const categoriesRef = useRef<DisplayCategory[]>([]);
   const pendingCategorySnapshotRef = useRef<DisplayCategory[] | null>(null);
@@ -289,15 +280,14 @@ export default function MenuDisplayPage() {
         const animation = track.animate(
           [
             { transform: "translateY(0px)", offset: 0 },
-            { transform: "translateY(0px)", offset: 0.12 },
-            { transform: `translateY(${-overflowPx}px)`, offset: 0.56 },
-            { transform: `translateY(${-overflowPx}px)`, offset: 0.78 },
-            { transform: "translateY(0px)", offset: 0.96 },
-            { transform: "translateY(0px)", offset: 1 },
+            { transform: "translateY(0px)", offset: 0.2 },
+            { transform: `translateY(${-overflowPx * 0.08}px)`, offset: 0.32 },
+            { transform: `translateY(${-overflowPx}px)`, offset: 0.82 },
+            { transform: `translateY(${-overflowPx}px)`, offset: 1 },
           ],
           {
             duration: pageDisplayMs,
-            easing: "cubic-bezier(0.42, 0, 0.24, 1)",
+            easing: "cubic-bezier(0.28, 0.08, 0.24, 1)",
             iterations: 1,
             fill: "both",
           },
@@ -391,29 +381,6 @@ export default function MenuDisplayPage() {
     pageStructureSignature,
     shouldFadeBetweenPages,
   ]);
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.repeat || event.key.toLowerCase() !== "s") {
-        return;
-      }
-      setForceShowEtaDebug((prev) => {
-        const next = !prev;
-        notify({
-          level: "info",
-          message: next
-            ? "提供目安のデバッグ表示を有効化しました"
-            : "提供目安のデバッグ表示を無効化しました",
-        });
-        return next;
-      });
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [notify]);
 
   useRealtimeSubscription({
     enabled: Boolean(session),
@@ -531,13 +498,13 @@ export default function MenuDisplayPage() {
                   }}
                 >
                   {category.menus.map((menu) => {
-                    const unavailable = menu.availability !== "AVAILABLE";
+                    const unavailable =
+                      menu.availability === "PAUSED" ||
+                      menu.availability === "SOLD_OUT";
+                    const showIncreasedWait =
+                      menu.availability === "INCREASED_WAIT";
                     const imageSrc = menu.coverImageDataUrl;
                     const hasImage = Boolean(imageSrc);
-                    const etaText = formatEta(
-                      menu.leadTimeSecondsP75_30m,
-                      forceShowEtaDebug,
-                    );
                     const allergenNotice = formatAllergenNotice(menu.allergens);
                     const hasAllergenWarning = menu.allergens.length > 0;
                     const badgeText = menu.customBadgeText?.trim() ?? "";
@@ -546,7 +513,7 @@ export default function MenuDisplayPage() {
                     return (
                       <article
                         key={menu.id}
-                        className={`menu-display-row ${hasImage ? "has-image" : "no-image"} ${unavailable ? "unavailable" : ""}`}
+                        className={`menu-display-row ${unavailable ? "unavailable" : ""}`}
                         style={
                           badgeText
                             ? ({
@@ -580,28 +547,25 @@ export default function MenuDisplayPage() {
                               <span className="menu-display-row-price">
                                 {fmtJpy(menu.priceJpy)}
                               </span>
-                              {etaText ? (
-                                <span className="menu-display-row-eta">
-                                  <span className="menu-display-row-eta-label">
-                                    提供目安
-                                  </span>
-                                  <span className="menu-display-row-eta-value">
-                                    {etaText}
-                                  </span>
+                              {showIncreasedWait ? (
+                                <span className="menu-display-row-wait">
+                                  お時間をいただきます
                                 </span>
                               ) : null}
                             </div>
                           )}
                         </div>
-                        {hasImage ? (
-                          <div className="menu-display-row-image-wrap">
+                        <div
+                          className={`menu-display-row-image-wrap ${hasImage ? "" : "is-empty"}`}
+                        >
+                          {hasImage ? (
                             <img
                               src={imageSrc ?? undefined}
                               alt={`${menu.name} の画像`}
                               className="menu-display-row-image"
                             />
-                          </div>
-                        ) : null}
+                          ) : null}
+                        </div>
                       </article>
                     );
                   })}

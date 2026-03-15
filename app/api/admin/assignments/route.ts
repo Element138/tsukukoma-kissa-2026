@@ -86,6 +86,19 @@ export async function POST(req: NextRequest) {
           }
         });
 
+        if (body.enabled) {
+          await tx.menuKitchenAssignment.updateMany({
+            where: {
+              menuId: body.menuId,
+              kitchenId: { not: body.kitchenId },
+              enabled: true
+            },
+            data: {
+              enabled: false
+            }
+          });
+        }
+
         await updateMenusAvailabilityByKitchenCoverage(tx, [body.menuId]);
 
         await writeAuditLog(tx, {
@@ -93,7 +106,7 @@ export async function POST(req: NextRequest) {
           actorType: actor.actorType,
           actionType: "MENU_KITCHEN_ASSIGNMENT_UPSERT",
           entityType: "menu_kitchen_assignment",
-          entityId: `${body.menuId}:${body.kitchenId}`,
+          entityId: body.menuId,
           afterJson: saved,
           result: "SUCCESS"
         });

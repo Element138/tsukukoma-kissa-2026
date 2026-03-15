@@ -92,10 +92,11 @@ type Menu = {
   id: string;
   name: string;
   priceJpy: number;
-  availability: "AVAILABLE" | "PAUSED" | "SOLD_OUT";
+  availability: "AVAILABLE" | "INCREASED_WAIT" | "PAUSED" | "SOLD_OUT";
   workloadSeconds: number;
   displayOrder: number | null;
   categoryId: string;
+  assignedKitchenId: string | null;
   isActive: boolean;
   hasActiveKitchenCoverage: boolean;
   coverImageDataUrl: string | null;
@@ -103,12 +104,11 @@ type Menu = {
   customBadgeText: string | null;
   customBadgeColor: string | null;
 };
-type Assignment = { menuId: string; kitchenId: string; enabled: boolean };
 type MenuEdit = {
   name: string;
   priceJpy: string;
-  workloadPerMinute: string;
   categoryId: string;
+  kitchenId: string;
   coverImageDataUrl: string;
   allergens: SpecifiedAllergenKey[];
   customBadgeText: string;
@@ -136,40 +136,25 @@ const MENU_COVER_SUPPORTED_TYPES = new Set([
 
 const AVAILABILITY_OPTIONS: Array<Menu["availability"]> = [
   "AVAILABLE",
+  "INCREASED_WAIT",
   "PAUSED",
   "SOLD_OUT",
 ];
 const STATUS_BUTTON_ACTIVE_TONE: Record<Menu["availability"], string> = {
   AVAILABLE:
     "border-emerald-700 bg-emerald-600 text-white hover:bg-emerald-700",
+  INCREASED_WAIT:
+    "border-orange-700 bg-orange-500 text-white hover:bg-orange-600",
   PAUSED: "border-amber-700 bg-amber-500 text-white hover:bg-amber-600",
   SOLD_OUT: "border-rose-700 bg-rose-600 text-white hover:bg-rose-700",
 };
-const NUMERIC_BLOCK_KEYS = new Set(["e", "E", "+", "-"]);
-const WORKLOAD_COMPARISON_TOLERANCE = 0.05;
 const BADGE_COLOR_HEX_REGEX = /^#[0-9a-fA-F]{6}$/;
+const DEFAULT_MENU_WORKLOAD_SECONDS = 300;
 
 const dangerConfirm = (message: string) => window.confirm(message);
 
-const blockScientificNotationInput = (
-  event: ReactKeyboardEvent<HTMLInputElement>,
-) => {
-  if (NUMERIC_BLOCK_KEYS.has(event.key)) {
-    event.preventDefault();
-  }
-};
-
 function sanitizeIntegerInput(value: string) {
   return value.replace(/[^\d]/g, "");
-}
-
-function sanitizeDecimalInput(value: string) {
-  const normalized = value.replace(/[^\d.]/g, "");
-  const [whole, ...fractionParts] = normalized.split(".");
-  if (fractionParts.length === 0) {
-    return whole;
-  }
-  return `${whole}.${fractionParts.join("")}`;
 }
 
 function replaceExtensionWithWebp(filename: string) {
@@ -315,55 +300,12 @@ function toPositiveFiniteNumber(
   return value;
 }
 
-function efficiencyToWorkloadSeconds(efficiencyPerMinute: number) {
-  return 60 / efficiencyPerMinute;
-}
-
-function workloadSecondsToEfficiency(workloadSeconds: number) {
-  if (!Number.isFinite(workloadSeconds) || workloadSeconds <= 0) {
-    return 0;
-  }
-  return 60 / workloadSeconds;
-}
-
-function formatEfficiencyInput(workloadSeconds: number) {
-  const efficiency = workloadSecondsToEfficiency(workloadSeconds);
-  if (!Number.isFinite(efficiency) || efficiency <= 0) {
-    return "";
-  }
-  return efficiency.toFixed(8).replace(/\.?0+$/, "");
-}
-
-function formatEfficiencyLabel(workloadSeconds: number) {
-  const efficiency = workloadSecondsToEfficiency(workloadSeconds);
-  if (!Number.isFinite(efficiency) || efficiency <= 0) {
-    return "-";
-  }
-  return efficiency.toFixed(2).replace(/\.?0+$/, "");
-}
-
-function hasWorkloadDifference(
-  nextWorkloadSeconds: number,
-  currentWorkloadSeconds: number,
-) {
-  if (
-    !Number.isFinite(nextWorkloadSeconds) ||
-    !Number.isFinite(currentWorkloadSeconds)
-  ) {
-    return true;
-  }
-  return (
-    Math.abs(nextWorkloadSeconds - currentWorkloadSeconds) >
-    WORKLOAD_COMPARISON_TOLERANCE
-  );
-}
-
 function toMenuEdit(menu: Menu): MenuEdit {
   return {
     name: menu.name,
     priceJpy: String(menu.priceJpy),
-    workloadPerMinute: formatEfficiencyInput(menu.workloadSeconds),
     categoryId: menu.categoryId,
+    kitchenId: menu.assignedKitchenId ?? "",
     coverImageDataUrl: menu.coverImageDataUrl ?? "",
     allergens: normalizeSpecifiedAllergens(menu.allergensJson),
     customBadgeText: menu.customBadgeText ?? "",
@@ -459,7 +401,6 @@ export default function AdminPage() {
   const [actors, setActors] = useState<Actor[]>([]);
   const [menus, setMenus] = useState<Menu[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
 
   const [newActorType, setNewActorType] = useState<Actor["actorType"]>("POS");
   const [newActorLabel, setNewActorLabel] = useState("");
@@ -473,8 +414,7 @@ export default function AdminPage() {
   const [newMenuName, setNewMenuName] = useState("");
   const [newMenuPrice, setNewMenuPrice] = useState("500");
   const [newMenuCategoryId, setNewMenuCategoryId] = useState("");
-  const [newMenuWorkloadPerMinute, setNewMenuWorkloadPerMinute] =
-    useState("0.2");
+  const [newMenuKitchenId, setNewMenuKitchenId] = useState("");
   const [menuEdits, setMenuEdits] = useState<Record<string, MenuEdit>>({});
   const [menuDisplaySettings, setMenuDisplaySettings] =
     useState<MenuDisplaySettings | null>(null);
@@ -555,15 +495,11 @@ export default function AdminPage() {
       const menuBadgeColor = menuBadgeText
         ? (menu.customBadgeColor ?? "").trim()
         : "";
-      const parsedEfficiency = Number(edit.workloadPerMinute);
-      const parsedWorkloadSeconds = Number.isFinite(parsedEfficiency)
-        ? efficiencyToWorkloadSeconds(parsedEfficiency)
-        : Number.NaN;
       return (
         edit.name !== menu.name ||
         Number(edit.priceJpy) !== menu.priceJpy ||
-        hasWorkloadDifference(parsedWorkloadSeconds, menu.workloadSeconds) ||
         edit.categoryId !== menu.categoryId ||
+        edit.kitchenId !== (menu.assignedKitchenId ?? "") ||
         normalizedCover !== menuCover ||
         normalizedEditAllergens.join(",") !== normalizedMenuAllergens.join(",") ||
         editBadgeText !== menuBadgeText ||
@@ -592,7 +528,7 @@ export default function AdminPage() {
     if (reloadInFlightRef.current) return;
     reloadInFlightRef.current = true;
     try {
-      const [a, m, c, s, settings] = await Promise.all([
+      const [a, m, c, settings] = await Promise.all([
         apiFetch<{ actors: Actor[] }>("/api/admin/actors", {
           timeoutMs: 5000,
           retry: 1,
@@ -602,10 +538,6 @@ export default function AdminPage() {
           { timeoutMs: 5000, retry: 1 },
         ),
         apiFetch<{ categories: Category[] }>("/api/admin/categories", {
-          timeoutMs: 5000,
-          retry: 1,
-        }),
-        apiFetch<{ assignments: Assignment[] }>("/api/admin/assignments", {
           timeoutMs: 5000,
           retry: 1,
         }),
@@ -620,7 +552,6 @@ export default function AdminPage() {
       setActors(a.actors);
       setMenus(m.menus);
       setCategories(c.categories);
-      setAssignments(s.assignments);
       setMenuDisplaySettings(settings.settings);
       setPageDisplaySecondsDraft((prev) => {
         const previousServerValue = menuDisplaySettings?.pageDisplaySeconds;
@@ -650,6 +581,16 @@ export default function AdminPage() {
       if (!newMenuCategoryId && firstActiveCategory) {
         setNewMenuCategoryId(firstActiveCategory.id);
       }
+      const firstKitchen = a.actors
+        .filter((row) => row.actorType === "KITCHEN" && row.isActive)
+        .sort(
+          (x, y) =>
+            x.kitchenDisplayOrder - y.kitchenDisplayOrder ||
+            x.label.localeCompare(y.label, "ja"),
+        )[0];
+      if (!newMenuKitchenId && firstKitchen) {
+        setNewMenuKitchenId(firstKitchen.id);
+      }
       window.setTimeout(() => {
         setDidBootstrap(true);
       }, 0);
@@ -671,7 +612,7 @@ export default function AdminPage() {
 
   useRealtimeSubscription({
     enabled: Boolean(session),
-    channels: ["actors", "menus", "categories", "assignments"],
+    channels: ["actors", "menus", "categories"],
     onEvent: () => void reload(),
     onResync: () => void reload(),
   });
@@ -836,7 +777,7 @@ export default function AdminPage() {
       body: JSON.stringify({ id, ...patch }),
     });
   };
-  const patchMenu = async (menuId: string, patch: Partial<Menu>) => {
+  const patchMenu = async (menuId: string, patch: Record<string, unknown>) => {
     await apiFetch("/api/admin/menus", {
       method: "PATCH",
       body: JSON.stringify({ id: menuId, ...patch }),
@@ -846,8 +787,8 @@ export default function AdminPage() {
   const parseMenuInput = (params: {
     name: string;
     priceJpy: string;
-    workloadPerMinute: string;
     categoryId: string;
+    kitchenId: string;
     coverImageDataUrl: string;
     allergens: SpecifiedAllergenKey[];
     customBadgeText: string;
@@ -866,17 +807,11 @@ export default function AdminPage() {
       min: 0,
       max: 100000,
     });
-    const efficiencyPerMinute = toPositiveFiniteNumber(
-      params.workloadPerMinute,
-      "調理効率 (個/分)",
-      {
-        min: 0.01,
-        max: 120,
-      },
-    );
-    const workloadSeconds = efficiencyToWorkloadSeconds(efficiencyPerMinute);
     if (!params.categoryId) {
       throw new Error("カテゴリを選択してください");
+    }
+    if (!params.kitchenId) {
+      throw new Error("担当キッチンを選択してください");
     }
 
     const normalizedAllergens = normalizeSpecifiedAllergens(params.allergens);
@@ -889,8 +824,8 @@ export default function AdminPage() {
     return {
       name: trimmedName,
       priceJpy,
-      workloadSeconds,
       categoryId: params.categoryId,
+      kitchenId: params.kitchenId,
       coverImageDataUrl: params.coverImageDataUrl.trim() || null,
       allergensJson: normalizedAllergens,
       customBadgeText: customBadgeText || null,
@@ -979,10 +914,6 @@ export default function AdminPage() {
       });
     }
   };
-
-  const assignmentMap = new Map(
-    assignments.map((a) => [`${a.menuId}:${a.kitchenId}`, a.enabled]),
-  );
 
   if (loading || !session) return <LoadingScreen />;
 
@@ -1483,17 +1414,6 @@ export default function AdminPage() {
                         }
                         inputMode="numeric"
                       />
-                      <InputField
-                        label="調理効率 (個/分)"
-                        value={newMenuWorkloadPerMinute}
-                        onChange={(value) =>
-                          setNewMenuWorkloadPerMinute(
-                            sanitizeDecimalInput(value),
-                          )
-                        }
-                        inputMode="decimal"
-                        onKeyDown={blockScientificNotationInput}
-                      />
                       <label className="grid gap-0">
                         <span className="text-[11px] font-medium leading-none text-muted-foreground">
                           カテゴリ
@@ -1514,6 +1434,26 @@ export default function AdminPage() {
                           </SelectContent>
                         </Select>
                       </label>
+                      <label className="grid gap-0">
+                        <span className="text-[11px] font-medium leading-none text-muted-foreground">
+                          担当キッチン
+                        </span>
+                        <Select
+                          value={newMenuKitchenId}
+                          onValueChange={setNewMenuKitchenId}
+                        >
+                          <SelectTrigger className="bg-background text-foreground">
+                            <SelectValue placeholder="キッチン" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {kitchenActors.map((kitchen) => (
+                              <SelectItem key={kitchen.id} value={kitchen.id}>
+                                {kitchen.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </label>
                       <Button
                         type="button"
                         className="self-end"
@@ -1523,8 +1463,8 @@ export default function AdminPage() {
                             parsedInput = parseMenuInput({
                               name: newMenuName,
                               priceJpy: newMenuPrice,
-                              workloadPerMinute: newMenuWorkloadPerMinute,
                               categoryId: newMenuCategoryId,
+                              kitchenId: newMenuKitchenId,
                               coverImageDataUrl: "",
                               allergens: [],
                               customBadgeText: "",
@@ -1554,6 +1494,7 @@ export default function AdminPage() {
                                 body: JSON.stringify({
                                   ...parsedInput,
                                   availability: "PAUSED",
+                                  workloadSeconds: DEFAULT_MENU_WORKLOAD_SECONDS,
                                   displayOrder: nextDisplayOrder,
                                   showLeadTime: true,
                                 }),
@@ -1570,8 +1511,9 @@ export default function AdminPage() {
                         disabled={
                           !newMenuName ||
                           !newMenuCategoryId ||
+                          !newMenuKitchenId ||
                           !newMenuPrice ||
-                          !newMenuWorkloadPerMinute
+                          kitchenActors.length === 0
                         }
                       >
                         <Add20Regular />
@@ -1584,6 +1526,9 @@ export default function AdminPage() {
               <Accordion type="single" collapsible className="space-y-2">
                 {activeMenus.map((menu) => {
                   const edit = menuEdits[menu.id] ?? toMenuEdit(menu);
+                  const assignedKitchenLabel =
+                    kitchenActors.find((row) => row.id === menu.assignedKitchenId)
+                      ?.label ?? "未設定";
                   const sameCategoryMenus = activeMenus.filter(
                     (row) => row.categoryId === menu.categoryId,
                   );
@@ -1604,17 +1549,17 @@ export default function AdminPage() {
                           <div>
                             <strong className="text-sm">{menu.name}</strong>
                             <div className="mt-1 text-xs text-muted-foreground">
-                              {fmtJpy(menu.priceJpy)} / 分速
-                              {formatEfficiencyLabel(menu.workloadSeconds)}個
+                              {fmtJpy(menu.priceJpy)} / {assignedKitchenLabel}
                             </div>
                           </div>
                           <div
-                            className="grid grid-cols-3 gap-1 md:min-w-72"
+                            className="grid grid-cols-4 gap-1 md:min-w-72"
                             onClick={(e) => e.stopPropagation()}
                           >
                             {AVAILABILITY_OPTIONS.map((status) => {
                               const noCoverage =
-                                status === "AVAILABLE" &&
+                                (status === "AVAILABLE" ||
+                                  status === "INCREASED_WAIT") &&
                                 !menu.hasActiveKitchenCoverage;
                               const disabled =
                                 menuAvailabilityBusyId === menu.id;
@@ -1694,21 +1639,6 @@ export default function AdminPage() {
                             }
                             inputMode="numeric"
                           />
-                          <InputField
-                            label="調理効率 (個/分)"
-                            value={edit.workloadPerMinute}
-                            onChange={(v) =>
-                              setMenuEdits((p) => ({
-                                ...p,
-                                [menu.id]: {
-                                  ...edit,
-                                  workloadPerMinute: sanitizeDecimalInput(v),
-                                },
-                              }))
-                            }
-                            inputMode="decimal"
-                            onKeyDown={blockScientificNotationInput}
-                          />
                           <label className="grid gap-0">
                             <span className="text-[11px] font-medium leading-none text-muted-foreground">
                               カテゴリ
@@ -1729,6 +1659,31 @@ export default function AdminPage() {
                                 {activeCategories.map((c) => (
                                   <SelectItem key={c.id} value={c.id}>
                                     {c.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </label>
+                          <label className="grid gap-0">
+                            <span className="text-[11px] font-medium leading-none text-muted-foreground">
+                              担当キッチン
+                            </span>
+                            <Select
+                              value={edit.kitchenId}
+                              onValueChange={(v) =>
+                                setMenuEdits((p) => ({
+                                  ...p,
+                                  [menu.id]: { ...edit, kitchenId: v },
+                                }))
+                              }
+                            >
+                              <SelectTrigger className="bg-background text-foreground">
+                                <SelectValue placeholder="キッチン" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {kitchenActors.map((kitchen) => (
+                                  <SelectItem key={kitchen.id} value={kitchen.id}>
+                                    {kitchen.label}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
@@ -1890,8 +1845,8 @@ export default function AdminPage() {
                                   parsedInput = parseMenuInput({
                                     name: edit.name,
                                     priceJpy: edit.priceJpy,
-                                    workloadPerMinute: edit.workloadPerMinute,
                                     categoryId: edit.categoryId,
+                                    kitchenId: edit.kitchenId,
                                     coverImageDataUrl: edit.coverImageDataUrl,
                                     allergens: edit.allergens,
                                     customBadgeText: edit.customBadgeText,
@@ -1919,10 +1874,8 @@ export default function AdminPage() {
                                       ...prev[menu.id],
                                       name: parsedInput.name,
                                       priceJpy: String(parsedInput.priceJpy),
-                                      workloadPerMinute: formatEfficiencyInput(
-                                        parsedInput.workloadSeconds,
-                                      ),
                                       categoryId: parsedInput.categoryId,
+                                      kitchenId: parsedInput.kitchenId,
                                       coverImageDataUrl:
                                         parsedInput.coverImageDataUrl ?? "",
                                       allergens: normalizeSpecifiedAllergens(
@@ -1974,50 +1927,6 @@ export default function AdminPage() {
                               }}
                             />
                           </div>
-                        </div>
-                        <div className="grid gap-2 rounded-md border bg-card/60 p-3">
-                          <div className="text-xs font-semibold text-muted-foreground">
-                            キッチン割り当て
-                          </div>
-                          {kitchenActors.map((kitchen) => {
-                            const key = `${menu.id}:${kitchen.id}`;
-                            const enabled = assignmentMap.get(key) ?? false;
-                            return (
-                              <label
-                                key={key}
-                                className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
-                              >
-                                <span className="font-medium">
-                                  {kitchen.label}
-                                </span>
-                                <Switch
-                                  checked={enabled}
-                                  onCheckedChange={(checked) =>
-                                    void runMutation({
-                                      action: async () => {
-                                        await apiFetch(
-                                          "/api/admin/assignments",
-                                          {
-                                            method: "POST",
-                                            body: JSON.stringify({
-                                              menuId: menu.id,
-                                              kitchenId: kitchen.id,
-                                              enabled: checked,
-                                            }),
-                                          },
-                                        );
-                                      },
-                                      successMessage: checked
-                                        ? "キッチン割り当てを有効化しました"
-                                        : "キッチン割り当てを無効化しました",
-                                      errorMessage:
-                                        "キッチン割り当ての更新に失敗しました",
-                                    })
-                                  }
-                                />
-                              </label>
-                            );
-                          })}
                         </div>
                       </AccordionContent>
                     </AccordionItem>

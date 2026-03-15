@@ -1,0 +1,6 @@
+DO $$
+BEGIN
+  ALTER TYPE "Availability" ADD VALUE IF NOT EXISTS 'INCREASED_WAIT';
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
