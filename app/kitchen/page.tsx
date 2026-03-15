@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -72,8 +72,7 @@ const STATUS_BUTTON_ACTIVE_TONE: Record<
 > = {
   AVAILABLE:
     "border-emerald-700 bg-emerald-600 text-white hover:bg-emerald-700",
-  INCREASED_WAIT:
-    "border-amber-700 bg-amber-500 text-white hover:bg-amber-600",
+  INCREASED_WAIT: "border-amber-700 bg-amber-500 text-white hover:bg-amber-600",
   PAUSED: "border-orange-700 bg-orange-500 text-white hover:bg-orange-600",
   SOLD_OUT: "border-rose-700 bg-rose-600 text-white hover:bg-rose-700",
 };
@@ -115,7 +114,7 @@ export default function KitchenPage() {
       if (session && reloadInFlightRef.current) {
         if (queuedReloadModeRef.current !== "all") {
           queuedReloadModeRef.current =
-            mode === "all" ? "all" : queuedReloadModeRef.current ?? "menus";
+            mode === "all" ? "all" : (queuedReloadModeRef.current ?? "menus");
         }
       }
       return;
@@ -372,7 +371,8 @@ export default function KitchenPage() {
     } catch (e) {
       notify({
         level: "error",
-        message: e instanceof Error ? e.message : "上限設定の更新に失敗しました",
+        message:
+          e instanceof Error ? e.message : "上限設定の更新に失敗しました",
       });
     } finally {
       setCapBusyMenuId(null);
@@ -431,7 +431,8 @@ export default function KitchenPage() {
               {orderedMenus.map((menu) => {
                 const currentElapsed =
                   menu.oldestQueuedSeconds + elapsedSinceFetchSec;
-                const tone = menu.queuedCount > 0 ? queueTone(currentElapsed) : "";
+                const tone =
+                  menu.queuedCount > 0 ? queueTone(currentElapsed) : "";
                 const pickerOpen = pickerMenuId === menu.menuId;
                 const capPickerOpen = capPickerMenuId === menu.menuId;
                 const capValue = menu.dailyOrderCap;
@@ -447,27 +448,31 @@ export default function KitchenPage() {
                         <div className="queue-menu-name">{menu.menuName}</div>
                         {menu.queuedCount > 0 ? (
                           <div className="muted text-xs">
-                            最古キュー: {formatMss(currentElapsed)}
+                            最も古い注文 {formatMss(currentElapsed)}
                           </div>
                         ) : null}
                       </div>
                     </div>
 
                     <div className="kitchen-menu-metrics">
-                      <div className="kitchen-queued-big">{menu.queuedCount}</div>
+                      <div className="kitchen-queued-big">
+                        未処理の注文 {menu.queuedCount} 品
+                      </div>
                       <div className="kitchen-cap-inline">
                         <span className="kitchen-cap-summary">
-                          {menu.todayOrderCount} / {capValue == null ? "∞" : capValue}
+                          本日 {menu.todayOrderCount}{" "}
+                          {capValue == null ? "" : " / " + capValue + " "}
+                          品注文済
                         </span>
                         <span className="kitchen-cap-remaining">
-                          {remaining == null ? "-" : remaining}
+                          {remaining == null ? "" : remaining}
                         </span>
                         <button
                           type="button"
                           className="ghost-btn kitchen-cap-edit-trigger"
                           onClick={() => openCapEditor(menu)}
                         >
-                          上限
+                          上限を変更
                         </button>
                       </div>
                     </div>

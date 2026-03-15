@@ -444,6 +444,7 @@ export default function AdminPage() {
   const reloadInFlightRef = useRef(false);
   const queuedReloadRef = useRef(false);
   const hasSettledWithoutUnsavedRef = useRef(false);
+  const saveAllChangesRef = useRef<() => Promise<void>>(async () => {});
 
   const kitchenActors = useMemo(
     () =>
@@ -1060,6 +1061,7 @@ export default function AdminPage() {
     notify,
     reload,
   ]);
+  saveAllChangesRef.current = saveAllChanges;
 
   useEffect(() => {
     if (!didBootstrap) {
@@ -1083,7 +1085,7 @@ export default function AdminPage() {
           {
             label: "すべて保存",
             onClick: () => {
-              void saveAllChanges();
+              void saveAllChangesRef.current();
             },
           },
         ],
@@ -1095,7 +1097,6 @@ export default function AdminPage() {
     didBootstrap,
     hasUnsavedChanges,
     notify,
-    saveAllChanges,
   ]);
 
   const moveMenu = async (menu: Menu, direction: -1 | 1) => {
