@@ -134,6 +134,19 @@ type MenuCoverUploadData = {
   url: string;
 };
 
+type CategoryOrderAutoCorrectionMeta = {
+  displayOrderAutoCorrected?: boolean;
+  displayOrderAutoCorrectedCount?: number;
+};
+
+type CategoryListResponse = {
+  categories: Category[];
+} & CategoryOrderAutoCorrectionMeta;
+
+type CategoryMutationResponse = {
+  category: Category;
+} & CategoryOrderAutoCorrectionMeta;
+
 const MAX_MENU_COVER_FILE_BYTES = 1_000_000;
 const MENU_COVER_OUTPUT_TYPE = "image/webp";
 const MENU_COVER_INITIAL_QUALITY = 0.9;
@@ -162,6 +175,7 @@ const STATUS_BUTTON_ACTIVE_TONE: Record<Menu["availability"], string> = {
 const BADGE_COLOR_HEX_REGEX = /^#[0-9a-fA-F]{6}$/;
 const DEFAULT_MENU_WORKLOAD_SECONDS = 300;
 const LOW_STOCK_BADGE_THRESHOLD_UNLIMITED = 100000;
+const CATEGORY_ORDER_AUTO_CORRECTED_TOAST_ID = "category-order-auto-corrected";
 
 const dangerConfirm = (message: string) => window.confirm(message);
 
@@ -357,7 +371,7 @@ function InputField(props: {
   onKeyDown?: (event: ReactKeyboardEvent<HTMLInputElement>) => void;
 }) {
   return (
-    <label className={cn("grid gap-0", props.className)}>
+    <label className={cn("gap-1", props.className)}>
       <span className="text-[11px] font-medium leading-none text-muted-foreground">
         {props.label}
       </span>
@@ -423,8 +437,7 @@ export default function AdminPage() {
 
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryBadgeText, setNewCategoryBadgeText] = useState("");
-  const [newCategoryBadgeColor, setNewCategoryBadgeColor] =
-    useState("#d97706");
+  const [newCategoryBadgeColor, setNewCategoryBadgeColor] = useState("#d97706");
   const [categoryNameDrafts, setCategoryNameDrafts] = useState<
     Record<string, string>
   >({});
@@ -510,32 +523,30 @@ export default function AdminPage() {
     [menus, categoryOrder],
   );
   const hasUnsavedChanges = useMemo(() => {
-    const categoryDirty = activeCategories.some(
-      (category) => {
-        const draftName = categoryNameDrafts[category.id] ?? category.name;
-        const draftBadgeText = (
-          categoryBadgeTextDrafts[category.id] ??
-          category.customBadgeText ??
-          ""
-        ).trim();
-        const draftBadgeColor = draftBadgeText
-          ? (
-              categoryBadgeColorDrafts[category.id] ??
-              category.customBadgeColor ??
-              "#d97706"
-            ).trim()
-          : "";
-        const currentBadgeText = (category.customBadgeText ?? "").trim();
-        const currentBadgeColor = currentBadgeText
-          ? (category.customBadgeColor ?? "").trim()
-          : "";
-        return (
-          draftName !== category.name ||
-          draftBadgeText !== currentBadgeText ||
-          draftBadgeColor !== currentBadgeColor
-        );
-      },
-    );
+    const categoryDirty = activeCategories.some((category) => {
+      const draftName = categoryNameDrafts[category.id] ?? category.name;
+      const draftBadgeText = (
+        categoryBadgeTextDrafts[category.id] ??
+        category.customBadgeText ??
+        ""
+      ).trim();
+      const draftBadgeColor = draftBadgeText
+        ? (
+            categoryBadgeColorDrafts[category.id] ??
+            category.customBadgeColor ??
+            "#d97706"
+          ).trim()
+        : "";
+      const currentBadgeText = (category.customBadgeText ?? "").trim();
+      const currentBadgeColor = currentBadgeText
+        ? (category.customBadgeColor ?? "").trim()
+        : "";
+      return (
+        draftName !== category.name ||
+        draftBadgeText !== currentBadgeText ||
+        draftBadgeColor !== currentBadgeColor
+      );
+    });
 
     const menuDirty = activeMenus.some((menu) => {
       const edit = menuEdits[menu.id];
@@ -619,7 +630,7 @@ export default function AdminPage() {
           "/api/admin/menus",
           { timeoutMs: 5000, retry: 1 },
         ),
-        apiFetch<{ categories: Category[] }>("/api/admin/categories", {
+        apiFetch<CategoryListResponse>("/api/admin/categories", {
           timeoutMs: 5000,
           retry: 1,
         }),
@@ -634,6 +645,7 @@ export default function AdminPage() {
       setActors(a.actors);
       setMenus(m.menus);
       setCategories(c.categories);
+      notifyCategoryOrderAutoCorrection(c);
       setMenuDisplaySettings(settings.settings);
       setPageDisplaySecondsDraft((prev) => {
         const previousServerValue = menuDisplaySettings?.pageDisplaySeconds;
@@ -654,7 +666,7 @@ export default function AdminPage() {
         Object.fromEntries(
           c.categories.map((cat) => [
             cat.id,
-            prev[cat.id] ?? (cat.customBadgeText ?? ""),
+            prev[cat.id] ?? cat.customBadgeText ?? "",
           ]),
         ),
       );
@@ -662,7 +674,7 @@ export default function AdminPage() {
         Object.fromEntries(
           c.categories.map((cat) => [
             cat.id,
-            prev[cat.id] ?? (cat.customBadgeColor ?? "#d97706"),
+            prev[cat.id] ?? cat.customBadgeColor ?? "#d97706",
           ]),
         ),
       );
@@ -831,6 +843,25 @@ export default function AdminPage() {
     });
   };
 
+  const notifyCategoryOrderAutoCorrection = useCallback(
+    (meta?: CategoryOrderAutoCorrectionMeta) => {
+      if (!meta?.displayOrderAutoCorrected) {
+        return;
+      }
+      const correctedCount = meta.displayOrderAutoCorrectedCount ?? 0;
+      notify({
+        id: CATEGORY_ORDER_AUTO_CORRECTED_TOAST_ID,
+        level: "error",
+        message:
+          correctedCount > 0
+            ? `カテゴリ表示順の重複を検知したため、自動で連番に補正しました（${correctedCount}件）。`
+            : "カテゴリ表示順の重複を検知したため、自動で連番に補正しました。",
+        durationMs: 5000,
+      });
+    },
+    [notify],
+  );
+
   const runMutation = async (params: {
     action: () => Promise<void>;
     successMessage: string;
@@ -851,10 +882,12 @@ export default function AdminPage() {
   };
 
   const patchCategory = async (id: string, patch: Partial<Category>) => {
-    await apiFetch("/api/admin/categories", {
+    const data = await apiFetch<CategoryMutationResponse>("/api/admin/categories", {
       method: "PATCH",
       body: JSON.stringify({ id, ...patch }),
     });
+    notifyCategoryOrderAutoCorrection(data);
+    return data;
   };
   const patchMenu = async (menuId: string, patch: Record<string, unknown>) => {
     await apiFetch("/api/admin/menus", {
@@ -1314,7 +1347,7 @@ export default function AdminPage() {
                         onSubmit={createActor}
                         className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4"
                       >
-                        <label className="grid gap-0">
+                        <label className="gap-1">
                           <span className="text-[11px] font-medium leading-none text-muted-foreground">
                             ロール
                           </span>
@@ -1534,11 +1567,13 @@ export default function AdminPage() {
                   <InputField
                     label="カテゴリバッジ文言"
                     value={newCategoryBadgeText}
-                    onChange={(value) => setNewCategoryBadgeText(value.slice(0, 32))}
+                    onChange={(value) =>
+                      setNewCategoryBadgeText(value.slice(0, 32))
+                    }
                     className="max-w-xs"
                     placeholder="例: 期間限定"
                   />
-                  <label className="grid gap-0">
+                  <label className="gap-1">
                     <span className="text-[11px] font-medium leading-none text-muted-foreground">
                       バッジ色
                     </span>
@@ -1586,17 +1621,21 @@ export default function AdminPage() {
                               "カテゴリバッジ色は #RRGGBB 形式で入力してください",
                             );
                           }
-                          await apiFetch("/api/admin/categories", {
-                            method: "POST",
-                            body: JSON.stringify({
-                              name: trimmedName,
-                              displayOrder: nextDisplayOrder,
-                              customBadgeText: trimmedBadgeText || null,
-                              customBadgeColor: trimmedBadgeText
-                                ? newCategoryBadgeColor
-                                : null,
-                            }),
-                          });
+                          const data = await apiFetch<CategoryMutationResponse>(
+                            "/api/admin/categories",
+                            {
+                              method: "POST",
+                              body: JSON.stringify({
+                                name: trimmedName,
+                                displayOrder: nextDisplayOrder,
+                                customBadgeText: trimmedBadgeText || null,
+                                customBadgeColor: trimmedBadgeText
+                                  ? newCategoryBadgeColor
+                                  : null,
+                              }),
+                            },
+                          );
+                          notifyCategoryOrderAutoCorrection(data);
                         },
                         successMessage: "カテゴリを追加しました",
                         errorMessage: "カテゴリ追加に失敗しました",
@@ -1639,7 +1678,8 @@ export default function AdminPage() {
                           label="カテゴリバッジ文言"
                           value={
                             categoryBadgeTextDrafts[cat.id] ??
-                            (cat.customBadgeText ?? "")
+                            cat.customBadgeText ??
+                            ""
                           }
                           onChange={(value) =>
                             setCategoryBadgeTextDrafts((prev) => ({
@@ -1649,7 +1689,7 @@ export default function AdminPage() {
                           }
                           placeholder="例: 期間限定"
                         />
-                        <label className="grid gap-0">
+                        <label className="gap-1">
                           <span className="text-[11px] font-medium leading-none text-muted-foreground">
                             バッジ色
                           </span>
@@ -1874,7 +1914,7 @@ export default function AdminPage() {
                           }
                           inputMode="numeric"
                         />
-                        <label className="grid gap-0">
+                        <label className="gap-1">
                           <span className="text-[11px] font-medium leading-none text-muted-foreground">
                             カテゴリ
                           </span>
@@ -1894,7 +1934,7 @@ export default function AdminPage() {
                             </SelectContent>
                           </Select>
                         </label>
-                        <label className="grid gap-0">
+                        <label className="gap-1">
                           <span className="text-[11px] font-medium leading-none text-muted-foreground">
                             担当キッチン
                           </span>
@@ -2010,7 +2050,7 @@ export default function AdminPage() {
                           }
                           placeholder="例: おすすめ"
                         />
-                        <label className="grid gap-0">
+                        <label className="gap-1">
                           <span className="text-[11px] font-medium leading-none text-muted-foreground">
                             バッジ色
                           </span>
@@ -2273,7 +2313,7 @@ export default function AdminPage() {
                             }
                             inputMode="numeric"
                           />
-                          <label className="grid gap-0">
+                          <label className="gap-1">
                             <span className="text-[11px] font-medium leading-none text-muted-foreground">
                               カテゴリ
                             </span>
@@ -2298,7 +2338,7 @@ export default function AdminPage() {
                               </SelectContent>
                             </Select>
                           </label>
-                          <label className="grid gap-0">
+                          <label className="gap-1">
                             <span className="text-[11px] font-medium leading-none text-muted-foreground">
                               担当キッチン
                             </span>
@@ -2401,7 +2441,7 @@ export default function AdminPage() {
                             }
                             placeholder="例: おすすめ"
                           />
-                          <label className="grid gap-0">
+                          <label className="gap-1">
                             <span className="text-[11px] font-medium leading-none text-muted-foreground">
                               バッジ色
                             </span>

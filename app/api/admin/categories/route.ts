@@ -1,4 +1,5 @@
-﻿import { NextRequest } from "next/server";
+import { NextRequest } from "next/server";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireSession } from "@/lib/server/auth";
@@ -52,6 +53,66 @@ function normalizeCategoryBadgeInput(params: {
   };
 }
 
+type CategoryOrderNormalization = {
+  applied: boolean;
+  updatedCategoryCount: number;
+};
+
+async function normalizeActiveCategoryDisplayOrder(
+  tx: Prisma.TransactionClient,
+): Promise<CategoryOrderNormalization> {
+  const activeCategories = await tx.menuCategory.findMany({
+    where: { isActive: true },
+    select: {
+      id: true,
+      name: true,
+      displayOrder: true,
+    },
+    orderBy: [{ displayOrder: "asc" }, { name: "asc" }, { id: "asc" }],
+  });
+
+  const seenOrder = new Set<number>();
+  let needsNormalization = false;
+
+  for (const category of activeCategories) {
+    if (category.displayOrder == null) {
+      needsNormalization = true;
+      break;
+    }
+    if (seenOrder.has(category.displayOrder)) {
+      needsNormalization = true;
+      break;
+    }
+    seenOrder.add(category.displayOrder);
+  }
+
+  if (!needsNormalization) {
+    return {
+      applied: false,
+      updatedCategoryCount: 0,
+    };
+  }
+
+  let updatedCategoryCount = 0;
+  for (let index = 0; index < activeCategories.length; index += 1) {
+    const category = activeCategories[index];
+    const nextDisplayOrder = index + 1;
+    if (category.displayOrder === nextDisplayOrder) {
+      continue;
+    }
+    await tx.menuCategory.update({
+      where: { id: category.id },
+      data: { displayOrder: nextDisplayOrder },
+    });
+    updatedCategoryCount += 1;
+  }
+
+  return {
+    applied: true,
+    updatedCategoryCount,
+  };
+}
+
 export async function GET(req: NextRequest) {
   return withRouteTrace(req, "admin/categories.GET", async (trace) => {
     try {
@@ -59,15 +120,34 @@ export async function GET(req: NextRequest) {
       await requireSession(req, { actorTypes: ["ADMIN", "POS", "MENU_DISPLAY"] });
       trace("auth.ok");
 
-      const categories = await prisma.menuCategory.findMany({
-        orderBy: [
-          { displayOrder: "asc" },
-          { name: "asc" },
-        ]
-      });
-      trace("db.findMany.ok", { count: categories.length });
+      const data = await prisma.$transaction(async (tx) => {
+        const orderNormalization = await normalizeActiveCategoryDisplayOrder(tx);
+        if (orderNormalization.applied) {
+          await broadcastInvalidation(
+            tx,
+            CHANNEL_GROUPS.CATEGORIES,
+            "categories",
+            "category_order_auto_corrected",
+          );
+        }
 
-      return ok({ categories });
+        const categories = await tx.menuCategory.findMany({
+          orderBy: [{ displayOrder: "asc" }, { name: "asc" }],
+        });
+        return { categories, orderNormalization };
+      });
+      trace("db.findMany.ok", {
+        count: data.categories.length,
+        autoCorrected: data.orderNormalization.applied,
+        autoCorrectedCount: data.orderNormalization.updatedCategoryCount,
+      });
+
+      return ok({
+        categories: data.categories,
+        displayOrderAutoCorrected: data.orderNormalization.applied,
+        displayOrderAutoCorrectedCount:
+          data.orderNormalization.updatedCategoryCount,
+      });
     } catch (error) {
       traceError(trace, "error", error);
       return fail(error);
