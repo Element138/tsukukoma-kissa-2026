@@ -54,6 +54,12 @@ const DEFAULT_SETTINGS: MenuDisplaySettings = {
 };
 const PAGE_FADE_MS = 750;
 const PRIORITY_KEEP_TERMS = [
+  "アイス",
+  "ホット",
+  "ブレンド",
+  "コーラ",
+  "サンデー",
+  "クロック",
   "コーヒー",
   "ラテ",
   "カフェ",
@@ -122,10 +128,9 @@ const PRIORITY_KEEP_TERMS = [
   "マドレーヌ",
   "シフォン",
   "ロールケーキ",
-  "ショートケーキ",
-  "パン",
-  "食パン",
-  "トースト",
+  "ブレンドケーキ",
+  "コーラ",
+  "サンデー",
   "クロワッサン",
   "デニッシュ",
   "ベーグル",
@@ -601,17 +606,32 @@ export default function MenuDisplayPage() {
   const columnCount = Math.min(3, Math.max(1, activePage.length));
 
   const renderDisplayText = (text: string) => {
-    const chunks = buildRenderChunks(text);
-    return chunks.map((chunk, index) => (
-      <Fragment key={index}>
-        {chunk.keepTogether ? (
-          <span className="menu-display-keep-term">{chunk.text}</span>
-        ) : (
-          chunk.text
-        )}
-        {index < chunks.length - 1 ? <wbr /> : null}
-      </Fragment>
-    ));
+    const segments = text.split(/(\s+)/);
+    return segments.map((segment, segmentIndex) => {
+      if (!segment) {
+        return null;
+      }
+
+      if (/^\s+$/.test(segment)) {
+        return <Fragment key={`space-${segmentIndex}`}>{segment}</Fragment>;
+      }
+
+      const chunks = buildRenderChunks(segment);
+      return (
+        <Fragment key={`segment-${segmentIndex}`}>
+          {chunks.map((chunk, chunkIndex) => (
+            <Fragment key={`${segmentIndex}-${chunkIndex}`}>
+              {chunk.keepTogether ? (
+                <span className="menu-display-keep-term">{chunk.text}</span>
+              ) : (
+                chunk.text
+              )}
+              {chunkIndex < chunks.length - 1 ? <wbr /> : null}
+            </Fragment>
+          ))}
+        </Fragment>
+      );
+    });
   };
 
   return (
@@ -655,118 +675,123 @@ export default function MenuDisplayPage() {
               category.customBadgeColor?.trim() || "#d97706";
 
             return (
-            <section key={category.id} className="menu-display-category">
-              <header className="menu-display-category-header">
-                {categoryBadgeText ? (
-                  <span
-                    className="menu-display-category-badge"
-                    style={{ backgroundColor: categoryBadgeColor }}
-                  >
-                    {renderDisplayText(categoryBadgeText)}
-                  </span>
-                ) : null}
-                <h2>{renderDisplayText(category.name)}</h2>
-              </header>
-              <div
-                className="menu-display-scroll-viewport"
-                ref={(el) => {
-                  viewportRefs.current[category.id] = el;
-                }}
-              >
+              <section key={category.id} className="menu-display-category">
+                <header className="menu-display-category-header">
+                  <div className="menu-display-category-title-row">
+                    <h2>{renderDisplayText(category.name)}</h2>
+                    {categoryBadgeText ? (
+                      <span
+                        className="menu-display-category-badge"
+                        style={{ backgroundColor: categoryBadgeColor }}
+                      >
+                        {renderDisplayText(categoryBadgeText)}
+                      </span>
+                    ) : null}
+                  </div>
+                </header>
                 <div
-                  className="menu-display-scroll-track"
+                  className="menu-display-scroll-viewport"
                   ref={(el) => {
-                    trackRefs.current[category.id] = el;
+                    viewportRefs.current[category.id] = el;
                   }}
                 >
-                  {category.menus.map((menu) => {
-                    const unavailable =
-                      menu.availability === "PAUSED" ||
-                      menu.availability === "SOLD_OUT";
-                    const showIncreasedWait =
-                      menu.availability === "INCREASED_WAIT";
-                    const imageSrc = menu.coverImageDataUrl;
-                    const hasImage = Boolean(imageSrc);
-                    const allergenNotice = formatAllergenNotice(menu.allergens);
-                    const hasAllergenWarning = menu.allergens.length > 0;
-                    const badgeText = menu.customBadgeText?.trim() ?? "";
-                    const badgeColor =
-                      menu.customBadgeColor?.trim() || "#d97706";
-                    const showLowStockBadge = menu.showLowStockBadge;
-                    const lowStockLabel =
-                      menu.remainingUntilCap != null
-                        ? `残り ${menu.remainingUntilCap} 個`
-                        : "残り -";
+                  <div
+                    className="menu-display-scroll-track"
+                    ref={(el) => {
+                      trackRefs.current[category.id] = el;
+                    }}
+                  >
+                    {category.menus.map((menu) => {
+                      const unavailable =
+                        menu.availability === "PAUSED" ||
+                        menu.availability === "SOLD_OUT";
+                      const showIncreasedWait =
+                        menu.availability === "INCREASED_WAIT";
+                      const imageSrc = menu.coverImageDataUrl;
+                      const hasImage = Boolean(imageSrc);
+                      const allergenNotice = formatAllergenNotice(
+                        menu.allergens,
+                      );
+                      const hasAllergenWarning = menu.allergens.length > 0;
+                      const badgeText = menu.customBadgeText?.trim() ?? "";
+                      const badgeColor =
+                        menu.customBadgeColor?.trim() || "#d97706";
+                      const showLowStockBadge = menu.showLowStockBadge;
+                      const lowStockLabel =
+                        menu.remainingUntilCap != null
+                          ? `残り ${menu.remainingUntilCap} 個`
+                          : "残り -";
 
-                    return (
-                      <article
-                        key={menu.id}
-                        className={`menu-display-row ${hasImage ? "has-image" : "no-image"} ${unavailable ? "unavailable" : ""}`}
-                        style={
-                          badgeText && !unavailable
-                            ? ({
-                                borderColor: badgeColor,
-                                borderWidth: "3px",
-                              } as CSSProperties)
-                            : undefined
-                        }
-                      >
-                        <div className="menu-display-row-text">
-                          {!unavailable && (badgeText || showLowStockBadge) ? (
-                            <div className="menu-display-row-badge-wrap">
-                              {badgeText ? (
-                                <span
-                                  className="menu-display-row-badge"
-                                  style={{ backgroundColor: badgeColor }}
-                                >
-                                  {badgeText}
+                      return (
+                        <article
+                          key={menu.id}
+                          className={`menu-display-row ${hasImage ? "has-image" : "no-image"} ${unavailable ? "unavailable" : ""}`}
+                          style={
+                            badgeText && !unavailable
+                              ? ({
+                                  borderColor: badgeColor,
+                                  borderWidth: "3px",
+                                } as CSSProperties)
+                              : undefined
+                          }
+                        >
+                          <div className="menu-display-row-text">
+                            {!unavailable &&
+                            (badgeText || showLowStockBadge) ? (
+                              <div className="menu-display-row-badge-wrap">
+                                {badgeText ? (
+                                  <span
+                                    className="menu-display-row-badge"
+                                    style={{ backgroundColor: badgeColor }}
+                                  >
+                                    {badgeText}
+                                  </span>
+                                ) : null}
+                                {showLowStockBadge ? (
+                                  <span className="menu-display-row-badge menu-display-row-badge-low-stock">
+                                    {lowStockLabel}
+                                  </span>
+                                ) : null}
+                              </div>
+                            ) : null}
+                            <strong>{renderDisplayText(menu.name)}</strong>
+                            <div
+                              className={`menu-display-row-allergen ${hasAllergenWarning ? "has-allergen" : "none"}`}
+                            >
+                              {allergenNotice}
+                            </div>
+                            {unavailable ? (
+                              <div className="menu-display-row-status">
+                                {labelOf(AVAILABILITY_LABEL, menu.availability)}
+                              </div>
+                            ) : (
+                              <div className="menu-display-row-meta">
+                                <span className="menu-display-row-price">
+                                  {fmtJpy(menu.priceJpy)}
                                 </span>
-                              ) : null}
-                              {showLowStockBadge ? (
-                                <span className="menu-display-row-badge menu-display-row-badge-low-stock">
-                                  {lowStockLabel}
-                                </span>
-                              ) : null}
+                                {showIncreasedWait ? (
+                                  <span className="menu-display-row-wait">
+                                    お時間をいただきます
+                                  </span>
+                                ) : null}
+                              </div>
+                            )}
+                          </div>
+                          {hasImage ? (
+                            <div className="menu-display-row-image-wrap">
+                              <img
+                                src={imageSrc ?? undefined}
+                                alt={`${menu.name} の画像`}
+                                className="menu-display-row-image"
+                              />
                             </div>
                           ) : null}
-                          <strong>{renderDisplayText(menu.name)}</strong>
-                          <div
-                            className={`menu-display-row-allergen ${hasAllergenWarning ? "has-allergen" : "none"}`}
-                          >
-                            {allergenNotice}
-                          </div>
-                          {unavailable ? (
-                            <div className="menu-display-row-status">
-                              {labelOf(AVAILABILITY_LABEL, menu.availability)}
-                            </div>
-                          ) : (
-                            <div className="menu-display-row-meta">
-                              <span className="menu-display-row-price">
-                                {fmtJpy(menu.priceJpy)}
-                              </span>
-                              {showIncreasedWait ? (
-                                <span className="menu-display-row-wait">
-                                  お時間をいただきます
-                                </span>
-                              ) : null}
-                            </div>
-                          )}
-                        </div>
-                        {hasImage ? (
-                          <div className="menu-display-row-image-wrap">
-                            <img
-                              src={imageSrc ?? undefined}
-                              alt={`${menu.name} の画像`}
-                              className="menu-display-row-image"
-                            />
-                          </div>
-                        ) : null}
-                      </article>
-                    );
-                  })}
+                        </article>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            </section>
+              </section>
             );
           })}
         </div>

@@ -38,7 +38,9 @@ function parseOrderEvents(raw: Prisma.JsonValue | null): ParsedOrderEvent[] {
     const type = typeof record.type === "string" ? record.type : "";
     const at = parseDateOrNull(record.at);
     const detail =
-      record.detail && typeof record.detail === "object" && !Array.isArray(record.detail)
+      record.detail &&
+      typeof record.detail === "object" &&
+      !Array.isArray(record.detail)
         ? (record.detail as Record<string, unknown>)
         : null;
 
@@ -51,7 +53,10 @@ function parseOrderEvents(raw: Prisma.JsonValue | null): ParsedOrderEvent[] {
   return events.sort((a, b) => a.at.getTime() - b.at.getTime());
 }
 
-function latestEventOfType(events: ParsedOrderEvent[], types: ReadonlySet<string>): ParsedOrderEvent | null {
+function latestEventOfType(
+  events: ParsedOrderEvent[],
+  types: ReadonlySet<string>,
+): ParsedOrderEvent | null {
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const event = events[index];
     if (types.has(event.type)) {
@@ -66,7 +71,10 @@ function normalizeReasonType(event: ParsedOrderEvent | null): string | null {
     return null;
   }
   const explicitReasonType = event.detail?.reasonType;
-  if (typeof explicitReasonType === "string" && explicitReasonType.trim().length > 0) {
+  if (
+    typeof explicitReasonType === "string" &&
+    explicitReasonType.trim().length > 0
+  ) {
     return explicitReasonType.trim().toUpperCase();
   }
   if (event.type === "ORDER_FAILED") {
@@ -92,7 +100,10 @@ export function deriveOrderProcessingTrace(params: {
   events: Prisma.JsonValue | null;
 }): OrderProcessingTrace {
   const events = parseOrderEvents(params.events);
-  const failure = latestEventOfType(events, new Set(["PAYMENT_FAILED", "ORDER_FAILED"]));
+  const failure = latestEventOfType(
+    events,
+    new Set(["PAYMENT_FAILED", "ORDER_FAILED"]),
+  );
   const successCallback = latestEventOfType(
     events,
     new Set(["PAYMENT_SUCCESS_CALLBACK_AFTER_FAILED", "PAYMENT_SUCCESS"]),
@@ -138,9 +149,11 @@ export function buildLateSuccessIncidentMessage(params: {
   successCallbackAt: Date;
 }): string {
   const reasonLabel = failureReasonLabel(params.failureReasonType);
-  const reasonDetail = params.failureReasonText ? ` / ${params.failureReasonText}` : "";
+  const reasonDetail = params.failureReasonText
+    ? ` / ${params.failureReasonText}`
+    : "";
   return (
-    `注文 #${params.orderNo} の処理トレース: 作成=${formatTraceAt(params.createdAt)}, ` +
+    `注文の失敗が確定した後にSquareの決済成功コールバックを受信してしまいました。注文 #${params.orderNo} 作成=${formatTraceAt(params.createdAt)}, ` +
     `失敗=${formatTraceAt(params.failedAt)}（${reasonLabel}${reasonDetail}）, ` +
     `SUCCESSコールバック受信=${formatTraceAt(params.successCallbackAt)}。` +
     "入金有無を確認してください。"
