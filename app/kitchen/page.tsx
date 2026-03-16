@@ -99,8 +99,9 @@ export default function KitchenPage() {
   >(null);
   const [capBusyMenuId, setCapBusyMenuId] = useState<string | null>(null);
 
-  const [pickerMenuId, setPickerMenuId] = useState<string | null>(null);
-  const [pickerQuantity, setPickerQuantity] = useState<number>(1);
+  const [readyQuantityByMenuId, setReadyQuantityByMenuId] = useState<
+    Record<string, number>
+  >({});
   const [capPickerMenuId, setCapPickerMenuId] = useState<string | null>(null);
   const [capDraft, setCapDraft] = useState<number>(1);
   const [capUnlimited, setCapUnlimited] = useState<boolean>(true);
@@ -129,6 +130,15 @@ export default function KitchenPage() {
         apiFetch<{ menus: KitchenMenuRow[] }>("/api/kitchen/queue").then(
           (payload) => {
             setMenus(payload.menus);
+            setReadyQuantityByMenuId((prev) => {
+              const next: Record<string, number> = {};
+              for (const menu of payload.menus) {
+                const max = Math.max(1, menu.queuedCount);
+                const current = prev[menu.menuId] ?? 1;
+                next[menu.menuId] = Math.max(1, Math.min(max, current));
+              }
+              return next;
+            });
             setQueueFetchedAt(Date.now());
           },
         ),
@@ -216,8 +226,6 @@ export default function KitchenPage() {
         message: `${result.markedReadyCount} 個を調理済みにしました`,
       });
 
-      setPickerMenuId(null);
-      setPickerQuantity(1);
       await reload("menus");
     } catch (e) {
       notify({
@@ -228,15 +236,6 @@ export default function KitchenPage() {
     } finally {
       setBusy(false);
     }
-  };
-
-  const readyFromCard = async (menu: KitchenMenuRow) => {
-    if (menu.queuedCount <= 1) {
-      await submitReady(menu.menuId, 1);
-      return;
-    }
-    setPickerMenuId(menu.menuId);
-    setPickerQuantity(1);
   };
 
   const undo = async () => {
@@ -433,10 +432,16 @@ export default function KitchenPage() {
                   menu.oldestQueuedSeconds + elapsedSinceFetchSec;
                 const tone =
                   menu.queuedCount > 0 ? queueTone(currentElapsed) : "";
-                const pickerOpen = pickerMenuId === menu.menuId;
                 const capPickerOpen = capPickerMenuId === menu.menuId;
                 const capValue = menu.dailyOrderCap;
                 const remaining = menu.remainingUntilCap;
+                const readyQuantity = Math.max(
+                  1,
+                  Math.min(
+                    Math.max(1, menu.queuedCount),
+                    readyQuantityByMenuId[menu.menuId] ?? 1,
+                  ),
+                );
 
                 return (
                   <article
@@ -534,67 +539,75 @@ export default function KitchenPage() {
                       </div>
                     </div>
 
-                    {pickerOpen ? (
-                      <div className="queue-picker">
-                        <div className="stepper">
-                          <button
-                            type="button"
-                            className="ghost-btn"
-                            onClick={() =>
-                              setPickerQuantity((prev) => Math.max(1, prev - 1))
-                            }
-                          >
-                            -
-                          </button>
-                          <div className="stepper-count">{pickerQuantity}</div>
-                          <button
-                            type="button"
-                            className="ghost-btn"
-                            onClick={() =>
-                              setPickerQuantity((prev) =>
-                                Math.min(menu.queuedCount, prev + 1),
-                              )
-                            }
-                          >
-                            +
-                          </button>
-                          <button
-                            type="button"
-                            className="ghost-btn"
-                            onClick={() => setPickerQuantity(menu.queuedCount)}
-                          >
-                            全て
-                          </button>
-                        </div>
-                        <div className="row wrap">
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() =>
-                              submitReady(menu.menuId, pickerQuantity)
-                            }
-                          >
-                            調理済みにする
-                          </button>
-                          <button
-                            type="button"
-                            className="ghost-btn"
-                            disabled={busy}
-                            onClick={() => setPickerMenuId(null)}
-                          >
-                            閉じる
-                          </button>
-                        </div>
+                    <div
+                      className="ready-action-group"
+                      role="group"
+                      aria-label={`${menu.menuName} の調理済み操作`}
+                    >
+                      <div className="ready-action-row">
+                        {menu.queuedCount > 1 ? (
+                          <div className="stepper ready-stepper">
+                            <button
+                              type="button"
+                              className="ghost-btn"
+                              disabled={busy}
+                              onClick={() =>
+                                setReadyQuantityByMenuId((prev) => ({
+                                  ...prev,
+                                  [menu.menuId]: Math.max(1, readyQuantity - 1),
+                                }))
+                              }
+                            >
+                              -
+                            </button>
+                            <div className="stepper-count">{readyQuantity}</div>
+                            <button
+                              type="button"
+                              className="ghost-btn"
+                              disabled={busy}
+                              onClick={() =>
+                                setReadyQuantityByMenuId((prev) => ({
+                                  ...prev,
+                                  [menu.menuId]: Math.min(
+                                    menu.queuedCount,
+                                    readyQuantity + 1,
+                                  ),
+                                }))
+                              }
+                            >
+                              +
+                            </button>
+                            <button
+                              type="button"
+                              className="ghost-btn ready-stepper-all"
+                              disabled={busy}
+                              onClick={() =>
+                                setReadyQuantityByMenuId((prev) => ({
+                                  ...prev,
+                                  [menu.menuId]: menu.queuedCount,
+                                }))
+                              }
+                            >
+                              全て
+                            </button>
+                          </div>
+                        ) : null}
+                        <button
+                          type="button"
+                          className="ready-action-submit"
+                          disabled={busy || menu.queuedCount === 0}
+                          onClick={() =>
+                            void submitReady(
+                              menu.menuId,
+                              menu.queuedCount > 1 ? readyQuantity : 1,
+                            )
+                          }
+                        >
+                          調理済みにする
+                          {menu.queuedCount > 1 ? `（${readyQuantity}個）` : ""}
+                        </button>
                       </div>
-                    ) : (
-                      <button
-                        type="button"
-                        disabled={busy || menu.queuedCount === 0}
-                        onClick={() => void readyFromCard(menu)}
-                      >
-                        調理済みにする
-                      </button>
-                    )}
+                    </div>
 
                     <div className="menu-status-grid" style={{ marginTop: 8 }}>
                       {AVAILABILITY_OPTIONS.map((status) => {
