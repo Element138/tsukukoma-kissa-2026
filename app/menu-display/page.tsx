@@ -54,6 +54,7 @@ const DEFAULT_SETTINGS: MenuDisplaySettings = {
 };
 const PAGE_FADE_MS = 750;
 const PRIORITY_KEEP_TERMS = [
+  "スープ",
   "アイス",
   "ホット",
   "ブレンド",

@@ -4,6 +4,7 @@ export type MenuNameRenderChunk = {
 };
 
 const PRIORITY_KEEP_TERMS = [
+  "スープ",
   "アイス",
   "ホット",
   "ブレンド",
