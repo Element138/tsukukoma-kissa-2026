@@ -9,17 +9,48 @@ import { withRouteTrace, traceError } from "@/lib/server/trace";
 import { AppError } from "@/lib/errors";
 import { broadcastInvalidation, CHANNEL_GROUPS } from "@/lib/server/realtime-broadcast";
 
+const BADGE_COLOR_HEX_REGEX = /^#[0-9a-fA-F]{6}$/;
+
 const createSchema = z.object({
   name: z.string().min(1).max(120),
-  displayOrder: z.number().int().min(0).max(999)
+  displayOrder: z.number().int().min(0).max(999),
+  customBadgeText: z.string().trim().max(32).nullish(),
+  customBadgeColor: z.string().trim().max(16).nullish(),
 });
 
 const updateSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1).max(120).optional(),
   displayOrder: z.number().int().min(0).max(999).optional(),
-  isActive: z.boolean().optional()
+  isActive: z.boolean().optional(),
+  customBadgeText: z.string().trim().max(32).nullish(),
+  customBadgeColor: z.string().trim().max(16).nullish(),
 });
+
+function normalizeCategoryBadgeInput(params: {
+  customBadgeText?: string | null;
+  customBadgeColor?: string | null;
+}) {
+  const customBadgeText = params.customBadgeText?.trim() ?? "";
+  const customBadgeColor = params.customBadgeColor?.trim() ?? "";
+  if (!customBadgeText) {
+    return {
+      customBadgeText: null,
+      customBadgeColor: null,
+    };
+  }
+  if (!BADGE_COLOR_HEX_REGEX.test(customBadgeColor)) {
+    throw new AppError(
+      400,
+      "VALIDATION_ERROR",
+      "カテゴリバッジ色は #RRGGBB 形式で入力してください",
+    );
+  }
+  return {
+    customBadgeText,
+    customBadgeColor,
+  };
+}
 
 export async function GET(req: NextRequest) {
   return withRouteTrace(req, "admin/categories.GET", async (trace) => {
@@ -53,9 +84,20 @@ export async function POST(req: NextRequest) {
 
       const body = await parseJson(req, createSchema);
       trace("parseJson.ok", { name: body.name });
+      const badge = normalizeCategoryBadgeInput({
+        customBadgeText: body.customBadgeText,
+        customBadgeColor: body.customBadgeColor,
+      });
 
       const category = await prisma.$transaction(async (tx) => {
-        const created = await tx.menuCategory.create({ data: body });
+        const created = await tx.menuCategory.create({
+          data: {
+            name: body.name,
+            displayOrder: body.displayOrder,
+            customBadgeText: badge.customBadgeText,
+            customBadgeColor: badge.customBadgeColor,
+          },
+        });
 
         await writeAuditLog(tx, {
           actorId: actor.actorId,
@@ -95,13 +137,28 @@ export async function PATCH(req: NextRequest) {
         throw new AppError(404, "CATEGORY_NOT_FOUND", "Category not found");
       }
 
+      const shouldUpdateBadge =
+        body.customBadgeText !== undefined || body.customBadgeColor !== undefined;
+      const badgePatch = shouldUpdateBadge
+        ? normalizeCategoryBadgeInput({
+            customBadgeText: body.customBadgeText ?? before.customBadgeText,
+            customBadgeColor: body.customBadgeColor ?? before.customBadgeColor,
+          })
+        : null;
+
       const category = await prisma.$transaction(async (tx) => {
         const updated = await tx.menuCategory.update({
           where: { id: body.id },
           data: {
             name: body.name,
             displayOrder: body.displayOrder,
-            isActive: body.isActive
+            isActive: body.isActive,
+            ...(badgePatch
+              ? {
+                  customBadgeText: badgePatch.customBadgeText,
+                  customBadgeColor: badgePatch.customBadgeColor,
+                }
+              : {}),
           }
         });
 

@@ -86,6 +86,8 @@ type Actor = {
 type Category = {
   id: string;
   name: string;
+  customBadgeText: string | null;
+  customBadgeColor: string | null;
   displayOrder: number | null;
   isActive: boolean;
 };
@@ -420,7 +422,16 @@ export default function AdminPage() {
   const [newActorSecret, setNewActorSecret] = useState("");
 
   const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryBadgeText, setNewCategoryBadgeText] = useState("");
+  const [newCategoryBadgeColor, setNewCategoryBadgeColor] =
+    useState("#d97706");
   const [categoryNameDrafts, setCategoryNameDrafts] = useState<
+    Record<string, string>
+  >({});
+  const [categoryBadgeTextDrafts, setCategoryBadgeTextDrafts] = useState<
+    Record<string, string>
+  >({});
+  const [categoryBadgeColorDrafts, setCategoryBadgeColorDrafts] = useState<
     Record<string, string>
   >({});
 
@@ -500,8 +511,30 @@ export default function AdminPage() {
   );
   const hasUnsavedChanges = useMemo(() => {
     const categoryDirty = activeCategories.some(
-      (category) =>
-        (categoryNameDrafts[category.id] ?? category.name) !== category.name,
+      (category) => {
+        const draftName = categoryNameDrafts[category.id] ?? category.name;
+        const draftBadgeText = (
+          categoryBadgeTextDrafts[category.id] ??
+          category.customBadgeText ??
+          ""
+        ).trim();
+        const draftBadgeColor = draftBadgeText
+          ? (
+              categoryBadgeColorDrafts[category.id] ??
+              category.customBadgeColor ??
+              "#d97706"
+            ).trim()
+          : "";
+        const currentBadgeText = (category.customBadgeText ?? "").trim();
+        const currentBadgeColor = currentBadgeText
+          ? (category.customBadgeColor ?? "").trim()
+          : "";
+        return (
+          draftName !== category.name ||
+          draftBadgeText !== currentBadgeText ||
+          draftBadgeColor !== currentBadgeColor
+        );
+      },
     );
 
     const menuDirty = activeMenus.some((menu) => {
@@ -562,6 +595,8 @@ export default function AdminPage() {
   }, [
     activeCategories,
     activeMenus,
+    categoryBadgeColorDrafts,
+    categoryBadgeTextDrafts,
     categoryNameDrafts,
     menuEdits,
     menuDisplaySettings,
@@ -613,6 +648,22 @@ export default function AdminPage() {
       setCategoryNameDrafts((prev) =>
         Object.fromEntries(
           c.categories.map((cat) => [cat.id, prev[cat.id] ?? cat.name]),
+        ),
+      );
+      setCategoryBadgeTextDrafts((prev) =>
+        Object.fromEntries(
+          c.categories.map((cat) => [
+            cat.id,
+            prev[cat.id] ?? (cat.customBadgeText ?? ""),
+          ]),
+        ),
+      );
+      setCategoryBadgeColorDrafts((prev) =>
+        Object.fromEntries(
+          c.categories.map((cat) => [
+            cat.id,
+            prev[cat.id] ?? (cat.customBadgeColor ?? "#d97706"),
+          ]),
         ),
       );
       setMenuEdits((prev) => {
@@ -932,8 +983,26 @@ export default function AdminPage() {
         id: category.id,
         nextName: (categoryNameDrafts[category.id] ?? category.name).trim(),
         currentName: category.name,
+        nextBadgeText: (
+          categoryBadgeTextDrafts[category.id] ??
+          category.customBadgeText ??
+          ""
+        ).trim(),
+        currentBadgeText: (category.customBadgeText ?? "").trim(),
+        nextBadgeColor: (
+          categoryBadgeColorDrafts[category.id] ??
+          category.customBadgeColor ??
+          "#d97706"
+        ).trim(),
+        currentBadgeColor: (category.customBadgeColor ?? "").trim(),
       }))
-      .filter((row) => row.nextName !== row.currentName);
+      .filter(
+        (row) =>
+          row.nextName !== row.currentName ||
+          row.nextBadgeText !== row.currentBadgeText ||
+          (row.nextBadgeText ? row.nextBadgeColor : "") !==
+            (row.currentBadgeText ? row.currentBadgeColor : ""),
+      );
 
     const menuUpdates: Array<{
       menuId: string;
@@ -1037,8 +1106,18 @@ export default function AdminPage() {
         if (!categoryUpdate.nextName) {
           throw new Error("カテゴリ名を入力してください");
         }
+        if (
+          categoryUpdate.nextBadgeText &&
+          !BADGE_COLOR_HEX_REGEX.test(categoryUpdate.nextBadgeColor)
+        ) {
+          throw new Error("カテゴリバッジ色は #RRGGBB 形式で入力してください");
+        }
         await patchCategory(categoryUpdate.id, {
           name: categoryUpdate.nextName,
+          customBadgeText: categoryUpdate.nextBadgeText || null,
+          customBadgeColor: categoryUpdate.nextBadgeText
+            ? categoryUpdate.nextBadgeColor
+            : null,
         });
       }
 
@@ -1068,6 +1147,8 @@ export default function AdminPage() {
   }, [
     activeCategories,
     activeMenus,
+    categoryBadgeColorDrafts,
+    categoryBadgeTextDrafts,
     categoryNameDrafts,
     menuDisplaySettings,
     menuEdits,
@@ -1450,6 +1531,30 @@ export default function AdminPage() {
                     onChange={setNewCategoryName}
                     className="max-w-xs"
                   />
+                  <InputField
+                    label="カテゴリバッジ文言"
+                    value={newCategoryBadgeText}
+                    onChange={(value) => setNewCategoryBadgeText(value.slice(0, 32))}
+                    className="max-w-xs"
+                    placeholder="例: 期間限定"
+                  />
+                  <label className="grid gap-0">
+                    <span className="text-[11px] font-medium leading-none text-muted-foreground">
+                      バッジ色
+                    </span>
+                    <Input
+                      type="color"
+                      value={
+                        BADGE_COLOR_HEX_REGEX.test(newCategoryBadgeColor)
+                          ? newCategoryBadgeColor
+                          : "#d97706"
+                      }
+                      className="h-9 w-20 p-1"
+                      onChange={(event) =>
+                        setNewCategoryBadgeColor(event.target.value)
+                      }
+                    />
+                  </label>
                   <Button
                     type="button"
                     variant="outline"
@@ -1472,11 +1577,24 @@ export default function AdminPage() {
 
                       const saved = await runMutation({
                         action: async () => {
+                          const trimmedBadgeText = newCategoryBadgeText.trim();
+                          if (
+                            trimmedBadgeText &&
+                            !BADGE_COLOR_HEX_REGEX.test(newCategoryBadgeColor)
+                          ) {
+                            throw new Error(
+                              "カテゴリバッジ色は #RRGGBB 形式で入力してください",
+                            );
+                          }
                           await apiFetch("/api/admin/categories", {
                             method: "POST",
                             body: JSON.stringify({
                               name: trimmedName,
                               displayOrder: nextDisplayOrder,
+                              customBadgeText: trimmedBadgeText || null,
+                              customBadgeColor: trimmedBadgeText
+                                ? newCategoryBadgeColor
+                                : null,
                             }),
                           });
                         },
@@ -1486,6 +1604,8 @@ export default function AdminPage() {
 
                       if (saved) {
                         setNewCategoryName("");
+                        setNewCategoryBadgeText("");
+                        setNewCategoryBadgeColor("#d97706");
                       }
                     }}
                     disabled={!newCategoryName}
@@ -1514,6 +1634,48 @@ export default function AdminPage() {
                           #{cat.displayOrder ?? "-"}
                         </Badge>
                       </div>
+                      <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
+                        <InputField
+                          label="カテゴリバッジ文言"
+                          value={
+                            categoryBadgeTextDrafts[cat.id] ??
+                            (cat.customBadgeText ?? "")
+                          }
+                          onChange={(value) =>
+                            setCategoryBadgeTextDrafts((prev) => ({
+                              ...prev,
+                              [cat.id]: value.slice(0, 32),
+                            }))
+                          }
+                          placeholder="例: 期間限定"
+                        />
+                        <label className="grid gap-0">
+                          <span className="text-[11px] font-medium leading-none text-muted-foreground">
+                            バッジ色
+                          </span>
+                          <Input
+                            type="color"
+                            value={
+                              BADGE_COLOR_HEX_REGEX.test(
+                                categoryBadgeColorDrafts[cat.id] ??
+                                  cat.customBadgeColor ??
+                                  "#d97706",
+                              )
+                                ? (categoryBadgeColorDrafts[cat.id] ??
+                                  cat.customBadgeColor ??
+                                  "#d97706")
+                                : "#d97706"
+                            }
+                            className="h-9 w-20 p-1"
+                            onChange={(event) =>
+                              setCategoryBadgeColorDrafts((prev) => ({
+                                ...prev,
+                                [cat.id]: event.target.value,
+                              }))
+                            }
+                          />
+                        </label>
+                      </div>
                       <div className="mt-2 flex flex-wrap items-center gap-1">
                         <IconActionButton
                           label="保存"
@@ -1524,6 +1686,16 @@ export default function AdminPage() {
                               const nextName = (
                                 categoryNameDrafts[cat.id] ?? cat.name
                               ).trim();
+                              const nextBadgeText = (
+                                categoryBadgeTextDrafts[cat.id] ??
+                                cat.customBadgeText ??
+                                ""
+                              ).trim();
+                              const nextBadgeColor = (
+                                categoryBadgeColorDrafts[cat.id] ??
+                                cat.customBadgeColor ??
+                                "#d97706"
+                              ).trim();
                               if (!nextName) {
                                 notify({
                                   level: "error",
@@ -1531,10 +1703,25 @@ export default function AdminPage() {
                                 });
                                 return;
                               }
+                              if (
+                                nextBadgeText &&
+                                !BADGE_COLOR_HEX_REGEX.test(nextBadgeColor)
+                              ) {
+                                notify({
+                                  level: "error",
+                                  message:
+                                    "カテゴリバッジ色は #RRGGBB 形式で入力してください",
+                                });
+                                return;
+                              }
                               const saved = await runMutation({
                                 action: async () => {
                                   await patchCategory(cat.id, {
                                     name: nextName,
+                                    customBadgeText: nextBadgeText || null,
+                                    customBadgeColor: nextBadgeText
+                                      ? nextBadgeColor
+                                      : null,
                                   });
                                 },
                                 successMessage: "カテゴリ名を更新しました",
@@ -1544,6 +1731,14 @@ export default function AdminPage() {
                                 setCategoryNameDrafts((prev) => ({
                                   ...prev,
                                   [cat.id]: nextName,
+                                }));
+                                setCategoryBadgeTextDrafts((prev) => ({
+                                  ...prev,
+                                  [cat.id]: nextBadgeText,
+                                }));
+                                setCategoryBadgeColorDrafts((prev) => ({
+                                  ...prev,
+                                  [cat.id]: nextBadgeColor,
                                 }));
                               }
                             })()

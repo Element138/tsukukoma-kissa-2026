@@ -125,6 +125,8 @@ model Session {
 model MenuCategory {
   id           String   @id @default(uuid())
   name         String   @db.VarChar(120)
+  customBadgeText String? @db.VarChar(32)
+  customBadgeColor String? @db.VarChar(16)
   displayOrder Int?     @default(0)
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())

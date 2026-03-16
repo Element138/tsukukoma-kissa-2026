@@ -110,21 +110,21 @@ export function deriveOrderProcessingTrace(params: {
 export function failureReasonLabel(reasonType: string | null): string {
   switch ((reasonType ?? "").toUpperCase()) {
     case "TIMEOUT":
-      return "Timeout";
+      return "タイムアウト";
     case "FAILURE_CALLBACK":
-      return "Failure callback";
+      return "失敗コールバック";
     case "MANUAL_CANCEL":
-      return "Manual cancel";
+      return "手動キャンセル";
     case "MANUAL_FAILURE":
-      return "Manual failure";
+      return "手動失敗処理";
     default:
-      return "Unknown";
+      return "不明";
   }
 }
 
 export function formatTraceAt(date: Date | null): string {
   if (!date) {
-    return "unknown";
+    return "不明";
   }
   return `${formatTokyo(date)} JST`;
 }
@@ -140,9 +140,9 @@ export function buildLateSuccessIncidentMessage(params: {
   const reasonLabel = failureReasonLabel(params.failureReasonType);
   const reasonDetail = params.failureReasonText ? ` / ${params.failureReasonText}` : "";
   return (
-    `Order #${params.orderNo} trace: created=${formatTraceAt(params.createdAt)}, ` +
-    `failed=${formatTraceAt(params.failedAt)} (${reasonLabel}${reasonDetail}), ` +
-    `success_callback=${formatTraceAt(params.successCallbackAt)}. ` +
-    "Please verify settlement."
+    `注文 #${params.orderNo} の処理トレース: 作成=${formatTraceAt(params.createdAt)}, ` +
+    `失敗=${formatTraceAt(params.failedAt)}（${reasonLabel}${reasonDetail}）, ` +
+    `SUCCESSコールバック受信=${formatTraceAt(params.successCallbackAt)}。` +
+    "入金有無を確認してください。"
   );
 }

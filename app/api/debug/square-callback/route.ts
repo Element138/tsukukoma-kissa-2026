@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
         reasonType: body.result === "FAILED" ? "FAILURE_CALLBACK" : undefined,
         reasonText:
           body.result === "FAILED"
-            ? "Debug callback returned FAILED"
+            ? "デバッグコールバックでFAILEDが返却されました"
             : undefined,
       });
 

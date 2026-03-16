@@ -38,7 +38,7 @@ export async function runPaymentWatchdog(db: DbClient) {
   for (const order of awaitingTimeouts) {
     const failedAt = now();
     const reasonType = "TIMEOUT";
-    const reasonText = "Square callback timeout";
+    const reasonText = "Square決済コールバックがタイムアウトしました";
 
     const changed = await db.order.updateMany({
       where: {

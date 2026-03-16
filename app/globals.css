@@ -749,6 +749,21 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   margin: 0;
   font-size: clamp(1.6rem, 2.6vw, 2.5rem);
   font-weight: 900;
+  white-space: pre-wrap;
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+
+.menu-display-category-badge {
+  display: inline-flex;
+  width: fit-content;
+  margin-bottom: 8px;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 10px;
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 700;
 }
 
 .menu-display-scroll-viewport {
@@ -821,7 +836,9 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
 .menu-display-row-text strong {
   font-size: clamp(1.45rem, 2.2vw, 2.3rem);
   line-height: 1.24;
-  word-break: break-word;
+  white-space: pre-wrap;
+  word-break: normal;
+  overflow-wrap: break-word;
 }
 
 .menu-display-row-meta {

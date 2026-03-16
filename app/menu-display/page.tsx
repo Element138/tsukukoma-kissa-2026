@@ -24,6 +24,8 @@ import { useToast } from "@/components/toast";
 type DisplayCategory = {
   id: string;
   name: string;
+  customBadgeText: string | null;
+  customBadgeColor: string | null;
   menus: Array<{
     id: string;
     name: string;
@@ -647,9 +649,22 @@ export default function MenuDisplayPage() {
             } as CSSProperties
           }
         >
-          {activePage.map((category) => (
+          {activePage.map((category) => {
+            const categoryBadgeText = category.customBadgeText?.trim() ?? "";
+            const categoryBadgeColor =
+              category.customBadgeColor?.trim() || "#d97706";
+
+            return (
             <section key={category.id} className="menu-display-category">
               <header className="menu-display-category-header">
+                {categoryBadgeText ? (
+                  <span
+                    className="menu-display-category-badge"
+                    style={{ backgroundColor: categoryBadgeColor }}
+                  >
+                    {renderDisplayText(categoryBadgeText)}
+                  </span>
+                ) : null}
                 <h2>{renderDisplayText(category.name)}</h2>
               </header>
               <div
@@ -752,7 +767,8 @@ export default function MenuDisplayPage() {
                 </div>
               </div>
             </section>
-          ))}
+            );
+          })}
         </div>
       </DashboardShell>
     </>

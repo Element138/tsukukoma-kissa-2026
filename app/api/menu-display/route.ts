@@ -38,6 +38,8 @@ export async function GET(req: NextRequest) {
       id: cat.id,
       name: cat.name,
       displayOrder: cat.displayOrder,
+      customBadgeText: cat.customBadgeText,
+      customBadgeColor: cat.customBadgeColor,
       menus: menus
         .filter((menu) => menu.categoryId === cat.id)
         .map((menu) => {

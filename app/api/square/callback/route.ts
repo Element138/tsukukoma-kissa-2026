@@ -159,7 +159,7 @@ async function applySquareCallback(payload: { orderId: string | null; result: "S
       reasonType: payload.result === "FAILED" ? "FAILURE_CALLBACK" : undefined,
       reasonText:
         payload.result === "FAILED"
-          ? "Square callback returned FAILED"
+          ? "Square決済コールバックでFAILEDが返却されました"
           : undefined,
     });
 

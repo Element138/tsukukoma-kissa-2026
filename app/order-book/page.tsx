@@ -158,15 +158,15 @@ function bundleItems(items: OrderRow["items"]): BundledItem[] {
 function failureReasonLabel(reasonType: string | null) {
   switch ((reasonType ?? "").toUpperCase()) {
     case "TIMEOUT":
-      return "Timeout";
+      return "タイムアウト";
     case "FAILURE_CALLBACK":
-      return "Failure callback";
+      return "失敗コールバック";
     case "MANUAL_CANCEL":
-      return "Manual cancel";
+      return "手動キャンセル";
     case "MANUAL_FAILURE":
-      return "Manual failure";
+      return "手動失敗処理";
     default:
-      return "Unknown";
+      return "不明";
   }
 }
 
@@ -342,10 +342,10 @@ export default function OrderBookPage() {
         bundledItems: bundleItems(order.items),
         elapsedLabel:
           order.orderStatus === "COMPLETED"
-            ? `確定時刻 ${confirmedLabel}`
+            ? `注文確定時刻 ${confirmedLabel}`
             : order.orderStatus === "FAILED"
               ? `失敗時刻 ${failedLabel}`
-            : `注文から ${formatMss(elapsedSec)}`,
+              : `注文から ${formatMss(elapsedSec)}`,
       };
     });
   }, [orders, tickNow]);
