@@ -12,8 +12,13 @@ async function handle(req: NextRequest) {
     triggerPaymentWatchdogBestEffort();
 
     const trackOrderId = req.nextUrl.searchParams.get("trackOrderId");
-    const awaiting = await findOpenSquareAwaitingOrderForPos(prisma, actor.actorId);
-    const callbackUrl = process.env.SQUARE_CALLBACK_URL || "https://example.com/api/square/callback";
+    const awaiting = await findOpenSquareAwaitingOrderForPos(
+      prisma,
+      actor.actorId,
+    );
+    const callbackUrl =
+      process.env.SQUARE_CALLBACK_URL ||
+      "https://example.com/api/square/callback";
 
     const awaitingOrder = awaiting
       ? {
@@ -26,8 +31,8 @@ async function handle(req: NextRequest) {
             orderNo: awaiting.orderNo,
             amountJpy: awaiting.totalPriceJpy,
             callbackUrl,
-            note: `KISSa order #${awaiting.orderNo}`
-          }).deepLink
+            note: `筑駒文化祭喫茶 注文#${awaiting.orderNo}`,
+          }).deepLink,
         }
       : null;
 
@@ -35,20 +40,20 @@ async function handle(req: NextRequest) {
       ? await prisma.order.findFirst({
           where: {
             id: trackOrderId,
-            createdByActorId: actor.actorId
+            createdByActorId: actor.actorId,
           },
           select: {
             id: true,
             orderNo: true,
             paymentStatus: true,
-            orderStatus: true
-          }
+            orderStatus: true,
+          },
         })
       : null;
 
     const incidents = await prisma.paymentIncident.findMany({
       where: {
-        dismissedAt: null
+        dismissedAt: null,
       },
       select: {
         id: true,
@@ -58,14 +63,14 @@ async function handle(req: NextRequest) {
         order: {
           select: {
             orderNo: true,
-            createdByActorId: true
-          }
-        }
+            createdByActorId: true,
+          },
+        },
       },
       orderBy: {
-        createdAt: "desc"
+        createdAt: "desc",
       },
-      take: 12
+      take: 12,
     });
 
     return ok({
@@ -78,8 +83,8 @@ async function handle(req: NextRequest) {
         orderNo: incident.order.orderNo,
         responsiblePosActorId: incident.order.createdByActorId,
         messageJa: incident.messageJa,
-        createdAt: incident.createdAt
-      }))
+        createdAt: incident.createdAt,
+      })),
     });
   } catch (error) {
     return fail(error);

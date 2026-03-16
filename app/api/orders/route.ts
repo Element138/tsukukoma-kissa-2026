@@ -9,7 +9,11 @@ import { parseJson } from "@/lib/server/http";
 import { createOrderAtPaymentStart } from "@/lib/domain/orders";
 import { runPaymentWatchdog } from "@/lib/domain/payment-watchdog";
 import { createSquareAppSwitchRequest } from "@/lib/domain/square";
-import { broadcastInvalidation, CHANNEL_GROUPS, kitchenChannel } from "@/lib/server/realtime-broadcast";
+import {
+  broadcastInvalidation,
+  CHANNEL_GROUPS,
+  kitchenChannel,
+} from "@/lib/server/realtime-broadcast";
 import { triggerPaymentWatchdogBestEffort } from "@/lib/server/payment-watchdog-trigger";
 
 const querySchema = z.object({
@@ -19,7 +23,7 @@ const querySchema = z.object({
   fulfillmentType: z.string().optional(),
   from: z.string().optional(),
   to: z.string().optional(),
-  take: z.string().optional()
+  take: z.string().optional(),
 });
 
 export async function GET(req: NextRequest) {
@@ -27,22 +31,27 @@ export async function GET(req: NextRequest) {
     await requireSession(req);
     triggerPaymentWatchdogBestEffort();
 
-
-    const query = querySchema.parse(Object.fromEntries(req.nextUrl.searchParams.entries()));
+    const query = querySchema.parse(
+      Object.fromEntries(req.nextUrl.searchParams.entries()),
+    );
     const take = Math.min(Number(query.take ?? "100"), 300);
 
     const where: Prisma.OrderWhereInput = {
       ...(query.status ? { orderStatus: query.status as any } : {}),
-      ...(query.paymentStatus ? { paymentStatus: query.paymentStatus as any } : {}),
-      ...(query.fulfillmentType ? { fulfillmentType: query.fulfillmentType as any } : {}),
+      ...(query.paymentStatus
+        ? { paymentStatus: query.paymentStatus as any }
+        : {}),
+      ...(query.fulfillmentType
+        ? { fulfillmentType: query.fulfillmentType as any }
+        : {}),
       ...(query.from || query.to
         ? {
             createdAt: {
               ...(query.from ? { gte: new Date(query.from) } : {}),
-              ...(query.to ? { lte: new Date(query.to) } : {})
-            }
+              ...(query.to ? { lte: new Date(query.to) } : {}),
+            },
           }
-        : {})
+        : {}),
     };
 
     if (query.q) {
@@ -68,10 +77,10 @@ export async function GET(req: NextRequest) {
             kitchenId: true,
             status: true,
             readyAt: true,
-            servedAt: true
-          }
-        }
-      }
+            servedAt: true,
+          },
+        },
+      },
     });
 
     return ok({ orders });
@@ -91,7 +100,7 @@ export async function POST(req: NextRequest) {
       const created = await createOrderAtPaymentStart(tx, {
         actorId: actor.actorId,
         actorType: actor.actorType,
-        payload: body
+        payload: body,
       });
 
       if (!created.duplicated) {
@@ -104,7 +113,7 @@ export async function POST(req: NextRequest) {
           tx,
           [...CHANNEL_GROUPS.ORDER_FLOW, ...kitchenChannels],
           "orders",
-          "order_created"
+          "order_created",
         );
       }
 
@@ -112,25 +121,28 @@ export async function POST(req: NextRequest) {
     });
 
     let square = null;
-    if (result.order.paymentMethod === "SQUARE" && result.order.paymentStatus === "AWAITING") {
-      const callbackUrl = process.env.SQUARE_CALLBACK_URL || "https://example.com/api/square/callback";
+    if (
+      result.order.paymentMethod === "SQUARE" &&
+      result.order.paymentStatus === "AWAITING"
+    ) {
+      const callbackUrl =
+        process.env.SQUARE_CALLBACK_URL ||
+        "https://example.com/api/square/callback";
       square = createSquareAppSwitchRequest({
         orderId: result.order.id,
         orderNo: result.order.orderNo,
         amountJpy: result.order.totalPriceJpy,
         callbackUrl,
-        note: `KISSa order #${result.order.orderNo}`
+        note: `筑駒文化祭喫茶 注文#${result.order.orderNo}`,
       });
     }
 
     return ok({
       duplicated: result.duplicated,
       order: result.order,
-      square
+      square,
     });
   } catch (error) {
     return fail(error);
   }
 }
-
-

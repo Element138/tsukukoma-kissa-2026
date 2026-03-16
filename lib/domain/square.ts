@@ -22,7 +22,7 @@ export function createSquareAppSwitchRequest(params: {
         },
         client_id: process.env.SQUARE_APP_ID ?? "",
         state: params.orderId,
-        notes: params.note ?? `KISSa order #${params.orderNo}`,
+        notes: params.note ?? `筑駒文化祭喫茶 注文#${params.orderNo}`,
         callback_url: params.callbackUrl
       })
     )}`;

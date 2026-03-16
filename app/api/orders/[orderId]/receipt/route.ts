@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSession } from "@/lib/server/auth";
+import { FULFILLMENT_LABEL, PAYMENT_METHOD_LABEL, labelOf } from "@/lib/labels";
 import { fail, ok } from "@/lib/response";
+import { requireSession } from "@/lib/server/auth";
 import { formatTokyo } from "@/lib/time";
 
 function renderReceipt(order: {
@@ -13,26 +14,39 @@ function renderReceipt(order: {
   createdAt: Date;
   items: Array<{ itemNameSnapshot: string; unitPriceJpy: number }>;
 }) {
+  const fulfillmentLabel = labelOf(FULFILLMENT_LABEL, order.fulfillmentType);
+  const paymentMethodLabel = labelOf(PAYMENT_METHOD_LABEL, order.paymentMethod);
+
   const lines = [
-    `KISSa`,
-    `Order #${order.orderNo}`,
-    `Type: ${order.fulfillmentType}`,
-    order.tableNo ? `Table: ${order.tableNo}` : null,
-    `Time: ${formatTokyo(order.createdAt)}`,
-    `Payment: ${order.paymentMethod}`,
-    `----------------------`,
-    ...order.items.map((i) => `${i.itemNameSnapshot}  ${i.unitPriceJpy} JPY`),
-    `----------------------`,
-    `Total: ${order.totalPriceJpy} JPY`,
-    order.fulfillmentType === "TAKEOUT" ? `PICKUP NO. ${order.orderNo}` : null
+    "注文控え",
+    `注文番号: ${order.orderNo}`,
+    `受け渡し: ${fulfillmentLabel}`,
+    order.tableNo ? `テーブル: ${order.tableNo}` : null,
+    `注文時刻: ${formatTokyo(order.createdAt)}`,
+    `決済方法: ${paymentMethodLabel}`,
+    "----------------------",
+    ...order.items.map(
+      (item) =>
+        `${item.itemNameSnapshot}  ${item.unitPriceJpy.toLocaleString("ja-JP")}円`,
+    ),
+    "----------------------",
+    `合計: ${order.totalPriceJpy.toLocaleString("ja-JP")}円`,
+    order.fulfillmentType === "TAKEOUT"
+      ? `お受け取り番号: ${order.orderNo}`
+      : null,
   ].filter(Boolean);
 
   return lines.join("\n");
 }
 
-export async function POST(req: NextRequest, context: { params: Promise<{ orderId: string }> }) {
+export async function POST(
+  req: NextRequest,
+  context: { params: Promise<{ orderId: string }> },
+) {
   try {
-    await requireSession(req, { actorTypes: ["POS", "KITCHEN", "WAITER", "ADMIN"] });
+    await requireSession(req, {
+      actorTypes: ["POS", "KITCHEN", "WAITER", "ADMIN"],
+    });
     const { orderId } = await context.params;
 
     const order = await prisma.order.findUnique({
@@ -41,10 +55,10 @@ export async function POST(req: NextRequest, context: { params: Promise<{ orderI
         items: {
           select: {
             itemNameSnapshot: true,
-            unitPriceJpy: true
-          }
-        }
-      }
+            unitPriceJpy: true,
+          },
+        },
+      },
     });
 
     if (!order) {
@@ -58,18 +72,16 @@ export async function POST(req: NextRequest, context: { params: Promise<{ orderI
       return ok({
         printed: false,
         mode,
-        receiptPreview: text
+        receiptPreview: text,
       });
     }
 
     return ok({
       printed: true,
       mode,
-      receiptPreview: text
+      receiptPreview: text,
     });
   } catch (error) {
     return fail(error);
   }
 }
-
-

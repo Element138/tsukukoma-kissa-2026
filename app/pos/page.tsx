@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { apiFetch, fmtJpy } from "@/lib/client";
 import { useSession } from "@/components/use-session";
@@ -38,6 +38,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { buildProtectedMenuNameChunks } from "@/lib/menu-name-line-break";
 
 type MenuPayload = {
   menus: Array<{
@@ -128,6 +129,35 @@ function summarizeOrderErrorMessage(rawMessage: string) {
     return normalized;
   }
   return `${normalized.slice(0, 48)}...`;
+}
+
+function renderMenuName(text: string) {
+  const segments = text.split(/(\s+)/);
+  return segments.map((segment, segmentIndex) => {
+    if (!segment) {
+      return null;
+    }
+
+    if (/^\s+$/.test(segment)) {
+      return <Fragment key={`space-${segmentIndex}`}>{segment}</Fragment>;
+    }
+
+    const chunks = buildProtectedMenuNameChunks(segment);
+    return (
+      <Fragment key={`segment-${segmentIndex}`}>
+        {chunks.map((chunk, chunkIndex) => (
+          <Fragment key={`${segmentIndex}-${chunkIndex}`}>
+            {chunk.keepTogether ? (
+              <span className="menu-display-keep-term">{chunk.text}</span>
+            ) : (
+              chunk.text
+            )}
+            {chunkIndex < chunks.length - 1 ? <wbr /> : null}
+          </Fragment>
+        ))}
+      </Fragment>
+    );
+  });
 }
 
 export default function PosPage() {
@@ -738,7 +768,7 @@ export default function PosPage() {
                     className={`menu-tile ${qty > 0 ? "selected" : ""} ${unavailable ? "unavailable" : ""}`}
                   >
                     <div className="row between">
-                      <strong>{menu.name}</strong>
+                      <strong>{renderMenuName(menu.name)}</strong>
                       {menu.dailyOrderCap != null ? (
                         <span className="muted text-xs">
                           残り {remainingUntilCap ?? 0} / 上限{" "}
@@ -870,7 +900,7 @@ export default function PosPage() {
                 {selectedItems.map((item) => (
                   <div key={item.id} className="list-item row between">
                     <div>
-                      {item.name} × {item.quantity}
+                      {renderMenuName(item.name)} × {item.quantity}
                     </div>
                     <strong>{fmtJpy(item.priceJpy * item.quantity)}</strong>
                   </div>

@@ -791,6 +791,7 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   border: 1px solid rgba(255, 255, 255, 0.9);
   border-radius: 14px;
   background: #fff;
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   min-height: clamp(138px, 15vh, 192px);
@@ -805,6 +806,15 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
 .menu-display-row.unavailable {
   background: linear-gradient(145deg, #f2f3f8 0%, #e8ecf4 100%);
   color: #667084;
+}
+
+.menu-display-row.unavailable::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(148, 163, 184, 0.28);
+  pointer-events: none;
+  z-index: 2;
 }
 
 .menu-display-row-text {
@@ -897,6 +907,10 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   object-fit: cover;
   object-position: center;
   display: block;
+}
+
+.menu-display-row.unavailable .menu-display-row-image {
+  filter: grayscale(0.72) brightness(0.82);
 }
 
 .menu-display-fullscreen .menu-display-scroll-viewport {
