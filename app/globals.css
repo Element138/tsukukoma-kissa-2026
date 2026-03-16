@@ -1294,6 +1294,12 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   grid-template-columns: repeat(auto-fill, minmax(540px, 1fr));
 }
 
+@media (min-width: 900px) and (max-width: 1200px) {
+  .kitchen-menus-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .kitchen-menu-tile {
   gap: 12px;
 }
@@ -1919,7 +1925,7 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   }
 }
 
-@media (max-width: 1080px) {
+@media (max-width: 1000px) {
   .grid.two,
   .grid.three,
   .grid.four,
@@ -1932,7 +1938,7 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   }
 
   .login-hero {
-    min-height: 280px;
+    min-height: 200px;
   }
 
   .menu-display-columns {

@@ -29,8 +29,8 @@ The system-of-record is the backend. `Order` and `OrderItem` are strictly separa
 
 Set these in Vercel Project Settings -> Environment Variables:
 
-- `DATABASE_URL` (runtime/pool URL)
-- `DIRECT_URL` (direct DB URL for Prisma migrate)
+- `DATABASE_URL` (runtime URL: Supabase transaction pooler `:6543` recommended)
+- `DIRECT_URL` (direct DB URL for Prisma migrate, non-pooler `:5432`)
 - `SESSION_SECRET`
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`

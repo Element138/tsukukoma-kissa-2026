@@ -15,6 +15,15 @@ function resolveRuntimeDatabaseUrl() {
 
   try {
     const parsed = new URL(raw);
+    const isSupabasePoolerHost = parsed.hostname.includes("pooler.supabase.com");
+    const isSessionPoolPort = parsed.port === "" || parsed.port === "5432";
+
+    // Supabase session pool URLs can exhaust backend connections under bursty traffic.
+    // Force transaction pooling port at runtime when a Supabase pooler host is used.
+    if (isSupabasePoolerHost && isSessionPoolPort) {
+      parsed.port = "6543";
+    }
+
     const likelyPooler = parsed.hostname.includes("pooler.") || parsed.port === "6543";
 
     if (likelyPooler) {
