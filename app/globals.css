@@ -700,6 +700,16 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   margin: 18px auto 20px;
 }
 
+.menu-display-standard .dashboard-title,
+.menu-display-fullscreen .dashboard-title {
+  font-size: clamp(1.8rem, 2.9vw, 2.6rem);
+}
+
+.menu-display-standard .dashboard-hero .p-5,
+.menu-display-fullscreen .dashboard-hero .p-5 {
+  padding: 0.95rem 1.05rem;
+}
+
 .menu-display-fullscreen .menu-display-page .menu-tile {
   min-height: 242px;
   padding: 24px;
@@ -854,7 +864,7 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
 
 .menu-display-row-text strong {
   font-size: clamp(1.45rem, 2.2vw, 2.3rem);
-  line-height: 1.24;
+  line-height: 1.18;
   white-space: pre-wrap;
   word-break: normal;
   overflow-wrap: break-word;
