@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { fail } from "@/lib/response";
 import { verifySquareCallbackSignature } from "@/lib/domain/square";
-import { confirmOrderPayment } from "@/lib/domain/orders";
+import { appendOrderEvent, confirmOrderPayment } from "@/lib/domain/orders";
 import { broadcastInvalidation, CHANNEL_GROUPS, kitchenChannel } from "@/lib/server/realtime-broadcast";
 import { openLateSuccessIncident } from "@/lib/domain/payment-incidents";
+import { deriveOrderProcessingTrace } from "@/lib/domain/order-processing-trace";
 import { writeAuditLog } from "@/lib/domain/audit";
+import { now } from "@/lib/time";
 
 function normalizeSquareResult(value: unknown): "SUCCESS" | "FAILED" {
   if (value === true) {
@@ -67,8 +69,10 @@ async function applySquareCallback(payload: { orderId: string | null; result: "S
       id: true,
       orderNo: true,
       createdByActorId: true,
+      createdAt: true,
       confirmedAt: true,
-      paymentStatus: true
+      paymentStatus: true,
+      events: true,
     }
   });
   if (!existing) {
@@ -92,12 +96,31 @@ async function applySquareCallback(payload: { orderId: string | null; result: "S
   }
 
   if (payload.result === "SUCCESS" && existing.paymentStatus === "FAILED") {
+    const successCallbackAt = now();
+    const trace = deriveOrderProcessingTrace({
+      createdAt: existing.createdAt,
+      events: existing.events,
+    });
+
     const incident = await prisma.$transaction(async (tx) => {
+      await appendOrderEvent(tx, existing.id, {
+        type: "PAYMENT_SUCCESS_CALLBACK_AFTER_FAILED",
+        at: successCallbackAt.toISOString(),
+        detail: {
+          squareTransactionId: payload.squareTransactionId ?? null,
+        },
+      });
+
       const created = await openLateSuccessIncident(tx, {
         orderId: existing.id,
         orderNo: existing.orderNo,
         responsiblePosActorId: existing.createdByActorId,
-        squareTransactionId: payload.squareTransactionId ?? null
+        squareTransactionId: payload.squareTransactionId ?? null,
+        orderCreatedAt: trace.createdAt,
+        failedAt: trace.failedAt,
+        failureReasonType: trace.failureReasonType,
+        failureReasonText: trace.failureReasonText,
+        successCallbackAt,
       });
 
       await writeAuditLog(tx, {
@@ -110,7 +133,8 @@ async function applySquareCallback(payload: { orderId: string | null; result: "S
         afterJson: {
           orderNo: existing.orderNo,
           responsiblePosActorId: existing.createdByActorId,
-          squareTransactionId: payload.squareTransactionId ?? null
+          squareTransactionId: payload.squareTransactionId ?? null,
+          successCallbackAt: successCallbackAt.toISOString(),
         },
         result: "SUCCESS"
       });
@@ -131,7 +155,12 @@ async function applySquareCallback(payload: { orderId: string | null; result: "S
       actorType: null,
       orderId: payload.orderId!,
       result: payload.result,
-      squareTransactionId: payload.squareTransactionId
+      squareTransactionId: payload.squareTransactionId,
+      reasonType: payload.result === "FAILED" ? "FAILURE_CALLBACK" : undefined,
+      reasonText:
+        payload.result === "FAILED"
+          ? "Square callback returned FAILED"
+          : undefined,
     });
 
     const kitchenChannels = order.items

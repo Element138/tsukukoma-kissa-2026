@@ -40,6 +40,9 @@ type OrderRow = {
   paymentMethod: string;
   paymentStatus: string;
   orderStatus: string;
+  failedAt: string | null;
+  failureReasonType: string | null;
+  failureReasonText: string | null;
   totalPriceJpy: number;
   specialNote: string | null;
   items: Array<{
@@ -104,8 +107,19 @@ function orderStatusClass(orderStatus: string) {
   }
 }
 
-function orderAgeClass(orderStatus: string, elapsedSec: number) {
-  if (orderStatus === "COMPLETED" || orderStatus === "FAILED" || orderStatus === "CANCELED") {
+function orderAgeClass(
+  orderStatus: string,
+  paymentStatus: string,
+  elapsedSec: number,
+) {
+  if (
+    orderStatus === "COMPLETED" ||
+    orderStatus === "FAILED" ||
+    orderStatus === "CANCELED"
+  ) {
+    return "";
+  }
+  if (paymentStatus === "AWAITING") {
     return "";
   }
   if (elapsedSec >= 600) {
@@ -139,6 +153,21 @@ function bundleItems(items: OrderRow["items"]): BundledItem[] {
   }
 
   return [...bucket.values()];
+}
+
+function failureReasonLabel(reasonType: string | null) {
+  switch ((reasonType ?? "").toUpperCase()) {
+    case "TIMEOUT":
+      return "Timeout";
+    case "FAILURE_CALLBACK":
+      return "Failure callback";
+    case "MANUAL_CANCEL":
+      return "Manual cancel";
+    case "MANUAL_FAILURE":
+      return "Manual failure";
+    default:
+      return "Unknown";
+  }
 }
 
 export default function OrderBookPage() {
@@ -269,7 +298,8 @@ export default function OrderBookPage() {
     } catch (e) {
       notify({
         level: "error",
-        message: e instanceof Error ? e.message : "異常通知の更新に失敗しました",
+        message:
+          e instanceof Error ? e.message : "異常通知の更新に失敗しました",
       });
     }
   };
@@ -289,14 +319,32 @@ export default function OrderBookPage() {
             second: "2-digit",
           })
         : "-";
+      const failedLabel = order.failedAt
+        ? new Date(order.failedAt).toLocaleString("ja-JP", {
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour12: false,
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          })
+        : "-";
+      const failureReason =
+        order.failureReasonText && order.failureReasonText.trim().length > 0
+          ? `${failureReasonLabel(order.failureReasonType)} / ${order.failureReasonText}`
+          : failureReasonLabel(order.failureReasonType);
 
       return {
         ...order,
         elapsedSec,
+        failureReason,
         bundledItems: bundleItems(order.items),
         elapsedLabel:
           order.orderStatus === "COMPLETED"
             ? `確定時刻 ${confirmedLabel}`
+            : order.orderStatus === "FAILED"
+              ? `失敗時刻 ${failedLabel}`
             : `注文から ${formatMss(elapsedSec)}`,
       };
     });
@@ -460,12 +508,16 @@ export default function OrderBookPage() {
             >
               <div className="row between wrap" style={{ marginBottom: 8 }}>
                 <strong style={{ color: "#7f1d1d" }}>
-                  重要: 決済矛盾の要確認注文
+                  Square決済状態が異常な注文
                 </strong>
               </div>
               <div className="list">
                 {incidents.map((incident) => (
-                  <div key={incident.id} className="notice error" style={{ margin: 0 }}>
+                  <div
+                    key={incident.id}
+                    className="notice error"
+                    style={{ margin: 0 }}
+                  >
                     <div style={{ color: "#7f1d1d", fontWeight: 700 }}>
                       注文 #{incident.orderNo}
                     </div>
@@ -493,7 +545,7 @@ export default function OrderBookPage() {
             {rows.map((order) => (
               <article
                 key={order.id}
-                className={`card ${orderAgeClass(order.orderStatus, order.elapsedSec)}`}
+                className={`card ${orderAgeClass(order.orderStatus, order.paymentStatus, order.elapsedSec)}`}
               >
                 <div className="row between wrap">
                   <div>
@@ -523,6 +575,11 @@ export default function OrderBookPage() {
                 {order.specialNote && (
                   <div className="notice" style={{ marginTop: 8 }}>
                     備考: {order.specialNote}
+                  </div>
+                )}
+                {order.orderStatus === "FAILED" && (
+                  <div className="notice error" style={{ marginTop: 8 }}>
+                    失敗理由: {order.failureReason}
                   </div>
                 )}
                 <div className="muted" style={{ marginTop: 8 }}>

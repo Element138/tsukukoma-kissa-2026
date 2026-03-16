@@ -6,6 +6,7 @@ import { fail, ok } from "@/lib/response";
 import { triggerPaymentWatchdogBestEffort } from "@/lib/server/payment-watchdog-trigger";
 import { parseAgeRangesToCounts } from "@/lib/age-groups";
 import { getMenuCapStates } from "@/lib/domain/menu-cap";
+import { deriveOrderProcessingTrace } from "@/lib/domain/order-processing-trace";
 
 const querySchema = z.object({
   orderNo: z.string().optional(),
@@ -95,6 +96,10 @@ export async function GET(req: NextRequest) {
     });
 
     const rows = filtered.map((order) => {
+      const trace = deriveOrderProcessingTrace({
+        createdAt: order.createdAt,
+        events: order.events,
+      });
       const servedTimestamps = order.items
         .map((item) => item.servedAt)
         .filter((servedAt): servedAt is Date => Boolean(servedAt));
@@ -116,6 +121,9 @@ export async function GET(req: NextRequest) {
         paymentMethod: order.paymentMethod,
         paymentStatus: order.paymentStatus,
         orderStatus: order.orderStatus,
+        failedAt: trace.failedAt,
+        failureReasonType: trace.failureReasonType,
+        failureReasonText: trace.failureReasonText,
         totalPriceJpy: order.totalPriceJpy,
         specialNote: order.specialNote,
         items: order.items.map((item) => ({

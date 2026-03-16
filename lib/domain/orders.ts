@@ -30,7 +30,7 @@ function asEvents(raw: Prisma.JsonValue | null): OrderEvent[] {
   return raw as OrderEvent[];
 }
 
-async function appendOrderEvent(db: DbClient, orderId: string, event: OrderEvent) {
+export async function appendOrderEvent(db: DbClient, orderId: string, event: OrderEvent) {
   const order = await db.order.findUnique({
     where: { id: orderId },
     select: { events: true }
@@ -318,6 +318,7 @@ export async function confirmOrderPayment(
     orderId: string;
     result: "SUCCESS" | "FAILED";
     squareTransactionId?: string;
+    reasonType?: string;
     reasonText?: string;
   }
 ) {
@@ -332,6 +333,10 @@ export async function confirmOrderPayment(
   assert(orderBefore.orderStatus === "PENDING", 409, "ORDER_NOT_PENDING", "Order is not pending");
 
   if (params.result === "FAILED") {
+    const failedAt = now();
+    const reasonType =
+      params.reasonType ?? (params.actorId ? "MANUAL_FAILURE" : "UNKNOWN");
+
     const failedOrder = await db.order.update({
       where: { id: params.orderId },
       data: {
@@ -350,9 +355,10 @@ export async function confirmOrderPayment(
 
     await appendOrderEvent(db, params.orderId, {
       type: "PAYMENT_FAILED",
-      at: now().toISOString(),
+      at: failedAt.toISOString(),
       actorId: params.actorId ?? undefined,
       detail: {
+        reasonType,
         reasonText: params.reasonText ?? null
       }
     });
@@ -367,6 +373,7 @@ export async function confirmOrderPayment(
       afterJson: {
         paymentStatus: "FAILED"
       },
+      reasonType,
       reasonText: params.reasonText ?? null,
       result: "SUCCESS"
     });
@@ -466,6 +473,8 @@ export async function cancelPendingOrder(
   assert(order.confirmedAt === null, 409, "ALREADY_CONFIRMED", "Confirmed order cannot be canceled");
   assert(order.orderStatus === "PENDING", 409, "INVALID_STATUS", "Only pending order can be canceled");
 
+  const failedAt = now();
+
   const failed = await db.order.update({
     where: { id: params.orderId },
     data: {
@@ -494,9 +503,10 @@ export async function cancelPendingOrder(
 
   await appendOrderEvent(db, params.orderId, {
     type: "ORDER_FAILED",
-    at: now().toISOString(),
+    at: failedAt.toISOString(),
     actorId: params.actorId,
     detail: {
+      reasonType: "MANUAL_CANCEL",
       reasonText: params.reasonText ?? null
     }
   });
@@ -508,6 +518,7 @@ export async function cancelPendingOrder(
     entityType: "order",
     entityId: params.orderId,
     orderId: params.orderId,
+    reasonType: "MANUAL_CANCEL",
     reasonText: params.reasonText ?? null,
     result: "SUCCESS"
   });

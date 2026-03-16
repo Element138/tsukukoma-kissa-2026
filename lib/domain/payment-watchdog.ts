@@ -1,6 +1,7 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 import { now } from "@/lib/time";
 import { writeAuditLog } from "@/lib/domain/audit";
+import { appendOrderEvent } from "@/lib/domain/orders";
 import { broadcastInvalidation, CHANNEL_GROUPS } from "@/lib/server/realtime-broadcast";
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
@@ -35,6 +36,10 @@ export async function runPaymentWatchdog(db: DbClient) {
   });
 
   for (const order of awaitingTimeouts) {
+    const failedAt = now();
+    const reasonType = "TIMEOUT";
+    const reasonText = "Square callback timeout";
+
     const changed = await db.order.updateMany({
       where: {
         id: order.id,
@@ -55,6 +60,15 @@ export async function runPaymentWatchdog(db: DbClient) {
       continue;
     }
 
+    await appendOrderEvent(db, order.id, {
+      type: "PAYMENT_FAILED",
+      at: failedAt.toISOString(),
+      detail: {
+        reasonType,
+        reasonText
+      }
+    });
+
     await writeAuditLog(db, {
       actorId: null,
       actorType: null,
@@ -62,6 +76,8 @@ export async function runPaymentWatchdog(db: DbClient) {
       entityType: "order",
       entityId: order.id,
       orderId: order.id,
+      reasonType,
+      reasonText,
       result: "SUCCESS"
     });
   }

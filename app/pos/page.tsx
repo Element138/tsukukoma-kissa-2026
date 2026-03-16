@@ -63,20 +63,14 @@ type MenuPayload = {
 
 const AVAILABILITY_OPTIONS: Array<
   "AVAILABLE" | "INCREASED_WAIT" | "PAUSED" | "SOLD_OUT"
-> = [
-  "AVAILABLE",
-  "INCREASED_WAIT",
-  "PAUSED",
-  "SOLD_OUT",
-];
+> = ["AVAILABLE", "INCREASED_WAIT", "PAUSED", "SOLD_OUT"];
 const STATUS_BUTTON_ACTIVE_TONE: Record<
   "AVAILABLE" | "INCREASED_WAIT" | "PAUSED" | "SOLD_OUT",
   string
 > = {
   AVAILABLE:
     "border-emerald-700 bg-emerald-600 text-white hover:bg-emerald-700",
-  INCREASED_WAIT:
-    "border-amber-700 bg-amber-500 text-white hover:bg-amber-600",
+  INCREASED_WAIT: "border-amber-700 bg-amber-500 text-white hover:bg-amber-600",
   PAUSED: "border-orange-700 bg-orange-500 text-white hover:bg-orange-600",
   SOLD_OUT: "border-rose-700 bg-rose-600 text-white hover:bg-rose-700",
 };
@@ -168,9 +162,9 @@ export default function PosPage() {
     null,
   );
   const [incidents, setIncidents] = useState<IncidentState[]>([]);
-  const [pendingSquareOrderId, setPendingSquareOrderId] = useState<string | null>(
-    null,
-  );
+  const [pendingSquareOrderId, setPendingSquareOrderId] = useState<
+    string | null
+  >(null);
   const [debugScenario, setDebugScenario] = useState<DebugScenario>("none");
   const notifiedIncidentIdsRef = useRef<Set<string>>(new Set());
 
@@ -225,7 +219,7 @@ export default function PosPage() {
       setPendingSquareOrderId(null);
       notify({
         level: "success",
-        message: `注文 #${data.trackedOrder.orderNo} のSquare決済が完了しました`,
+        message: `注文 #${data.trackedOrder.orderNo} のSquare決済完了を確認しました`,
       });
       return;
     }
@@ -234,7 +228,7 @@ export default function PosPage() {
       setPendingSquareOrderId(null);
       notify({
         level: "warning",
-        message: `注文 #${data.trackedOrder.orderNo} は決済失敗で終了しました。入力内容は保持しています。`,
+        message: `注文 #${data.trackedOrder.orderNo} のSquare決済失敗を確認しました`,
         durationMs: 9000,
       });
     }
@@ -368,7 +362,8 @@ export default function PosPage() {
         setDebugScenario("none");
         notify({
           level: "info",
-          message: "DEBUGシナリオを解除しました（本番投入前にショートカット実装も削除してください）",
+          message:
+            "DEBUGシナリオを解除しました（本番投入前にショートカット実装も削除してください）",
           durationMs: 9000,
         });
         return;
@@ -470,12 +465,20 @@ export default function PosPage() {
     }
     if (
       fulfillmentType === "DINE_IN" &&
-      (!tableNo.trim() || !Number.isInteger(parsedTableNo) || parsedTableNo <= 0)
+      (!tableNo.trim() ||
+        !Number.isInteger(parsedTableNo) ||
+        parsedTableNo <= 0)
     ) {
       missing.push("テーブル番号");
     }
     return missing;
-  }, [fulfillmentType, parsedTableNo, partySize, selectedItems.length, tableNo]);
+  }, [
+    fulfillmentType,
+    parsedTableNo,
+    partySize,
+    selectedItems.length,
+    tableNo,
+  ]);
   const sliderMissingText =
     missingRequiredFields.length === 0
       ? null
@@ -668,7 +671,8 @@ export default function PosPage() {
         resetInputsToDefault();
       }
     } catch (e) {
-      const errorMessage = e instanceof Error ? e.message : "注文登録に失敗しました";
+      const errorMessage =
+        e instanceof Error ? e.message : "注文登録に失敗しました";
       notify({
         level: "error",
         message: errorMessage,
@@ -686,11 +690,14 @@ export default function PosPage() {
 
   const isAwaitingLocked = Boolean(awaitingOrder);
   const awaitingDeadlineLabel = awaitingOrder?.paymentAwaitDeadlineAt
-    ? new Date(awaitingOrder.paymentAwaitDeadlineAt).toLocaleTimeString("ja-JP", {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      })
+    ? new Date(awaitingOrder.paymentAwaitDeadlineAt).toLocaleTimeString(
+        "ja-JP",
+        {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        },
+      )
     : null;
 
   return (
@@ -710,7 +717,11 @@ export default function PosPage() {
         <div className="grid two">
           <Card
             className="card"
-            style={isAwaitingLocked ? { opacity: 0.55, pointerEvents: "none" } : undefined}
+            style={
+              isAwaitingLocked
+                ? { opacity: 0.55, pointerEvents: "none" }
+                : undefined
+            }
           >
             <SectionTitle>メニュー</SectionTitle>
             <div className="menu-tile-grid">
@@ -719,8 +730,8 @@ export default function PosPage() {
                 const remainingUntilCap = menu.remainingUntilCap;
                 const unavailable =
                   menu.isCapReached ||
-                  menu.availability !== "AVAILABLE" &&
-                  menu.availability !== "INCREASED_WAIT";
+                  (menu.availability !== "AVAILABLE" &&
+                    menu.availability !== "INCREASED_WAIT");
                 return (
                   <div
                     key={menu.id}
@@ -730,7 +741,8 @@ export default function PosPage() {
                       <strong>{menu.name}</strong>
                       {menu.dailyOrderCap != null ? (
                         <span className="muted text-xs">
-                          残り {remainingUntilCap ?? 0} / 上限 {menu.dailyOrderCap}
+                          残り {remainingUntilCap ?? 0} / 上限{" "}
+                          {menu.dailyOrderCap}
                         </span>
                       ) : null}
                     </div>
@@ -757,7 +769,8 @@ export default function PosPage() {
                           onClick={() => changeQty(menu.id, 1)}
                           disabled={
                             unavailable ||
-                            (remainingUntilCap != null && qty >= remainingUntilCap)
+                            (remainingUntilCap != null &&
+                              qty >= remainingUntilCap)
                           }
                         >
                           +
@@ -776,7 +789,8 @@ export default function PosPage() {
                             option === "INCREASED_WAIT" ||
                             option === "PAUSED");
                         const disabled =
-                          menuAvailabilityBusyId === menu.id || capBlockedStatus;
+                          menuAvailabilityBusyId === menu.id ||
+                          capBlockedStatus;
                         const active = menu.availability === option;
 
                         return (
@@ -830,13 +844,15 @@ export default function PosPage() {
 
             {debugScenario !== "none" && (
               <div className="notice" style={{ marginBottom: 12 }}>
-                DEBUGシナリオ: {debugScenario}（本番投入前にこのショートカット実装を削除してください）
+                DEBUGシナリオ: {debugScenario}
+                （本番投入前にこのショートカット実装を削除してください）
               </div>
             )}
 
             {incidents.length > 0 && (
               <div className="notice error" style={{ marginBottom: 12 }}>
-                決済異常通知あり: {incidents.length}件（詳細はオーダーブック上部）
+                決済異常通知あり: {incidents.length}
+                件（詳細はオーダーブック上部）
               </div>
             )}
 
@@ -848,23 +864,23 @@ export default function PosPage() {
               }
             >
               <div className="list">
-              {selectedItems.length === 0 && (
-                <div className="muted">選択中のメニューはありません</div>
-              )}
-              {selectedItems.map((item) => (
-                <div key={item.id} className="list-item row between">
-                  <div>
-                    {item.name} × {item.quantity}
+                {selectedItems.length === 0 && (
+                  <div className="muted">選択中のメニューはありません</div>
+                )}
+                {selectedItems.map((item) => (
+                  <div key={item.id} className="list-item row between">
+                    <div>
+                      {item.name} × {item.quantity}
+                    </div>
+                    <strong>{fmtJpy(item.priceJpy * item.quantity)}</strong>
                   </div>
-                  <strong>{fmtJpy(item.priceJpy * item.quantity)}</strong>
-                </div>
-              ))}
-              {paymentMethod === "PAYMENT_SKIPPED" && total > 0 && (
-                <div className="list-item row between payment-skip-row">
-                  <div>決済スキップ</div>
-                  <strong>- {fmtJpy(total)}</strong>
-                </div>
-              )}
+                ))}
+                {paymentMethod === "PAYMENT_SKIPPED" && total > 0 && (
+                  <div className="list-item row between payment-skip-row">
+                    <div>決済スキップ</div>
+                    <strong>- {fmtJpy(total)}</strong>
+                  </div>
+                )}
               </div>
 
               <div className="row between" style={{ marginTop: 12 }}>
@@ -895,129 +911,136 @@ export default function PosPage() {
                   </Select>
                 </label>
 
-              {fulfillmentType === "DINE_IN" && (
-                <label>
-                  テーブル番号
-                  <Input
-                    type="number"
-                    min={1}
-                    step={1}
-                    inputMode="numeric"
-                    value={tableNo}
-                    onChange={(e) => setTableNo(e.target.value)}
-                  />
-                </label>
-              )}
-
-              <div className="age-group-grid">
-                {AGE_GROUPS.map((group) => (
-                  <div className="age-group-row" key={group.key}>
-                    <span>{group.label}</span>
-                    <div className="row">
-                      <button
-                        className="ghost-btn"
-                        type="button"
-                        disabled={(ageGroupCounts[group.key] ?? 0) <= 0}
-                        onClick={() => changeAgeGroup(group.key, -1)}
-                      >
-                        -
-                      </button>
-                      <strong>{ageGroupCounts[group.key]}</strong>
-                      <button
-                        className="ghost-btn"
-                        type="button"
-                        onClick={() => changeAgeGroup(group.key, 1)}
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <label>
-                備考
-                <textarea
-                  rows={2}
-                  value={specialNote}
-                  onChange={(e) => setSpecialNote(e.target.value)}
-                />
-              </label>
-
-              <label>
-                決済方法
-                <Select
-                  value={paymentMethod}
-                  onValueChange={(v) =>
-                    setPaymentMethod(v as "CASH" | "SQUARE" | "PAYMENT_SKIPPED")
-                  }
-                >
-                  <SelectTrigger className="bg-background text-foreground">
-                    <SelectValue placeholder="決済方法" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="CASH">
-                      {labelOf(PAYMENT_METHOD_LABEL, "CASH")}
-                    </SelectItem>
-                    <SelectItem value="SQUARE">
-                      {labelOf(PAYMENT_METHOD_LABEL, "SQUARE")}
-                    </SelectItem>
-                    <SelectItem value="PAYMENT_SKIPPED">
-                      {labelOf(PAYMENT_METHOD_LABEL, "PAYMENT_SKIPPED")}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </label>
-
-              {paymentMethod === "PAYMENT_SKIPPED" && (
-                <>
+                {fulfillmentType === "DINE_IN" && (
                   <label>
-                    スキップ理由
-                    <Select
-                      value={skipReasonType}
-                      onValueChange={(v) =>
-                        setSkipReasonType(
-                          v as
-                            | "TEST"
-                            | "DEVICE_ERROR"
-                            | "NETWORK_ERROR"
-                            | "OTHER",
-                        )
-                      }
-                    >
-                      <SelectTrigger className="bg-background text-foreground">
-                        <SelectValue placeholder="スキップ理由" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="TEST">
-                          {labelOf(PAYMENT_SKIP_REASON_LABEL, "TEST")}
-                        </SelectItem>
-                        <SelectItem value="DEVICE_ERROR">
-                          {labelOf(PAYMENT_SKIP_REASON_LABEL, "DEVICE_ERROR")}
-                        </SelectItem>
-                        <SelectItem value="NETWORK_ERROR">
-                          {labelOf(PAYMENT_SKIP_REASON_LABEL, "NETWORK_ERROR")}
-                        </SelectItem>
-                        <SelectItem value="OTHER">
-                          {labelOf(PAYMENT_SKIP_REASON_LABEL, "OTHER")}
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </label>
-                  <label>
-                    詳細メモ
+                    テーブル番号
                     <Input
-                      value={skipReasonText}
-                      onChange={(e) => setSkipReasonText(e.target.value)}
+                      type="number"
+                      min={1}
+                      step={1}
+                      inputMode="numeric"
+                      value={tableNo}
+                      onChange={(e) => setTableNo(e.target.value)}
                     />
                   </label>
-                </>
-              )}
+                )}
+
+                <div className="age-group-grid">
+                  {AGE_GROUPS.map((group) => (
+                    <div className="age-group-row" key={group.key}>
+                      <span>{group.label}</span>
+                      <div className="row">
+                        <button
+                          className="ghost-btn"
+                          type="button"
+                          disabled={(ageGroupCounts[group.key] ?? 0) <= 0}
+                          onClick={() => changeAgeGroup(group.key, -1)}
+                        >
+                          -
+                        </button>
+                        <strong>{ageGroupCounts[group.key]}</strong>
+                        <button
+                          className="ghost-btn"
+                          type="button"
+                          onClick={() => changeAgeGroup(group.key, 1)}
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <label>
+                  備考
+                  <textarea
+                    rows={2}
+                    value={specialNote}
+                    onChange={(e) => setSpecialNote(e.target.value)}
+                  />
+                </label>
+
+                <label>
+                  決済方法
+                  <Select
+                    value={paymentMethod}
+                    onValueChange={(v) =>
+                      setPaymentMethod(
+                        v as "CASH" | "SQUARE" | "PAYMENT_SKIPPED",
+                      )
+                    }
+                  >
+                    <SelectTrigger className="bg-background text-foreground">
+                      <SelectValue placeholder="決済方法" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="CASH">
+                        {labelOf(PAYMENT_METHOD_LABEL, "CASH")}
+                      </SelectItem>
+                      <SelectItem value="SQUARE">
+                        {labelOf(PAYMENT_METHOD_LABEL, "SQUARE")}
+                      </SelectItem>
+                      <SelectItem value="PAYMENT_SKIPPED">
+                        {labelOf(PAYMENT_METHOD_LABEL, "PAYMENT_SKIPPED")}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </label>
+
+                {paymentMethod === "PAYMENT_SKIPPED" && (
+                  <>
+                    <label>
+                      スキップ理由
+                      <Select
+                        value={skipReasonType}
+                        onValueChange={(v) =>
+                          setSkipReasonType(
+                            v as
+                              | "TEST"
+                              | "DEVICE_ERROR"
+                              | "NETWORK_ERROR"
+                              | "OTHER",
+                          )
+                        }
+                      >
+                        <SelectTrigger className="bg-background text-foreground">
+                          <SelectValue placeholder="スキップ理由" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="TEST">
+                            {labelOf(PAYMENT_SKIP_REASON_LABEL, "TEST")}
+                          </SelectItem>
+                          <SelectItem value="DEVICE_ERROR">
+                            {labelOf(PAYMENT_SKIP_REASON_LABEL, "DEVICE_ERROR")}
+                          </SelectItem>
+                          <SelectItem value="NETWORK_ERROR">
+                            {labelOf(
+                              PAYMENT_SKIP_REASON_LABEL,
+                              "NETWORK_ERROR",
+                            )}
+                          </SelectItem>
+                          <SelectItem value="OTHER">
+                            {labelOf(PAYMENT_SKIP_REASON_LABEL, "OTHER")}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </label>
+                    <label>
+                      詳細メモ
+                      <Input
+                        value={skipReasonText}
+                        onChange={(e) => setSkipReasonText(e.target.value)}
+                      />
+                    </label>
+                  </>
+                )}
               </div>
 
               <div className="row wrap" style={{ marginTop: 14 }}>
                 <ConfirmSlider
-                  disabled={busy || isAwaitingLocked || missingRequiredFields.length > 0}
+                  disabled={
+                    busy || isAwaitingLocked || missingRequiredFields.length > 0
+                  }
                   text={sliderDisplayText}
                   tone={sliderTone}
                   processingText="注文を送信中..."
@@ -1037,7 +1060,10 @@ export default function PosPage() {
                     : "タイムアウト目安を取得できませんでした"}
                 </div>
                 <div className="row wrap" style={{ marginTop: 8 }}>
-                  <a href={awaitingOrder.reopenDeepLink} className="btn-link ghost-btn">
+                  <a
+                    href={awaitingOrder.reopenDeepLink}
+                    className="btn-link ghost-btn"
+                  >
                     Square POSアプリを再表示
                   </a>
                 </div>
