@@ -527,6 +527,37 @@ export default function AdminPage() {
         ),
     [menus, categoryOrder],
   );
+  const menuGroups = useMemo(() => {
+    const menusByCategoryId = new Map<string, Menu[]>();
+    for (const menu of activeMenus) {
+      const rows = menusByCategoryId.get(menu.categoryId) ?? [];
+      rows.push(menu);
+      menusByCategoryId.set(menu.categoryId, rows);
+    }
+
+    const activeCategoryIds = new Set(
+      activeCategories.map((category) => category.id),
+    );
+    const categoryGroups = activeCategories.map((category) => ({
+      category,
+      menus: menusByCategoryId.get(category.id) ?? [],
+    }));
+    const uncategorizedMenus = activeMenus.filter(
+      (menu) => !activeCategoryIds.has(menu.categoryId),
+    );
+
+    if (uncategorizedMenus.length === 0) {
+      return categoryGroups;
+    }
+
+    return [
+      ...categoryGroups,
+      {
+        category: null,
+        menus: uncategorizedMenus,
+      },
+    ];
+  }, [activeCategories, activeMenus]);
   const hasUnsavedChanges = useMemo(() => {
     const categoryDirty = activeCategories.some((category) => {
       const draftName = categoryNameDrafts[category.id] ?? category.name;
@@ -2211,8 +2242,41 @@ export default function AdminPage() {
                   </AccordionContent>
                 </AccordionItem>
               </Accordion>
-              <Accordion type="single" collapsible className="space-y-2">
-                {activeMenus.map((menu) => {
+              <div className="admin-menu-category-list">
+                {menuGroups.length === 0 ? (
+                  <div className="admin-menu-category-empty">
+                    表示できるカテゴリがありません。先にカテゴリを追加してください。
+                  </div>
+                ) : (
+                  menuGroups.map((group) => (
+                    <section
+                      key={group.category?.id ?? "__uncategorized"}
+                      className="admin-menu-category-section"
+                    >
+                      <div className="admin-menu-category-head">
+                        <div>
+                          <h3>
+                            {group.category?.name ?? "未分類のメニュー"}
+                          </h3>
+                          <p>
+                            {group.category
+                              ? "このカテゴリ内の表示順で並んでいます"
+                              : "有効なカテゴリに紐づいていないメニューです"}
+                          </p>
+                        </div>
+                        <span>{group.menus.length} 件</span>
+                      </div>
+                      {group.menus.length === 0 ? (
+                        <div className="admin-menu-category-empty">
+                          このカテゴリにはまだメニューがありません。
+                        </div>
+                      ) : (
+                        <Accordion
+                          type="single"
+                          collapsible
+                          className="space-y-2"
+                        >
+                          {group.menus.map((menu) => {
                   const edit = menuEdits[menu.id] ?? toMenuEdit(menu);
                   const assignedKitchenLabel =
                     kitchenActors.find(
@@ -2768,8 +2832,13 @@ export default function AdminPage() {
                       </AccordionContent>
                     </AccordionItem>
                   );
-                })}
-              </Accordion>
+                          })}
+                        </Accordion>
+                      )}
+                    </section>
+                  ))
+                )}
+              </div>
             </CardContent>
           </Card>
           <Card>
