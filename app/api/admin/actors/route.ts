@@ -38,7 +38,10 @@ export async function GET(req: NextRequest) {
 
       trace("db.findMany.start");
       const actors = await prisma.actor.findMany({
-        where: actor.actorType === "KITCHEN" ? { actorType: "KITCHEN" } : undefined,
+        where:
+          actor.actorType === "KITCHEN"
+            ? { actorType: "KITCHEN", isActive: true }
+            : { isActive: true },
         select: actorPublicSelect,
         orderBy: [{ actorType: "asc" }, { kitchenDisplayOrder: "asc" }, { label: "asc" }, { id: "asc" }]
       });

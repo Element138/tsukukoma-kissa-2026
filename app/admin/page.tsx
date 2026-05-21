@@ -919,10 +919,13 @@ export default function AdminPage() {
   };
 
   const patchCategory = async (id: string, patch: Partial<Category>) => {
-    const data = await apiFetch<CategoryMutationResponse>("/api/admin/categories", {
-      method: "PATCH",
-      body: JSON.stringify({ id, ...patch }),
-    });
+    const data = await apiFetch<CategoryMutationResponse>(
+      "/api/admin/categories",
+      {
+        method: "PATCH",
+        body: JSON.stringify({ id, ...patch }),
+      },
+    );
     notifyCategoryOrderAutoCorrection(data);
     return data;
   };
@@ -1376,7 +1379,6 @@ export default function AdminPage() {
                 <Accordion
                   type="single"
                   collapsible
-                  defaultValue="new-actor"
                   className="rounded-lg border border-emerald-200 bg-emerald-50/70 px-3"
                 >
                   <AccordionItem value="new-actor" className="border-b-0">
@@ -1598,102 +1600,123 @@ export default function AdminPage() {
                 />
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="flex flex-wrap items-end gap-2">
-                  <InputField
-                    label="新しいカテゴリ名"
-                    value={newCategoryName}
-                    onChange={setNewCategoryName}
-                    className="max-w-xs"
-                  />
-                  <InputField
-                    label="カテゴリバッジ文言"
-                    value={newCategoryBadgeText}
-                    onChange={(value) =>
-                      setNewCategoryBadgeText(value.slice(0, 32))
-                    }
-                    className="max-w-xs"
-                    placeholder="例: 期間限定"
-                  />
-                  <label className="gap-1">
-                    <span className="text-[11px] font-medium leading-none text-muted-foreground">
-                      バッジ色
-                    </span>
-                    <Input
-                      type="color"
-                      value={
-                        BADGE_COLOR_HEX_REGEX.test(newCategoryBadgeColor)
-                          ? newCategoryBadgeColor
-                          : "#d97706"
-                      }
-                      className="h-9 w-20 p-1"
-                      onChange={(event) =>
-                        setNewCategoryBadgeColor(event.target.value)
-                      }
-                    />
-                  </label>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={async () => {
-                      const trimmedName = newCategoryName.trim();
-                      if (!trimmedName) {
-                        notify({
-                          level: "error",
-                          message: "カテゴリ名を入力してください",
-                        });
-                        return;
-                      }
-
-                      const nextDisplayOrder =
-                        activeCategories.reduce(
-                          (max, category) =>
-                            Math.max(max, category.displayOrder ?? 0),
-                          0,
-                        ) + 1;
-
-                      const saved = await runMutation({
-                        action: async () => {
-                          const trimmedBadgeText = newCategoryBadgeText.trim();
-                          if (
-                            trimmedBadgeText &&
-                            !BADGE_COLOR_HEX_REGEX.test(newCategoryBadgeColor)
-                          ) {
-                            throw new Error(
-                              "カテゴリバッジ色は #RRGGBB 形式で入力してください",
-                            );
+                <Accordion
+                  type="single"
+                  collapsible
+                  className="rounded-lg border border-emerald-200 bg-emerald-50/70 px-3"
+                >
+                  <AccordionItem value="new-category" className="border-b-0">
+                    <AccordionTrigger className="py-2 text-sm font-semibold text-emerald-900 hover:no-underline">
+                      新規カテゴリを追加
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="flex flex-wrap items-end gap-2">
+                        <InputField
+                          label="新しいカテゴリ名"
+                          value={newCategoryName}
+                          onChange={setNewCategoryName}
+                          className="max-w-xs"
+                        />
+                        <InputField
+                          label="カテゴリバッジ文言"
+                          value={newCategoryBadgeText}
+                          onChange={(value) =>
+                            setNewCategoryBadgeText(value.slice(0, 32))
                           }
-                          const data = await apiFetch<CategoryMutationResponse>(
-                            "/api/admin/categories",
-                            {
-                              method: "POST",
-                              body: JSON.stringify({
-                                name: trimmedName,
-                                displayOrder: nextDisplayOrder,
-                                customBadgeText: trimmedBadgeText || null,
-                                customBadgeColor: trimmedBadgeText
-                                  ? newCategoryBadgeColor
-                                  : null,
-                              }),
-                            },
-                          );
-                          notifyCategoryOrderAutoCorrection(data);
-                        },
-                        successMessage: "カテゴリを追加しました",
-                        errorMessage: "カテゴリ追加に失敗しました",
-                      });
+                          className="max-w-xs"
+                          placeholder="例: 期間限定"
+                        />
+                        <label className="gap-1">
+                          <span className="text-[11px] font-medium leading-none text-muted-foreground">
+                            バッジ色
+                          </span>
+                          <Input
+                            type="color"
+                            value={
+                              BADGE_COLOR_HEX_REGEX.test(newCategoryBadgeColor)
+                                ? newCategoryBadgeColor
+                                : "#d97706"
+                            }
+                            className="h-9 w-20 p-1"
+                            onChange={(event) =>
+                              setNewCategoryBadgeColor(event.target.value)
+                            }
+                          />
+                        </label>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={async () => {
+                            const trimmedName = newCategoryName.trim();
+                            if (!trimmedName) {
+                              notify({
+                                level: "error",
+                                message: "カテゴリ名を入力してください",
+                              });
+                              return;
+                            }
 
-                      if (saved) {
-                        setNewCategoryName("");
-                        setNewCategoryBadgeText("");
-                        setNewCategoryBadgeColor("#d97706");
-                      }
-                    }}
-                    disabled={!newCategoryName}
-                  >
-                    <Add20Regular />
-                    追加
-                  </Button>
-                </div>
+                            const nextDisplayOrder =
+                              activeCategories.reduce(
+                                (max, category) =>
+                                  Math.max(
+                                    max,
+                                    category.displayOrder ?? 0,
+                                  ),
+                                0,
+                              ) + 1;
+
+                            const saved = await runMutation({
+                              action: async () => {
+                                const trimmedBadgeText =
+                                  newCategoryBadgeText.trim();
+                                if (
+                                  trimmedBadgeText &&
+                                  !BADGE_COLOR_HEX_REGEX.test(
+                                    newCategoryBadgeColor,
+                                  )
+                                ) {
+                                  throw new Error(
+                                    "カテゴリバッジ色は #RRGGBB 形式で入力してください",
+                                  );
+                                }
+                                const data =
+                                  await apiFetch<CategoryMutationResponse>(
+                                    "/api/admin/categories",
+                                    {
+                                      method: "POST",
+                                      body: JSON.stringify({
+                                        name: trimmedName,
+                                        displayOrder: nextDisplayOrder,
+                                        customBadgeText:
+                                          trimmedBadgeText || null,
+                                        customBadgeColor: trimmedBadgeText
+                                          ? newCategoryBadgeColor
+                                          : null,
+                                      }),
+                                    },
+                                  );
+                                notifyCategoryOrderAutoCorrection(data);
+                              },
+                              successMessage: "カテゴリを追加しました",
+                              errorMessage: "カテゴリ追加に失敗しました",
+                            });
+
+                            if (saved) {
+                              setNewCategoryName("");
+                              setNewCategoryBadgeText("");
+                              setNewCategoryBadgeColor("#d97706");
+                            }
+                          }}
+                          disabled={!newCategoryName}
+                        >
+                          <Add20Regular />
+                          追加
+                        </Button>
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
                 <div className="grid gap-2">
                   {activeCategories.map((cat, index) => (
                     <article
@@ -1932,7 +1955,6 @@ export default function AdminPage() {
               <Accordion
                 type="single"
                 collapsible
-                defaultValue="new-menu"
                 className="rounded-lg border border-emerald-200 bg-emerald-50/70"
               >
                 <AccordionItem value="new-menu" className="border-b-0">
@@ -2045,7 +2067,9 @@ export default function AdminPage() {
                           </span>
                           <label className="inline-flex items-center gap-2 text-[11px] font-medium">
                             <span>
-                              {newMenuAllergenDisplayEnabled ? "表示" : "非表示"}
+                              {newMenuAllergenDisplayEnabled
+                                ? "表示"
+                                : "非表示"}
                             </span>
                             <Switch
                               checked={newMenuAllergenDisplayEnabled}
@@ -2072,8 +2096,8 @@ export default function AdminPage() {
                                   !newMenuAllergenDisplayEnabled
                                     ? "border-slate-300 bg-slate-200 text-slate-500 hover:bg-slate-200"
                                     : selected
-                                    ? "border-amber-700 bg-amber-500 text-white hover:bg-amber-600"
-                                    : "bg-background text-foreground hover:bg-muted",
+                                      ? "border-amber-700 bg-amber-500 text-white hover:bg-amber-600"
+                                      : "bg-background text-foreground hover:bg-muted",
                                 )}
                                 onClick={() =>
                                   setNewMenuAllergens((prev) => {
@@ -2097,10 +2121,10 @@ export default function AdminPage() {
                           {!newMenuAllergenDisplayEnabled
                             ? "表示: オフ（選択は保持されます）"
                             : newMenuAllergens.length > 0
-                            ? `選択中: ${newMenuAllergens
-                                .map((key) => allergenLabelOf(key))
-                                .join("、")}`
-                            : "選択中: 特定原材料なし"}
+                              ? `選択中: ${newMenuAllergens
+                                  .map((key) => allergenLabelOf(key))
+                                  .join("、")}`
+                              : "選択中: 特定原材料なし"}
                         </div>
                       </div>
                       <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
@@ -2255,12 +2279,10 @@ export default function AdminPage() {
                     >
                       <div className="admin-menu-category-head">
                         <div>
-                          <h3>
-                            {group.category?.name ?? "未分類のメニュー"}
-                          </h3>
+                          <h3>{group.category?.name ?? "未分類のメニュー"}</h3>
                           <p>
                             {group.category
-                              ? "このカテゴリ内の表示順で並んでいます"
+                              ? null
                               : "有効なカテゴリに紐づいていないメニューです"}
                           </p>
                         </div>
@@ -2277,561 +2299,620 @@ export default function AdminPage() {
                           className="space-y-2"
                         >
                           {group.menus.map((menu) => {
-                  const edit = menuEdits[menu.id] ?? toMenuEdit(menu);
-                  const assignedKitchenLabel =
-                    kitchenActors.find(
-                      (row) => row.id === menu.assignedKitchenId,
-                    )?.label ?? "未設定";
-                  const sameCategoryMenus = activeMenus.filter(
-                    (row) => row.categoryId === menu.categoryId,
-                  );
-                  const sameCategoryIndex = sameCategoryMenus.findIndex(
-                    (row) => row.id === menu.id,
-                  );
-                  const isFirstInCategory = sameCategoryIndex <= 0;
-                  const isLastInCategory =
-                    sameCategoryIndex === sameCategoryMenus.length - 1;
-                  return (
-                    <AccordionItem
-                      key={menu.id}
-                      value={menu.id}
-                      className="rounded-lg border bg-muted/25 px-3"
-                    >
-                      <AccordionTrigger className="py-3 hover:no-underline">
-                        <div className="flex w-full flex-col gap-2 text-left md:flex-row md:items-center md:justify-between">
-                          <div>
-                            <strong className="text-sm">{menu.name}</strong>
-                            <div className="mt-1 text-xs text-muted-foreground">
-                              {fmtJpy(menu.priceJpy)} / {assignedKitchenLabel}
-                              {menu.dailyOrderCap != null
-                                ? ` / 本日 ${menu.todayOrderCount} (残り ${menu.remainingUntilCap ?? 0} / 上限 ${menu.dailyOrderCap})`
-                                : ` / 本日 ${menu.todayOrderCount}`}
-                            </div>
-                          </div>
-                          <div
-                            className="grid grid-cols-4 gap-1 md:min-w-72"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            {AVAILABILITY_OPTIONS.map((status) => {
-                              const noCoverage =
-                                (status === "AVAILABLE" ||
-                                  status === "INCREASED_WAIT") &&
-                                !menu.hasActiveKitchenCoverage;
-                              const capBlockedStatus =
-                                menu.isCapReached &&
-                                (status === "AVAILABLE" ||
-                                  status === "INCREASED_WAIT" ||
-                                  status === "PAUSED");
-                              const disabled =
-                                menuAvailabilityBusyId === menu.id ||
-                                capBlockedStatus;
-                              const active = menu.availability === status;
-                              return (
-                                <Button
-                                  key={status}
-                                  type="button"
-                                  variant={active ? "default" : "outline"}
-                                  disabled={disabled}
-                                  className={cn(
-                                    "h-8 px-2 text-[11px] font-semibold leading-none",
-                                    (noCoverage || capBlockedStatus) &&
-                                      !active &&
-                                      "opacity-50",
-                                    active
-                                      ? STATUS_BUTTON_ACTIVE_TONE[status]
-                                      : "bg-background text-foreground hover:bg-muted",
-                                  )}
-                                  onClick={() =>
-                                    void (async () => {
-                                      if (noCoverage) {
-                                        notify({
-                                          level: "error",
-                                          message:
-                                            "現在対応できるキッチンがないため、販売中にできません",
-                                        });
-                                        return;
+                            const edit = menuEdits[menu.id] ?? toMenuEdit(menu);
+                            const assignedKitchenLabel =
+                              kitchenActors.find(
+                                (row) => row.id === menu.assignedKitchenId,
+                              )?.label ?? "未設定";
+                            const sameCategoryMenus = activeMenus.filter(
+                              (row) => row.categoryId === menu.categoryId,
+                            );
+                            const sameCategoryIndex =
+                              sameCategoryMenus.findIndex(
+                                (row) => row.id === menu.id,
+                              );
+                            const isFirstInCategory = sameCategoryIndex <= 0;
+                            const isLastInCategory =
+                              sameCategoryIndex ===
+                              sameCategoryMenus.length - 1;
+                            return (
+                              <AccordionItem
+                                key={menu.id}
+                                value={menu.id}
+                                className="rounded-lg border bg-muted/25 px-3"
+                              >
+                                <AccordionTrigger className="py-3 hover:no-underline">
+                                  <div className="flex w-full flex-col gap-2 text-left md:flex-row md:items-center md:justify-between">
+                                    <div>
+                                      <strong className="text-sm">
+                                        {menu.name}
+                                      </strong>
+                                      <div className="mt-1 text-xs text-muted-foreground">
+                                        {fmtJpy(menu.priceJpy)} /{" "}
+                                        {assignedKitchenLabel}
+                                        {menu.dailyOrderCap != null
+                                          ? ` / 本日 ${menu.todayOrderCount} (残り ${menu.remainingUntilCap ?? 0} / 上限 ${menu.dailyOrderCap})`
+                                          : ` / 本日 ${menu.todayOrderCount}`}
+                                      </div>
+                                    </div>
+                                    <div
+                                      className="grid grid-cols-4 gap-1 md:min-w-72"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      {AVAILABILITY_OPTIONS.map((status) => {
+                                        const noCoverage =
+                                          (status === "AVAILABLE" ||
+                                            status === "INCREASED_WAIT") &&
+                                          !menu.hasActiveKitchenCoverage;
+                                        const capBlockedStatus =
+                                          menu.isCapReached &&
+                                          (status === "AVAILABLE" ||
+                                            status === "INCREASED_WAIT" ||
+                                            status === "PAUSED");
+                                        const disabled =
+                                          menuAvailabilityBusyId === menu.id ||
+                                          capBlockedStatus;
+                                        const active =
+                                          menu.availability === status;
+                                        return (
+                                          <Button
+                                            key={status}
+                                            type="button"
+                                            variant={
+                                              active ? "default" : "outline"
+                                            }
+                                            disabled={disabled}
+                                            className={cn(
+                                              "h-8 px-2 text-[11px] font-semibold leading-none",
+                                              (noCoverage ||
+                                                capBlockedStatus) &&
+                                                !active &&
+                                                "opacity-50",
+                                              active
+                                                ? STATUS_BUTTON_ACTIVE_TONE[
+                                                    status
+                                                  ]
+                                                : "bg-background text-foreground hover:bg-muted",
+                                            )}
+                                            onClick={() =>
+                                              void (async () => {
+                                                if (noCoverage) {
+                                                  notify({
+                                                    level: "error",
+                                                    message:
+                                                      "現在対応できるキッチンがないため、販売中にできません",
+                                                  });
+                                                  return;
+                                                }
+                                                if (capBlockedStatus) {
+                                                  notify({
+                                                    level: "error",
+                                                    message:
+                                                      "本日の上限に達しているため変更できません",
+                                                  });
+                                                  return;
+                                                }
+                                                setMenuAvailabilityBusyId(
+                                                  menu.id,
+                                                );
+                                                try {
+                                                  await runMutation({
+                                                    action: async () => {
+                                                      await patchMenu(menu.id, {
+                                                        availability: status,
+                                                      });
+                                                    },
+                                                    successMessage:
+                                                      "販売状態を更新しました",
+                                                    errorMessage:
+                                                      "販売状態の更新に失敗しました",
+                                                  });
+                                                } finally {
+                                                  setMenuAvailabilityBusyId(
+                                                    null,
+                                                  );
+                                                }
+                                              })()
+                                            }
+                                          >
+                                            {labelOf(
+                                              AVAILABILITY_LABEL,
+                                              status,
+                                            )}
+                                          </Button>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                </AccordionTrigger>
+                                <AccordionContent className="space-y-3">
+                                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                                    <InputField
+                                      label="メニュー名"
+                                      value={edit.name}
+                                      onChange={(v) =>
+                                        setMenuEdits((p) => ({
+                                          ...p,
+                                          [menu.id]: { ...edit, name: v },
+                                        }))
                                       }
-                                      if (capBlockedStatus) {
-                                        notify({
-                                          level: "error",
-                                          message:
-                                            "本日の上限に達しているため変更できません",
-                                        });
-                                        return;
+                                    />
+                                    <InputField
+                                      label="価格 (円)"
+                                      value={edit.priceJpy}
+                                      onChange={(v) =>
+                                        setMenuEdits((p) => ({
+                                          ...p,
+                                          [menu.id]: {
+                                            ...edit,
+                                            priceJpy: sanitizeIntegerInput(v),
+                                          },
+                                        }))
                                       }
-                                      setMenuAvailabilityBusyId(menu.id);
-                                      try {
-                                        await runMutation({
+                                      inputMode="numeric"
+                                    />
+                                    <label className="gap-1">
+                                      <span className="text-[11px] font-medium leading-none text-muted-foreground">
+                                        カテゴリ
+                                      </span>
+                                      <Select
+                                        value={edit.categoryId}
+                                        onValueChange={(v) =>
+                                          setMenuEdits((p) => ({
+                                            ...p,
+                                            [menu.id]: {
+                                              ...edit,
+                                              categoryId: v,
+                                            },
+                                          }))
+                                        }
+                                      >
+                                        <SelectTrigger className="bg-background text-foreground">
+                                          <SelectValue placeholder="カテゴリ" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {activeCategories.map((c) => (
+                                            <SelectItem key={c.id} value={c.id}>
+                                              {c.name}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </label>
+                                    <label className="gap-1">
+                                      <span className="text-[11px] font-medium leading-none text-muted-foreground">
+                                        担当キッチン
+                                      </span>
+                                      <Select
+                                        value={edit.kitchenId}
+                                        onValueChange={(v) =>
+                                          setMenuEdits((p) => ({
+                                            ...p,
+                                            [menu.id]: {
+                                              ...edit,
+                                              kitchenId: v,
+                                            },
+                                          }))
+                                        }
+                                      >
+                                        <SelectTrigger className="bg-background text-foreground">
+                                          <SelectValue placeholder="キッチン" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {kitchenActors.map((kitchen) => (
+                                            <SelectItem
+                                              key={kitchen.id}
+                                              value={kitchen.id}
+                                            >
+                                              {kitchen.label}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </label>
+                                  </div>
+                                  <div className="grid gap-2 rounded-md border bg-card/70 p-3">
+                                    <div className="text-xs font-semibold text-muted-foreground">
+                                      特定原材料（8品目）
+                                    </div>
+                                    <div className="flex items-center justify-between gap-2 rounded-md border bg-background/60 px-2 py-1.5">
+                                      <span className="text-[11px] text-muted-foreground">
+                                        メニュー表示にアレルゲン情報を表示
+                                      </span>
+                                      <label className="inline-flex items-center gap-2 text-[11px] font-medium">
+                                        <span>
+                                          {edit.allergenDisplayEnabled
+                                            ? "表示"
+                                            : "非表示"}
+                                        </span>
+                                        <Switch
+                                          checked={edit.allergenDisplayEnabled}
+                                          onCheckedChange={(checked) =>
+                                            setMenuEdits((prev) => ({
+                                              ...prev,
+                                              [menu.id]: {
+                                                ...edit,
+                                                allergenDisplayEnabled: checked,
+                                              },
+                                            }))
+                                          }
+                                        />
+                                      </label>
+                                    </div>
+                                    <div className="flex flex-wrap gap-1">
+                                      {SPECIFIED_ALLERGENS.map((allergen) => {
+                                        const selected =
+                                          edit.allergens.includes(allergen.key);
+                                        return (
+                                          <Button
+                                            key={allergen.key}
+                                            type="button"
+                                            size="sm"
+                                            disabled={
+                                              !edit.allergenDisplayEnabled
+                                            }
+                                            variant={
+                                              selected ? "default" : "outline"
+                                            }
+                                            className={cn(
+                                              "h-8 px-3 text-xs",
+                                              !edit.allergenDisplayEnabled
+                                                ? "border-slate-300 bg-slate-200 text-slate-500 hover:bg-slate-200"
+                                                : selected
+                                                  ? "border-amber-700 bg-amber-500 text-white hover:bg-amber-600"
+                                                  : "bg-background text-foreground hover:bg-muted",
+                                            )}
+                                            onClick={() =>
+                                              setMenuEdits((prev) => {
+                                                const current =
+                                                  normalizeSpecifiedAllergens(
+                                                    prev[menu.id]?.allergens ??
+                                                      edit.allergens,
+                                                  );
+                                                const next = current.includes(
+                                                  allergen.key,
+                                                )
+                                                  ? current.filter(
+                                                      (row) =>
+                                                        row !== allergen.key,
+                                                    )
+                                                  : [...current, allergen.key];
+                                                return {
+                                                  ...prev,
+                                                  [menu.id]: {
+                                                    ...edit,
+                                                    allergens:
+                                                      normalizeSpecifiedAllergens(
+                                                        next,
+                                                      ),
+                                                  },
+                                                };
+                                              })
+                                            }
+                                          >
+                                            {allergen.label}
+                                          </Button>
+                                        );
+                                      })}
+                                    </div>
+                                    <div className="text-[11px] text-muted-foreground">
+                                      {!edit.allergenDisplayEnabled
+                                        ? "表示: オフ（選択は保持されます）"
+                                        : edit.allergens.length > 0
+                                          ? `選択中: ${edit.allergens
+                                              .map((key) =>
+                                                allergenLabelOf(key),
+                                              )
+                                              .join("、")}`
+                                          : "選択中: 特定原材料なし"}
+                                    </div>
+                                  </div>
+                                  <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                                    <InputField
+                                      label="カスタムバッジ文言"
+                                      value={edit.customBadgeText}
+                                      onChange={(value) =>
+                                        setMenuEdits((prev) => ({
+                                          ...prev,
+                                          [menu.id]: {
+                                            ...edit,
+                                            customBadgeText: value.slice(0, 32),
+                                          },
+                                        }))
+                                      }
+                                      placeholder="例: おすすめ"
+                                    />
+                                    <label className="gap-1">
+                                      <span className="text-[11px] font-medium leading-none text-muted-foreground">
+                                        バッジ色
+                                      </span>
+                                      <Input
+                                        type="color"
+                                        value={
+                                          BADGE_COLOR_HEX_REGEX.test(
+                                            edit.customBadgeColor,
+                                          )
+                                            ? edit.customBadgeColor
+                                            : "#d97706"
+                                        }
+                                        className="h-9 w-20 p-1"
+                                        onChange={(event) =>
+                                          setMenuEdits((prev) => ({
+                                            ...prev,
+                                            [menu.id]: {
+                                              ...edit,
+                                              customBadgeColor:
+                                                event.target.value,
+                                            },
+                                          }))
+                                        }
+                                      />
+                                    </label>
+                                  </div>
+                                  <div className="grid gap-2 sm:grid-cols-2">
+                                    <InputField
+                                      label="日次上限 (空欄=無制限)"
+                                      value={edit.dailyOrderCap}
+                                      onChange={(value) =>
+                                        setMenuEdits((prev) => ({
+                                          ...prev,
+                                          [menu.id]: {
+                                            ...edit,
+                                            dailyOrderCap:
+                                              sanitizeIntegerInput(value),
+                                          },
+                                        }))
+                                      }
+                                      inputMode="numeric"
+                                      placeholder="例: 120"
+                                    />
+                                    <InputField
+                                      label="残数バッジ閾値 (空欄=無制限)"
+                                      value={edit.lowStockBadgeThreshold}
+                                      onChange={(value) =>
+                                        setMenuEdits((prev) => ({
+                                          ...prev,
+                                          [menu.id]: {
+                                            ...edit,
+                                            lowStockBadgeThreshold:
+                                              sanitizeIntegerInput(value),
+                                          },
+                                        }))
+                                      }
+                                      inputMode="numeric"
+                                      placeholder="例: 10 / 空欄で無制限"
+                                    />
+                                  </div>
+                                  <div className="row wrap">
+                                    <span className="muted text-xs">
+                                      本日のカウント: {menu.todayOrderCount}
+                                      {menu.dailyOrderCap != null
+                                        ? ` / 残り ${menu.remainingUntilCap ?? 0}`
+                                        : ""}
+                                    </span>
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => {
+                                        if (
+                                          !dangerConfirm(
+                                            `「${menu.name}」の本日カウントをリセットします。よろしいですか？`,
+                                          )
+                                        ) {
+                                          return;
+                                        }
+                                        void runMutation({
                                           action: async () => {
-                                            await patchMenu(menu.id, {
-                                              availability: status,
-                                            });
+                                            await apiFetch(
+                                              "/api/admin/menus/reset-count",
+                                              {
+                                                method: "POST",
+                                                body: JSON.stringify({
+                                                  menuId: menu.id,
+                                                }),
+                                              },
+                                            );
                                           },
                                           successMessage:
-                                            "販売状態を更新しました",
+                                            "本日のカウントをリセットしました",
                                           errorMessage:
-                                            "販売状態の更新に失敗しました",
+                                            "カウントのリセットに失敗しました",
                                         });
-                                      } finally {
-                                        setMenuAvailabilityBusyId(null);
+                                      }}
+                                    >
+                                      カウントをリセット
+                                    </Button>
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-2 rounded-md border bg-card/70 p-2">
+                                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium">
+                                      画像をアップロード
+                                      <input
+                                        type="file"
+                                        accept="image/png,image/jpeg,image/webp"
+                                        className="hidden"
+                                        onChange={(e) => {
+                                          const file = e.target.files?.[0];
+                                          if (file) {
+                                            void uploadMenuCover(menu, file);
+                                          }
+                                          e.currentTarget.value = "";
+                                        }}
+                                      />
+                                    </label>
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() =>
+                                        void runMutation({
+                                          action: async () => {
+                                            await patchMenu(menu.id, {
+                                              coverImageDataUrl: null,
+                                            });
+                                            setMenuEdits((prev) => ({
+                                              ...prev,
+                                              [menu.id]: {
+                                                ...edit,
+                                                coverImageDataUrl: "",
+                                              },
+                                            }));
+                                          },
+                                          successMessage:
+                                            "メニュー画像を削除しました",
+                                          errorMessage:
+                                            "メニュー画像の削除に失敗しました",
+                                        })
                                       }
-                                    })()
-                                  }
-                                >
-                                  {labelOf(AVAILABILITY_LABEL, status)}
-                                </Button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent className="space-y-3">
-                        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                          <InputField
-                            label="メニュー名"
-                            value={edit.name}
-                            onChange={(v) =>
-                              setMenuEdits((p) => ({
-                                ...p,
-                                [menu.id]: { ...edit, name: v },
-                              }))
-                            }
-                          />
-                          <InputField
-                            label="価格 (円)"
-                            value={edit.priceJpy}
-                            onChange={(v) =>
-                              setMenuEdits((p) => ({
-                                ...p,
-                                [menu.id]: {
-                                  ...edit,
-                                  priceJpy: sanitizeIntegerInput(v),
-                                },
-                              }))
-                            }
-                            inputMode="numeric"
-                          />
-                          <label className="gap-1">
-                            <span className="text-[11px] font-medium leading-none text-muted-foreground">
-                              カテゴリ
-                            </span>
-                            <Select
-                              value={edit.categoryId}
-                              onValueChange={(v) =>
-                                setMenuEdits((p) => ({
-                                  ...p,
-                                  [menu.id]: { ...edit, categoryId: v },
-                                }))
-                              }
-                            >
-                              <SelectTrigger className="bg-background text-foreground">
-                                <SelectValue placeholder="カテゴリ" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {activeCategories.map((c) => (
-                                  <SelectItem key={c.id} value={c.id}>
-                                    {c.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </label>
-                          <label className="gap-1">
-                            <span className="text-[11px] font-medium leading-none text-muted-foreground">
-                              担当キッチン
-                            </span>
-                            <Select
-                              value={edit.kitchenId}
-                              onValueChange={(v) =>
-                                setMenuEdits((p) => ({
-                                  ...p,
-                                  [menu.id]: { ...edit, kitchenId: v },
-                                }))
-                              }
-                            >
-                              <SelectTrigger className="bg-background text-foreground">
-                                <SelectValue placeholder="キッチン" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {kitchenActors.map((kitchen) => (
-                                  <SelectItem
-                                    key={kitchen.id}
-                                    value={kitchen.id}
-                                  >
-                                    {kitchen.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </label>
-                        </div>
-                        <div className="grid gap-2 rounded-md border bg-card/70 p-3">
-                          <div className="text-xs font-semibold text-muted-foreground">
-                            特定原材料（8品目）
-                          </div>
-                          <div className="flex items-center justify-between gap-2 rounded-md border bg-background/60 px-2 py-1.5">
-                            <span className="text-[11px] text-muted-foreground">
-                              メニュー表示にアレルゲン情報を表示
-                            </span>
-                            <label className="inline-flex items-center gap-2 text-[11px] font-medium">
-                              <span>
-                                {edit.allergenDisplayEnabled ? "表示" : "非表示"}
-                              </span>
-                              <Switch
-                                checked={edit.allergenDisplayEnabled}
-                                onCheckedChange={(checked) =>
-                                  setMenuEdits((prev) => ({
-                                    ...prev,
-                                    [menu.id]: {
-                                      ...edit,
-                                      allergenDisplayEnabled: checked,
-                                    },
-                                  }))
-                                }
-                              />
-                            </label>
-                          </div>
-                          <div className="flex flex-wrap gap-1">
-                            {SPECIFIED_ALLERGENS.map((allergen) => {
-                              const selected = edit.allergens.includes(
-                                allergen.key,
-                              );
-                              return (
-                                <Button
-                                  key={allergen.key}
-                                  type="button"
-                                  size="sm"
-                                  disabled={!edit.allergenDisplayEnabled}
-                                  variant={selected ? "default" : "outline"}
-                                  className={cn(
-                                    "h-8 px-3 text-xs",
-                                    !edit.allergenDisplayEnabled
-                                      ? "border-slate-300 bg-slate-200 text-slate-500 hover:bg-slate-200"
-                                      : selected
-                                      ? "border-amber-700 bg-amber-500 text-white hover:bg-amber-600"
-                                      : "bg-background text-foreground hover:bg-muted",
-                                  )}
-                                  onClick={() =>
-                                    setMenuEdits((prev) => {
-                                      const current =
-                                        normalizeSpecifiedAllergens(
-                                          prev[menu.id]?.allergens ??
-                                            edit.allergens,
-                                        );
-                                      const next = current.includes(
-                                        allergen.key,
-                                      )
-                                        ? current.filter(
-                                            (row) => row !== allergen.key,
-                                          )
-                                        : [...current, allergen.key];
-                                      return {
-                                        ...prev,
-                                        [menu.id]: {
-                                          ...edit,
-                                          allergens:
-                                            normalizeSpecifiedAllergens(next),
-                                        },
-                                      };
-                                    })
-                                  }
-                                >
-                                  {allergen.label}
-                                </Button>
-                              );
-                            })}
-                          </div>
-                          <div className="text-[11px] text-muted-foreground">
-                            {!edit.allergenDisplayEnabled
-                              ? "表示: オフ（選択は保持されます）"
-                              : edit.allergens.length > 0
-                              ? `選択中: ${edit.allergens
-                                  .map((key) => allergenLabelOf(key))
-                                  .join("、")}`
-                              : "選択中: 特定原材料なし"}
-                          </div>
-                        </div>
-                        <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-                          <InputField
-                            label="カスタムバッジ文言"
-                            value={edit.customBadgeText}
-                            onChange={(value) =>
-                              setMenuEdits((prev) => ({
-                                ...prev,
-                                [menu.id]: {
-                                  ...edit,
-                                  customBadgeText: value.slice(0, 32),
-                                },
-                              }))
-                            }
-                            placeholder="例: おすすめ"
-                          />
-                          <label className="gap-1">
-                            <span className="text-[11px] font-medium leading-none text-muted-foreground">
-                              バッジ色
-                            </span>
-                            <Input
-                              type="color"
-                              value={
-                                BADGE_COLOR_HEX_REGEX.test(
-                                  edit.customBadgeColor,
-                                )
-                                  ? edit.customBadgeColor
-                                  : "#d97706"
-                              }
-                              className="h-9 w-20 p-1"
-                              onChange={(event) =>
-                                setMenuEdits((prev) => ({
-                                  ...prev,
-                                  [menu.id]: {
-                                    ...edit,
-                                    customBadgeColor: event.target.value,
-                                  },
-                                }))
-                              }
-                            />
-                          </label>
-                        </div>
-                        <div className="grid gap-2 sm:grid-cols-2">
-                          <InputField
-                            label="日次上限 (空欄=無制限)"
-                            value={edit.dailyOrderCap}
-                            onChange={(value) =>
-                              setMenuEdits((prev) => ({
-                                ...prev,
-                                [menu.id]: {
-                                  ...edit,
-                                  dailyOrderCap: sanitizeIntegerInput(value),
-                                },
-                              }))
-                            }
-                            inputMode="numeric"
-                            placeholder="例: 120"
-                          />
-                          <InputField
-                            label="残数バッジ閾値 (空欄=無制限)"
-                            value={edit.lowStockBadgeThreshold}
-                            onChange={(value) =>
-                              setMenuEdits((prev) => ({
-                                ...prev,
-                                [menu.id]: {
-                                  ...edit,
-                                  lowStockBadgeThreshold:
-                                    sanitizeIntegerInput(value),
-                                },
-                              }))
-                            }
-                            inputMode="numeric"
-                            placeholder="例: 10 / 空欄で無制限"
-                          />
-                        </div>
-                        <div className="row wrap">
-                          <span className="muted text-xs">
-                            本日のカウント: {menu.todayOrderCount}
-                            {menu.dailyOrderCap != null
-                              ? ` / 残り ${menu.remainingUntilCap ?? 0}`
-                              : ""}
-                          </span>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              if (
-                                !dangerConfirm(
-                                  `「${menu.name}」の本日カウントをリセットします。よろしいですか？`,
-                                )
-                              ) {
-                                return;
-                              }
-                              void runMutation({
-                                action: async () => {
-                                  await apiFetch(
-                                    "/api/admin/menus/reset-count",
-                                    {
-                                      method: "POST",
-                                      body: JSON.stringify({ menuId: menu.id }),
-                                    },
-                                  );
-                                },
-                                successMessage:
-                                  "本日のカウントをリセットしました",
-                                errorMessage:
-                                  "カウントのリセットに失敗しました",
-                              });
-                            }}
-                          >
-                            カウントをリセット
-                          </Button>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2 rounded-md border bg-card/70 p-2">
-                          <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium">
-                            画像をアップロード
-                            <input
-                              type="file"
-                              accept="image/png,image/jpeg,image/webp"
-                              className="hidden"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) {
-                                  void uploadMenuCover(menu, file);
-                                }
-                                e.currentTarget.value = "";
-                              }}
-                            />
-                          </label>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() =>
-                              void runMutation({
-                                action: async () => {
-                                  await patchMenu(menu.id, {
-                                    coverImageDataUrl: null,
-                                  });
-                                  setMenuEdits((prev) => ({
-                                    ...prev,
-                                    [menu.id]: {
-                                      ...edit,
-                                      coverImageDataUrl: "",
-                                    },
-                                  }));
-                                },
-                                successMessage: "メニュー画像を削除しました",
-                                errorMessage:
-                                  "メニュー画像の削除に失敗しました",
-                              })
-                            }
-                          >
-                            画像を削除
-                          </Button>
-                          {/* <span className="text-xs text-muted-foreground">
+                                    >
+                                      画像を削除
+                                    </Button>
+                                    {/* <span className="text-xs text-muted-foreground">
                             推奨: 横長画像 / 1MB 以下
                           </span> */}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-1">
-                          <IconActionButton
-                            label="保存"
-                            icon={<Save20Regular />}
-                            saveTone
-                            onClick={() =>
-                              void (async () => {
-                                let parsedInput: ReturnType<
-                                  typeof parseMenuInput
-                                >;
-                                try {
-                                  parsedInput = parseMenuInput({
-                                    name: edit.name,
-                                    priceJpy: edit.priceJpy,
-                                    categoryId: edit.categoryId,
-                                    kitchenId: edit.kitchenId,
-                                    coverImageDataUrl: edit.coverImageDataUrl,
-                                    allergens: edit.allergens,
-                                    allergenDisplayEnabled:
-                                      edit.allergenDisplayEnabled,
-                                    customBadgeText: edit.customBadgeText,
-                                    customBadgeColor: edit.customBadgeColor,
-                                    dailyOrderCap: edit.dailyOrderCap,
-                                    lowStockBadgeEnabled:
-                                      edit.lowStockBadgeEnabled,
-                                    lowStockBadgeThreshold:
-                                      edit.lowStockBadgeThreshold,
-                                  });
-                                } catch (error) {
-                                  notifyError(
-                                    error,
-                                    "入力内容を確認してください",
-                                  );
-                                  return;
-                                }
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-1">
+                                    <IconActionButton
+                                      label="保存"
+                                      icon={<Save20Regular />}
+                                      saveTone
+                                      onClick={() =>
+                                        void (async () => {
+                                          let parsedInput: ReturnType<
+                                            typeof parseMenuInput
+                                          >;
+                                          try {
+                                            parsedInput = parseMenuInput({
+                                              name: edit.name,
+                                              priceJpy: edit.priceJpy,
+                                              categoryId: edit.categoryId,
+                                              kitchenId: edit.kitchenId,
+                                              coverImageDataUrl:
+                                                edit.coverImageDataUrl,
+                                              allergens: edit.allergens,
+                                              allergenDisplayEnabled:
+                                                edit.allergenDisplayEnabled,
+                                              customBadgeText:
+                                                edit.customBadgeText,
+                                              customBadgeColor:
+                                                edit.customBadgeColor,
+                                              dailyOrderCap: edit.dailyOrderCap,
+                                              lowStockBadgeEnabled:
+                                                edit.lowStockBadgeEnabled,
+                                              lowStockBadgeThreshold:
+                                                edit.lowStockBadgeThreshold,
+                                            });
+                                          } catch (error) {
+                                            notifyError(
+                                              error,
+                                              "入力内容を確認してください",
+                                            );
+                                            return;
+                                          }
 
-                                const saved = await runMutation({
-                                  action: async () => {
-                                    await patchMenu(menu.id, parsedInput);
-                                  },
-                                  successMessage: "メニューを更新しました",
-                                  errorMessage: "メニュー更新に失敗しました",
-                                });
-                                if (saved) {
-                                  setMenuEdits((prev) => ({
-                                    ...prev,
-                                    [menu.id]: {
-                                      ...prev[menu.id],
-                                      name: parsedInput.name,
-                                      priceJpy: String(parsedInput.priceJpy),
-                                      categoryId: parsedInput.categoryId,
-                                      kitchenId: parsedInput.kitchenId,
-                                      coverImageDataUrl:
-                                        parsedInput.coverImageDataUrl ?? "",
-                                      allergens: normalizeSpecifiedAllergens(
-                                        parsedInput.allergensJson,
-                                      ),
-                                      allergenDisplayEnabled:
-                                        parsedInput.allergenDisplayEnabled,
-                                      customBadgeText:
-                                        parsedInput.customBadgeText ?? "",
-                                      customBadgeColor:
-                                        parsedInput.customBadgeColor ??
-                                        "#d97706",
-                                      dailyOrderCap:
-                                        parsedInput.dailyOrderCap == null
-                                          ? ""
-                                          : String(parsedInput.dailyOrderCap),
-                                      lowStockBadgeEnabled:
-                                        parsedInput.lowStockBadgeEnabled,
-                                      lowStockBadgeThreshold:
-                                        parsedInput.lowStockBadgeThreshold >=
-                                        LOW_STOCK_BADGE_THRESHOLD_UNLIMITED
-                                          ? ""
-                                          : String(
-                                              parsedInput.lowStockBadgeThreshold,
-                                            ),
-                                    },
-                                  }));
-                                }
-                              })()
-                            }
-                          />
-                          <IconActionButton
-                            label="上へ"
-                            icon={<ArrowUp20Regular />}
-                            disabled={isFirstInCategory}
-                            onClick={() => void moveMenu(menu, -1)}
-                          />
-                          <IconActionButton
-                            label="下へ"
-                            icon={<ArrowDown20Regular />}
-                            disabled={isLastInCategory}
-                            onClick={() => void moveMenu(menu, 1)}
-                          />
-                          <div className="ml-auto">
-                            <IconActionButton
-                              label="削除"
-                              icon={<Delete20Regular />}
-                              destructive
-                              onClick={() => {
-                                if (
-                                  dangerConfirm(
-                                    `メニュー「${menu.name}」を削除します。よろしいですか？`,
-                                  )
-                                )
-                                  void runMutation({
-                                    action: async () => {
-                                      await patchMenu(menu.id, {
-                                        isActive: false,
-                                      });
-                                    },
-                                    successMessage: "メニューを削除しました",
-                                    errorMessage: "メニュー削除に失敗しました",
-                                  });
-                              }}
-                            />
-                          </div>
-                        </div>
-                      </AccordionContent>
-                    </AccordionItem>
-                  );
+                                          const saved = await runMutation({
+                                            action: async () => {
+                                              await patchMenu(
+                                                menu.id,
+                                                parsedInput,
+                                              );
+                                            },
+                                            successMessage:
+                                              "メニューを更新しました",
+                                            errorMessage:
+                                              "メニュー更新に失敗しました",
+                                          });
+                                          if (saved) {
+                                            setMenuEdits((prev) => ({
+                                              ...prev,
+                                              [menu.id]: {
+                                                ...prev[menu.id],
+                                                name: parsedInput.name,
+                                                priceJpy: String(
+                                                  parsedInput.priceJpy,
+                                                ),
+                                                categoryId:
+                                                  parsedInput.categoryId,
+                                                kitchenId:
+                                                  parsedInput.kitchenId,
+                                                coverImageDataUrl:
+                                                  parsedInput.coverImageDataUrl ??
+                                                  "",
+                                                allergens:
+                                                  normalizeSpecifiedAllergens(
+                                                    parsedInput.allergensJson,
+                                                  ),
+                                                allergenDisplayEnabled:
+                                                  parsedInput.allergenDisplayEnabled,
+                                                customBadgeText:
+                                                  parsedInput.customBadgeText ??
+                                                  "",
+                                                customBadgeColor:
+                                                  parsedInput.customBadgeColor ??
+                                                  "#d97706",
+                                                dailyOrderCap:
+                                                  parsedInput.dailyOrderCap ==
+                                                  null
+                                                    ? ""
+                                                    : String(
+                                                        parsedInput.dailyOrderCap,
+                                                      ),
+                                                lowStockBadgeEnabled:
+                                                  parsedInput.lowStockBadgeEnabled,
+                                                lowStockBadgeThreshold:
+                                                  parsedInput.lowStockBadgeThreshold >=
+                                                  LOW_STOCK_BADGE_THRESHOLD_UNLIMITED
+                                                    ? ""
+                                                    : String(
+                                                        parsedInput.lowStockBadgeThreshold,
+                                                      ),
+                                              },
+                                            }));
+                                          }
+                                        })()
+                                      }
+                                    />
+                                    <IconActionButton
+                                      label="上へ"
+                                      icon={<ArrowUp20Regular />}
+                                      disabled={isFirstInCategory}
+                                      onClick={() => void moveMenu(menu, -1)}
+                                    />
+                                    <IconActionButton
+                                      label="下へ"
+                                      icon={<ArrowDown20Regular />}
+                                      disabled={isLastInCategory}
+                                      onClick={() => void moveMenu(menu, 1)}
+                                    />
+                                    <div className="ml-auto">
+                                      <IconActionButton
+                                        label="削除"
+                                        icon={<Delete20Regular />}
+                                        destructive
+                                        onClick={() => {
+                                          if (
+                                            dangerConfirm(
+                                              `メニュー「${menu.name}」を削除します。よろしいですか？`,
+                                            )
+                                          )
+                                            void runMutation({
+                                              action: async () => {
+                                                await patchMenu(menu.id, {
+                                                  isActive: false,
+                                                });
+                                              },
+                                              successMessage:
+                                                "メニューを削除しました",
+                                              errorMessage:
+                                                "メニュー削除に失敗しました",
+                                            });
+                                        }}
+                                      />
+                                    </div>
+                                  </div>
+                                </AccordionContent>
+                              </AccordionItem>
+                            );
                           })}
                         </Accordion>
                       )}
