@@ -104,6 +104,7 @@ type Menu = {
   hasActiveKitchenCoverage: boolean;
   coverImageDataUrl: string | null;
   allergensJson: SpecifiedAllergenKey[];
+  allergenDisplayEnabled: boolean;
   customBadgeText: string | null;
   customBadgeColor: string | null;
   dailyOrderCap: number | null;
@@ -120,6 +121,7 @@ type MenuEdit = {
   kitchenId: string;
   coverImageDataUrl: string;
   allergens: SpecifiedAllergenKey[];
+  allergenDisplayEnabled: boolean;
   customBadgeText: string;
   customBadgeColor: string;
   dailyOrderCap: string;
@@ -331,6 +333,7 @@ function toMenuEdit(menu: Menu): MenuEdit {
     kitchenId: menu.assignedKitchenId ?? "",
     coverImageDataUrl: menu.coverImageDataUrl ?? "",
     allergens: normalizeSpecifiedAllergens(menu.allergensJson),
+    allergenDisplayEnabled: menu.allergenDisplayEnabled,
     customBadgeText: menu.customBadgeText ?? "",
     customBadgeColor: menu.customBadgeColor ?? "#d97706",
     dailyOrderCap: menu.dailyOrderCap == null ? "" : String(menu.dailyOrderCap),
@@ -457,6 +460,8 @@ export default function AdminPage() {
   const [newMenuAllergens, setNewMenuAllergens] = useState<
     SpecifiedAllergenKey[]
   >([]);
+  const [newMenuAllergenDisplayEnabled, setNewMenuAllergenDisplayEnabled] =
+    useState(true);
   const [newMenuCustomBadgeText, setNewMenuCustomBadgeText] = useState("");
   const [newMenuCustomBadgeColor, setNewMenuCustomBadgeColor] =
     useState("#d97706");
@@ -588,6 +593,7 @@ export default function AdminPage() {
         normalizedCover !== menuCover ||
         normalizedEditAllergens.join(",") !==
           normalizedMenuAllergens.join(",") ||
+        edit.allergenDisplayEnabled !== menu.allergenDisplayEnabled ||
         editBadgeText !== menuBadgeText ||
         editBadgeColor !== menuBadgeColor ||
         dailyOrderCap !== (menu.dailyOrderCap ?? null) ||
@@ -903,6 +909,7 @@ export default function AdminPage() {
     kitchenId: string;
     coverImageDataUrl: string;
     allergens: SpecifiedAllergenKey[];
+    allergenDisplayEnabled: boolean;
     customBadgeText: string;
     customBadgeColor: string;
     dailyOrderCap: string;
@@ -964,6 +971,7 @@ export default function AdminPage() {
       kitchenId: params.kitchenId,
       coverImageDataUrl: params.coverImageDataUrl.trim() || null,
       allergensJson: normalizedAllergens,
+      allergenDisplayEnabled: params.allergenDisplayEnabled,
       customBadgeText: customBadgeText || null,
       customBadgeColor: customBadgeText ? customBadgeColor : null,
       dailyOrderCap,
@@ -1086,6 +1094,7 @@ export default function AdminPage() {
           normalizedCover !== menuCover ||
           normalizedEditAllergens.join(",") !==
             normalizedMenuAllergens.join(",") ||
+          edit.allergenDisplayEnabled !== menu.allergenDisplayEnabled ||
           editBadgeText !== menuBadgeText ||
           editBadgeColor !== menuBadgeColor ||
           dailyOrderCap !== (menu.dailyOrderCap ?? null) ||
@@ -1104,6 +1113,7 @@ export default function AdminPage() {
             kitchenId: edit.kitchenId,
             coverImageDataUrl: edit.coverImageDataUrl,
             allergens: edit.allergens,
+            allergenDisplayEnabled: edit.allergenDisplayEnabled,
             customBadgeText: edit.customBadgeText,
             customBadgeColor: edit.customBadgeColor,
             dailyOrderCap: edit.dailyOrderCap,
@@ -1998,6 +2008,22 @@ export default function AdminPage() {
                         <div className="text-xs font-semibold text-muted-foreground">
                           特定原材料（8品目）
                         </div>
+                        <div className="flex items-center justify-between gap-2 rounded-md border bg-background/60 px-2 py-1.5">
+                          <span className="text-[11px] text-muted-foreground">
+                            メニュー表示にアレルゲン情報を表示
+                          </span>
+                          <label className="inline-flex items-center gap-2 text-[11px] font-medium">
+                            <span>
+                              {newMenuAllergenDisplayEnabled ? "表示" : "非表示"}
+                            </span>
+                            <Switch
+                              checked={newMenuAllergenDisplayEnabled}
+                              onCheckedChange={(checked) =>
+                                setNewMenuAllergenDisplayEnabled(checked)
+                              }
+                            />
+                          </label>
+                        </div>
                         <div className="flex flex-wrap gap-1">
                           {SPECIFIED_ALLERGENS.map((allergen) => {
                             const selected = newMenuAllergens.includes(
@@ -2008,10 +2034,13 @@ export default function AdminPage() {
                                 key={allergen.key}
                                 type="button"
                                 size="sm"
+                                disabled={!newMenuAllergenDisplayEnabled}
                                 variant={selected ? "default" : "outline"}
                                 className={cn(
                                   "h-8 px-3 text-xs",
-                                  selected
+                                  !newMenuAllergenDisplayEnabled
+                                    ? "border-slate-300 bg-slate-200 text-slate-500 hover:bg-slate-200"
+                                    : selected
                                     ? "border-amber-700 bg-amber-500 text-white hover:bg-amber-600"
                                     : "bg-background text-foreground hover:bg-muted",
                                 )}
@@ -2034,7 +2063,9 @@ export default function AdminPage() {
                           })}
                         </div>
                         <div className="text-[11px] text-muted-foreground">
-                          {newMenuAllergens.length > 0
+                          {!newMenuAllergenDisplayEnabled
+                            ? "表示: オフ（選択は保持されます）"
+                            : newMenuAllergens.length > 0
                             ? `選択中: ${newMenuAllergens
                                 .map((key) => allergenLabelOf(key))
                                 .join("、")}`
@@ -2106,6 +2137,8 @@ export default function AdminPage() {
                                 kitchenId: newMenuKitchenId,
                                 coverImageDataUrl: newMenuCoverImageDataUrl,
                                 allergens: newMenuAllergens,
+                                allergenDisplayEnabled:
+                                  newMenuAllergenDisplayEnabled,
                                 customBadgeText: newMenuCustomBadgeText,
                                 customBadgeColor: newMenuCustomBadgeColor,
                                 dailyOrderCap: newMenuDailyOrderCap,
@@ -2154,6 +2187,7 @@ export default function AdminPage() {
                               setNewMenuPrice("500");
                               setNewMenuCoverImageDataUrl("");
                               setNewMenuAllergens([]);
+                              setNewMenuAllergenDisplayEnabled(true);
                               setNewMenuCustomBadgeText("");
                               setNewMenuCustomBadgeColor("#d97706");
                               setNewMenuDailyOrderCap("");
@@ -2371,6 +2405,28 @@ export default function AdminPage() {
                           <div className="text-xs font-semibold text-muted-foreground">
                             特定原材料（8品目）
                           </div>
+                          <div className="flex items-center justify-between gap-2 rounded-md border bg-background/60 px-2 py-1.5">
+                            <span className="text-[11px] text-muted-foreground">
+                              メニュー表示にアレルゲン情報を表示
+                            </span>
+                            <label className="inline-flex items-center gap-2 text-[11px] font-medium">
+                              <span>
+                                {edit.allergenDisplayEnabled ? "表示" : "非表示"}
+                              </span>
+                              <Switch
+                                checked={edit.allergenDisplayEnabled}
+                                onCheckedChange={(checked) =>
+                                  setMenuEdits((prev) => ({
+                                    ...prev,
+                                    [menu.id]: {
+                                      ...edit,
+                                      allergenDisplayEnabled: checked,
+                                    },
+                                  }))
+                                }
+                              />
+                            </label>
+                          </div>
                           <div className="flex flex-wrap gap-1">
                             {SPECIFIED_ALLERGENS.map((allergen) => {
                               const selected = edit.allergens.includes(
@@ -2381,10 +2437,13 @@ export default function AdminPage() {
                                   key={allergen.key}
                                   type="button"
                                   size="sm"
+                                  disabled={!edit.allergenDisplayEnabled}
                                   variant={selected ? "default" : "outline"}
                                   className={cn(
                                     "h-8 px-3 text-xs",
-                                    selected
+                                    !edit.allergenDisplayEnabled
+                                      ? "border-slate-300 bg-slate-200 text-slate-500 hover:bg-slate-200"
+                                      : selected
                                       ? "border-amber-700 bg-amber-500 text-white hover:bg-amber-600"
                                       : "bg-background text-foreground hover:bg-muted",
                                   )}
@@ -2419,7 +2478,9 @@ export default function AdminPage() {
                             })}
                           </div>
                           <div className="text-[11px] text-muted-foreground">
-                            {edit.allergens.length > 0
+                            {!edit.allergenDisplayEnabled
+                              ? "表示: オフ（選択は保持されます）"
+                              : edit.allergens.length > 0
                               ? `選択中: ${edit.allergens
                                   .map((key) => allergenLabelOf(key))
                                   .join("、")}`
@@ -2603,6 +2664,8 @@ export default function AdminPage() {
                                     kitchenId: edit.kitchenId,
                                     coverImageDataUrl: edit.coverImageDataUrl,
                                     allergens: edit.allergens,
+                                    allergenDisplayEnabled:
+                                      edit.allergenDisplayEnabled,
                                     customBadgeText: edit.customBadgeText,
                                     customBadgeColor: edit.customBadgeColor,
                                     dailyOrderCap: edit.dailyOrderCap,
@@ -2640,6 +2703,8 @@ export default function AdminPage() {
                                       allergens: normalizeSpecifiedAllergens(
                                         parsedInput.allergensJson,
                                       ),
+                                      allergenDisplayEnabled:
+                                        parsedInput.allergenDisplayEnabled,
                                       customBadgeText:
                                         parsedInput.customBadgeText ?? "",
                                       customBadgeColor:

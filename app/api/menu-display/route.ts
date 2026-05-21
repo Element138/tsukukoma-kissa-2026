@@ -61,6 +61,7 @@ export async function GET(req: NextRequest) {
             availability: isCapReached ? "SOLD_OUT" : menu.availability,
             coverImageDataUrl: menu.coverImageDataUrl,
             allergens: normalizeSpecifiedAllergens(menu.allergensJson),
+            allergenDisplayEnabled: menu.allergenDisplayEnabled,
             customBadgeText: menu.customBadgeText,
             customBadgeColor: menu.customBadgeColor,
             showLowStockBadge,

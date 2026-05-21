@@ -1,0 +1,2 @@
+ALTER TABLE "Menu"
+ADD COLUMN IF NOT EXISTS "allergenDisplayEnabled" BOOLEAN NOT NULL DEFAULT true;

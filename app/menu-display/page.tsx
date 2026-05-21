@@ -33,6 +33,7 @@ type DisplayCategory = {
     availability: "AVAILABLE" | "INCREASED_WAIT" | "PAUSED" | "SOLD_OUT";
     coverImageDataUrl: string | null;
     allergens: SpecifiedAllergenKey[];
+    allergenDisplayEnabled: boolean;
     customBadgeText: string | null;
     customBadgeColor: string | null;
     showLowStockBadge: boolean;
@@ -713,10 +714,11 @@ export default function MenuDisplayPage() {
                         menu.availability === "INCREASED_WAIT";
                       const imageSrc = menu.coverImageDataUrl;
                       const hasImage = Boolean(imageSrc);
-                      const allergenNotice = formatAllergenNotice(
-                        menu.allergens,
-                      );
-                      const hasAllergenWarning = menu.allergens.length > 0;
+                      const allergenNotice = menu.allergenDisplayEnabled
+                        ? formatAllergenNotice(menu.allergens)
+                        : "";
+                      const hasAllergenWarning =
+                        menu.allergenDisplayEnabled && menu.allergens.length > 0;
                       const badgeText = menu.customBadgeText?.trim() ?? "";
                       const badgeColor =
                         menu.customBadgeColor?.trim() || "#d97706";
@@ -759,11 +761,13 @@ export default function MenuDisplayPage() {
                               </div>
                             ) : null}
                             <strong>{renderDisplayText(menu.name)}</strong>
-                            <div
-                              className={`menu-display-row-allergen ${hasAllergenWarning ? "has-allergen" : "none"}`}
-                            >
-                              {allergenNotice}
-                            </div>
+                            {menu.allergenDisplayEnabled ? (
+                              <div
+                                className={`menu-display-row-allergen ${hasAllergenWarning ? "has-allergen" : "none"}`}
+                              >
+                                {allergenNotice}
+                              </div>
+                            ) : null}
                             {unavailable ? (
                               <div className="menu-display-row-status">
                                 {labelOf(AVAILABILITY_LABEL, menu.availability)}

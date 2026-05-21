@@ -146,6 +146,7 @@ model Menu {
   displayOrder    Int?                    @default(0)
   coverImageDataUrl String?
   allergensJson   Json                    @default("[]")
+  allergenDisplayEnabled Boolean          @default(true)
   customBadgeText String?                 @db.VarChar(32)
   customBadgeColor String?                @db.VarChar(16)
   categoryId      String

@@ -176,6 +176,7 @@ export const menuCreateSchema = z.object({
   showLeadTime: z.boolean().optional(),
   coverImageDataUrl: z.string().max(2_000_000).nullable().optional(),
   allergensJson: menuAllergensSchema.optional(),
+  allergenDisplayEnabled: z.boolean().optional(),
   customBadgeText: z.string().trim().max(32).nullable().optional(),
   customBadgeColor: badgeColorSchema.nullable().optional(),
 });
@@ -196,6 +197,7 @@ export const menuUpdateSchema = z.object({
   showLeadTime: z.boolean().optional(),
   coverImageDataUrl: z.string().max(2_000_000).nullable().optional(),
   allergensJson: menuAllergensSchema.optional(),
+  allergenDisplayEnabled: z.boolean().optional(),
   customBadgeText: z.string().trim().max(32).nullable().optional(),
   customBadgeColor: badgeColorSchema.nullable().optional(),
 });

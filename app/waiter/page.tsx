@@ -283,7 +283,7 @@ export default function WaiterPage() {
                             className="ghost-btn waiter-serve-btn"
                             onClick={() => serveItem(item.id)}
                           >
-                            提供済み
+                            提供
                           </button>
                         </div>
                       ))}
@@ -339,7 +339,7 @@ export default function WaiterPage() {
                     className="waiter-bulk-btn"
                     onClick={() => serveOrder(order.id)}
                   >
-                    提供済み
+                    提供
                   </button>
                 </article>
               ))}

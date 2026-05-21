@@ -7,7 +7,7 @@ import { minutesFromNow, now } from "@/lib/time";
 
 export const SESSION_COOKIE = "kissa_session";
 const SESSION_TTL_MINUTES = 10;
-const MENU_DISPLAY_TTL_MINUTES = 60 * 24 * 365 * 10;
+const MENU_DISPLAY_TTL_MINUTES = 60 * 12;
 const HEARTBEAT_TOUCH_MS = 10_000;
 
 type SessionActor = {
@@ -115,7 +115,7 @@ async function loadSession(req: NextRequest): Promise<SessionLoadResult> {
   if (!session.actor.isActive) {
     return { session: null, failureCode: "ACTOR_INACTIVE" };
   }
-  if (session.actor.actorType !== "MENU_DISPLAY" && session.expiresAt <= now()) {
+  if (session.expiresAt <= now()) {
     return { session: null, failureCode: "SESSION_EXPIRED" };
   }
 
