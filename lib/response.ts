@@ -219,6 +219,10 @@ export function fail(error: unknown) {
   }
 
   if (error instanceof Prisma.PrismaClientUnknownRequestError) {
+    console.error("Prisma unknown request error", {
+      name: error.name,
+      message: error.message,
+    });
     return errorResponse(503, "DB_TIMEOUT", "Database operation timed out");
   }
 

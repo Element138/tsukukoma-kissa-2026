@@ -3,20 +3,20 @@ import { fail, ok } from "@/lib/response";
 
 export const dynamic = "force-dynamic";
 
+type LoginOptionRow = {
+  id: string;
+  actorType: string;
+  label: string;
+};
+
 export async function GET() {
   try {
-    const actors = await prisma.actor.findMany({
-      where: {
-        isActive: true
-      },
-      select: {
-        id: true,
-        actorType: true,
-        label: true,
-        kitchenDisplayOrder: true
-      },
-      orderBy: [{ actorType: "asc" }, { kitchenDisplayOrder: "asc" }, { label: "asc" }, { id: "asc" }]
-    });
+    const actors = await prisma.$queryRaw<LoginOptionRow[]>`
+      SELECT "id", "actorType"::text AS "actorType", "label"
+      FROM "Actor"
+      WHERE "isActive" = true
+      ORDER BY "actorType" ASC, "kitchenDisplayOrder" ASC, "label" ASC, "id" ASC
+    `;
 
     return ok({
       actors: actors.map((actor) => ({
