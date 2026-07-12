@@ -1,6 +1,6 @@
 export const STATIC_REALTIME_CHANNELS = [
   "orders",
-  "waiter",
+  "counter",
   "menus",
   "categories",
   "actors",
@@ -12,7 +12,7 @@ export type StaticRealtimeChannel = (typeof STATIC_REALTIME_CHANNELS)[number];
 export type RealtimeChannel = StaticRealtimeChannel | `kitchen:${string}`;
 export type RealtimeEventType = "UPSERT" | "DELETE" | "BULK_INVALIDATE";
 
-export const OPS_STATIC_REALTIME_CHANNELS = ["orders", "waiter", "menus"] as const;
+export const OPS_STATIC_REALTIME_CHANNELS = ["orders", "counter", "menus"] as const;
 const OPS_STATIC_CHANNEL_SET = new Set<string>(OPS_STATIC_REALTIME_CHANNELS);
 
 export function isKitchenRealtimeChannel(channel: string): channel is `kitchen:${string}` {

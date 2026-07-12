@@ -130,9 +130,9 @@ export async function GET(req: NextRequest) {
           id: item.id,
           menuId: item.menuId,
           name: item.itemNameSnapshot,
+          unitPriceJpy: item.unitPriceJpy,
           status: item.status,
-          kitchenId: item.kitchenId,
-          kitchenName: item.kitchenActor?.label ?? item.kitchenActor?.id
+          kitchenId: item.kitchenId
         }))
       };
     });

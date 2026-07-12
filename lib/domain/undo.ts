@@ -63,7 +63,7 @@ export async function executeUndo(db: DbClient, params: { actorId: string; actor
     params.actorType === "KITCHEN" || params.actorType === "WAITER",
     403,
     "FORBIDDEN",
-    "Undo is allowed only for Kitchen and Waiter"
+    "Undo is allowed only for Kitchen and Counter"
   );
 
   const undo = await db.undoOperation.findFirst({
@@ -99,7 +99,7 @@ export async function executeUndo(db: DbClient, params: { actorId: string; actor
       readyAt: null
     };
   } else if (undo.operationType === "ITEM_SERVED") {
-    assert(params.actorType === "WAITER", 403, "UNDO_FORBIDDEN", "Waiter undo can only target waiter actions");
+    assert(params.actorType === "WAITER", 403, "UNDO_FORBIDDEN", "Counter undo can only target counter actions");
     targetItemIds = [undo.targetEntityId];
     expectedCurrentStatus = "SERVED";
     revertData = {
@@ -107,7 +107,7 @@ export async function executeUndo(db: DbClient, params: { actorId: string; actor
       servedAt: null
     };
   } else if (undo.operationType === "TAKEOUT_ORDER_SERVED") {
-    assert(params.actorType === "WAITER", 403, "UNDO_FORBIDDEN", "Waiter undo can only target waiter actions");
+    assert(params.actorType === "WAITER", 403, "UNDO_FORBIDDEN", "Counter undo can only target counter actions");
     targetItemIds = asStringArray((undo.payload as Record<string, unknown>).itemIds);
     expectedCurrentStatus = "SERVED";
     revertData = {

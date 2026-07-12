@@ -5,7 +5,7 @@
     case "KITCHEN":
       return "/kitchen";
     case "WAITER":
-      return "/waiter";
+      return "/counter";
     case "MENU_DISPLAY":
       return "/menu-display";
     case "ADMIN":

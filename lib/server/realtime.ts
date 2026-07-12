@@ -19,7 +19,7 @@ type RealtimeEventInput = {
 const DEFAULT_ALLOWED_STATIC_CHANNELS: Record<ActorType, Set<StaticRealtimeChannel>> = {
   POS: new Set(["orders", "menus", "categories", "actors", "assignments"]),
   KITCHEN: new Set(["orders", "menus", "assignments", "actors"]),
-  WAITER: new Set(["orders", "waiter", "actors"]),
+  WAITER: new Set(["orders", "counter", "actors"]),
   MENU_DISPLAY: new Set(["menus", "categories", "orders"]),
   ADMIN: new Set(STATIC_REALTIME_CHANNELS)
 };

@@ -13,7 +13,7 @@ The system-of-record is the backend. `Order` and `OrderItem` are strictly separa
 ## Important runtime behavior
 
 - All terminal actions are API + DB transaction based.
-- Kitchen/Waiter process per `OrderItem`, not per `Order`.
+- Kitchen processes per `OrderItem`; counter serves customer orders, with dine-in orders handled at order level.
 - Undo is limited to each terminal's last 1 action, with optimistic version checks.
 - Audit logs are written for critical operations.
 - Payment watchdog cron handles timeout/auto-cancel transitions.
@@ -42,7 +42,7 @@ Set these in Vercel Project Settings -> Environment Variables:
 
 ## Realtime transport (ops channels)
 
-- `orders`, `waiter`, `menus`, and `kitchen:{id}` are delivered via Supabase Realtime.
+- `orders`, `counter`, `menus`, and `kitchen:{id}` are delivered via Supabase Realtime.
 - `categories`, `actors`, `assignments`, `audit` continue to use SSE in this phase.
 - Apply Prisma migrations so `RealtimeEvent` RLS policy and publication wiring are installed.
 
@@ -76,7 +76,7 @@ So every deploy can prepare DB schema and seed base actors safely.
 - `pos-main` / `1234`
 - `kitchen-drink` / `1234`
 - `kitchen-food` / `1234`
-- `waiter-1` / `1234`
+- `counter-1` / `1234`
 - `menu-display-main` / `1234`
 
 ## Health endpoints

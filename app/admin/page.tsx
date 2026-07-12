@@ -1406,7 +1406,7 @@ export default function AdminPage() {
                             <SelectContent>
                               <SelectItem value="POS">POS</SelectItem>
                               <SelectItem value="KITCHEN">キッチン</SelectItem>
-                              <SelectItem value="WAITER">ウェイター</SelectItem>
+                              <SelectItem value="WAITER">カウンター</SelectItem>
                               <SelectItem value="MENU_DISPLAY">
                                 メニュー表示
                               </SelectItem>

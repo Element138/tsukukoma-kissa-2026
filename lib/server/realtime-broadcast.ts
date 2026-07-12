@@ -4,7 +4,7 @@ import { publishBulkInvalidation } from "@/lib/server/realtime";
 type DbClient = PrismaClient | Prisma.TransactionClient;
 
 export const CHANNEL_GROUPS = {
-  ORDER_FLOW: ["orders", "waiter", "menus", "audit"] as const,
+  ORDER_FLOW: ["orders", "counter", "menus", "audit"] as const,
   ACTORS: ["actors", "orders", "menus", "audit"] as const,
   MENUS: ["menus", "orders", "audit"] as const,
   CATEGORIES: ["categories", "menus", "audit"] as const,

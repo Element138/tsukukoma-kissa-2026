@@ -1,7 +1,7 @@
 ﻿export const ACTOR_TYPE_LABEL: Record<string, string> = {
   POS: "POS",
   KITCHEN: "キッチン",
-  WAITER: "ウェイター",
+  WAITER: "カウンター",
   MENU_DISPLAY: "メニュー表示",
   ADMIN: "管理者",
 };

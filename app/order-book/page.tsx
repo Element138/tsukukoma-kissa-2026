@@ -49,9 +49,9 @@ type OrderRow = {
     id: string;
     menuId: string;
     name: string;
+    unitPriceJpy: number;
     status: string;
     kitchenId: string | null;
-    kitchenName?: string;
   }>;
 };
 
@@ -76,8 +76,8 @@ type PaymentIncidentRow = {
 type BundledItem = {
   key: string;
   name: string;
+  unitPriceJpy: number;
   status: string;
-  kitchenName?: string;
   count: number;
 };
 
@@ -135,8 +135,7 @@ function bundleItems(items: OrderRow["items"]): BundledItem[] {
   const bucket = new Map<string, BundledItem>();
 
   for (const item of items) {
-    const kitchenName = item.kitchenName ?? "";
-    const key = `${item.name}::${item.status}::${kitchenName}`;
+    const key = `${item.name}::${item.status}::${item.unitPriceJpy}`;
     const existing = bucket.get(key);
     if (existing) {
       existing.count += 1;
@@ -146,8 +145,8 @@ function bundleItems(items: OrderRow["items"]): BundledItem[] {
     bucket.set(key, {
       key,
       name: item.name,
+      unitPriceJpy: item.unitPriceJpy,
       status: item.status,
-      kitchenName: item.kitchenName,
       count: 1,
     });
   }
@@ -605,11 +604,9 @@ export default function OrderBookPage() {
                         >
                           {labelOf(ORDER_ITEM_STATUS_LABEL, item.status)}
                         </span>
-                        {item.kitchenName && (
-                          <span className="muted" style={{ marginLeft: 8 }}>
-                            {item.kitchenName}
-                          </span>
-                        )}
+                        <span className="muted" style={{ marginLeft: 8 }}>
+                          {fmtJpy(item.unitPriceJpy)}
+                        </span>
                       </div>
                     </div>
                   ))}
