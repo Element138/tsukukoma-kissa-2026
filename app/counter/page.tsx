@@ -169,9 +169,7 @@ export default function CounterPage() {
   ) => {
     if (
       orderItemCount > 1 &&
-      !window.confirm(
-        `注文 #${orderNo} は複数品の店内注文です。通常は注文単位で提供します。「${itemName}」だけを提供済みにしますか？`,
-      )
+      !window.confirm(`「${itemName}」のみ提供済みにしてしまいますか？`)
     ) {
       return;
     }
