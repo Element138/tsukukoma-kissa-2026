@@ -78,6 +78,7 @@ So every deploy can prepare DB schema and seed base actors safely.
 - `kitchen-food` / `1234`
 - `counter-1` / `1234`
 - `menu-display-main` / `1234`
+- `order-display-main` / `1234`
 
 ## Health endpoints
 

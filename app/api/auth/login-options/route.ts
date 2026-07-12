@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/db";
 import { fail, ok } from "@/lib/response";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const actors = await prisma.actor.findMany({
