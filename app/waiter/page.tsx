@@ -16,7 +16,6 @@ import { ACTOR_TYPE_LABEL, labelOf } from "@/lib/labels";
 type DineInOrder = {
   id: string;
   orderNo: number;
-  tableNo: number | null;
   createdAt: string;
   specialNote: string | null;
   readyItems: Array<{ id: string; name: string }>;
@@ -259,12 +258,12 @@ export default function WaiterPage() {
                   <article key={order.id} className={`waiter-tile ${tone}`}>
                     <div className="waiter-tile-head">
                       <div className="waiter-major">
-                        <span className="waiter-major-label">テーブル番号</span>
+                        <span className="waiter-major-label">注文番号</span>
                         <span className="waiter-major-value">
-                          {order.tableNo ?? "-"}
+                          {order.orderNo}
                         </span>
                       </div>
-                      <span className="badge">注文 #{order.orderNo}</span>
+                      <span className="badge">{order.readyItemCount} 品</span>
                     </div>
                     <div className="muted waiter-tile-elapsed">
                       注文から {order.elapsedSinceOrdered}

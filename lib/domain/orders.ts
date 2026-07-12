@@ -243,7 +243,7 @@ export async function createOrderAtPaymentStart(
       idempotencyKey: params.payload.idempotencyKey,
       createdAt,
       fulfillmentType: params.payload.fulfillmentType,
-      tableNo: params.payload.fulfillmentType === "DINE_IN" ? (params.payload.tableNo ?? null) : null,
+      tableNo: null,
       partySize: params.payload.partySize,
       ageRangesJson: params.payload.ageRanges as Prisma.InputJsonValue,
       specialNote: params.payload.specialNote ?? null,

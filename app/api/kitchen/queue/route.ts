@@ -59,9 +59,11 @@ export async function GET(req: NextRequest) {
           },
         },
         select: {
+          id: true,
           menuId: true,
           order: {
             select: {
+              orderNo: true,
               confirmedAt: true,
             },
           },
@@ -91,7 +93,18 @@ export async function GET(req: NextRequest) {
       ),
     ]);
 
-    const queueMap = new Map<string, { queuedCount: number; oldestConfirmedAt: Date | null }>();
+    const queueMap = new Map<
+      string,
+      {
+        queuedCount: number;
+        oldestConfirmedAt: Date | null;
+        orders: Array<{
+          itemId: string;
+          orderNo: number;
+          confirmedAt: Date | null;
+        }>;
+      }
+    >();
     for (const item of queuedItems) {
       const existing = queueMap.get(item.menuId);
       const confirmedAt = item.order.confirmedAt;
@@ -99,10 +112,22 @@ export async function GET(req: NextRequest) {
         queueMap.set(item.menuId, {
           queuedCount: 1,
           oldestConfirmedAt: confirmedAt,
+          orders: [
+            {
+              itemId: item.id,
+              orderNo: item.order.orderNo,
+              confirmedAt,
+            },
+          ],
         });
         continue;
       }
       existing.queuedCount += 1;
+      existing.orders.push({
+        itemId: item.id,
+        orderNo: item.order.orderNo,
+        confirmedAt,
+      });
       if (
         confirmedAt &&
         (!existing.oldestConfirmedAt ||
@@ -119,6 +144,7 @@ export async function GET(req: NextRequest) {
         const queue = queueMap.get(assignment.menuId) ?? {
           queuedCount: 0,
           oldestConfirmedAt: null as Date | null,
+          orders: [],
         };
         const capState = capStateMap.get(assignment.menuId);
         const oldestQueuedSeconds = queue.oldestConfirmedAt
@@ -134,6 +160,15 @@ export async function GET(req: NextRequest) {
           queuedCount: queue.queuedCount,
           oldestQueuedSeconds,
           oldestElapsed: queue.oldestConfirmedAt ? elapsedMss(queue.oldestConfirmedAt) : "0:00",
+          queuedOrders: queue.orders.map((order) => ({
+            itemId: order.itemId,
+            orderNo: order.orderNo,
+            confirmedAt: order.confirmedAt,
+            queuedSeconds: order.confirmedAt
+              ? Math.max(0, Math.floor((Date.now() - order.confirmedAt.getTime()) / 1000))
+              : 0,
+            elapsed: order.confirmedAt ? elapsedMss(order.confirmedAt) : "0:00",
+          })),
           todayOrderCount: capState?.todayCount ?? 0,
           remainingUntilCap: capState?.remainingUntilCap ?? null,
           dailyOrderCap: assignment.menu.dailyOrderCap ?? null,

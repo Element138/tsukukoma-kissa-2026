@@ -15,7 +15,7 @@ export const orderItemInputSchema = z.object({
 export const orderCreateSchema = z
   .object({
     fulfillmentType: z.enum(["DINE_IN", "TAKEOUT"]),
-    tableNo: z.number().int().positive().nullable().optional(),
+    tableNo: z.number().int().nullable().optional(),
     partySize: z.number().int().min(1).max(50),
     ageRanges: z.array(z.string().min(1).max(32)).min(1),
     specialNote: z.string().max(500).optional(),
@@ -26,20 +26,6 @@ export const orderCreateSchema = z
     idempotencyKey: z.string().min(8).max(128)
   })
   .superRefine((v, ctx) => {
-    if (v.fulfillmentType === "DINE_IN" && (!v.tableNo || v.tableNo <= 0)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "店内注文ではテーブル番号が必要です",
-        path: ["tableNo"],
-      });
-    }
-    if (v.fulfillmentType === "TAKEOUT" && v.tableNo != null) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "持ち帰り注文ではテーブル番号を指定できません",
-        path: ["tableNo"],
-      });
-    }
     if (v.ageRanges.length !== v.partySize) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

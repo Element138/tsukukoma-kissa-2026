@@ -171,7 +171,6 @@ export default function PosPage() {
   const [fulfillmentType, setFulfillmentType] = useState<"DINE_IN" | "TAKEOUT">(
     "DINE_IN",
   );
-  const [tableNo, setTableNo] = useState<string>("");
   const [ageGroupCounts, setAgeGroupCounts] = useState<
     Record<AgeGroupKey, number>
   >(createEmptyAgeGroupCounts);
@@ -206,7 +205,6 @@ export default function PosPage() {
   const resetInputsToDefault = () => {
     setCart({});
     setAgeGroupCounts(createEmptyAgeGroupCounts());
-    setTableNo("");
     setSpecialNote("");
     setSkipReasonText("");
     setSliderErrorText(null);
@@ -484,7 +482,6 @@ export default function PosPage() {
   const ageRanges = useMemo(() => {
     return ageGroupCountsToRanges(ageGroupCounts);
   }, [ageGroupCounts]);
-  const parsedTableNo = Number(tableNo);
   const missingRequiredFields = useMemo(() => {
     const missing: string[] = [];
     if (selectedItems.length === 0) {
@@ -493,22 +490,8 @@ export default function PosPage() {
     if (partySize <= 0) {
       missing.push("年齢構成");
     }
-    if (
-      fulfillmentType === "DINE_IN" &&
-      (!tableNo.trim() ||
-        !Number.isInteger(parsedTableNo) ||
-        parsedTableNo <= 0)
-    ) {
-      missing.push("テーブル番号");
-    }
     return missing;
-  }, [
-    fulfillmentType,
-    parsedTableNo,
-    partySize,
-    selectedItems.length,
-    tableNo,
-  ]);
+  }, [partySize, selectedItems.length]);
   const sliderMissingText =
     missingRequiredFields.length === 0
       ? null
@@ -635,24 +618,13 @@ export default function PosPage() {
       notify({ level: "warning", message: "年齢構成を入力してください" });
       return;
     }
-    if (fulfillmentType === "DINE_IN") {
-      if (
-        !tableNo.trim() ||
-        !Number.isInteger(parsedTableNo) ||
-        parsedTableNo <= 0
-      ) {
-        notify({ level: "warning", message: "テーブル番号を入力してください" });
-        return;
-      }
-    }
-
     setBusy(true);
     setSliderErrorText(null);
 
     try {
       const payload = {
         fulfillmentType,
-        tableNo: fulfillmentType === "DINE_IN" ? parsedTableNo : null,
+        tableNo: null,
         partySize,
         ageRanges,
         specialNote: specialNote || undefined,
@@ -940,20 +912,6 @@ export default function PosPage() {
                     </SelectContent>
                   </Select>
                 </label>
-
-                {fulfillmentType === "DINE_IN" && (
-                  <label>
-                    テーブル番号
-                    <Input
-                      type="number"
-                      min={1}
-                      step={1}
-                      inputMode="numeric"
-                      value={tableNo}
-                      onChange={(e) => setTableNo(e.target.value)}
-                    />
-                  </label>
-                )}
 
                 <div className="age-group-grid">
                   {AGE_GROUPS.map((group) => (

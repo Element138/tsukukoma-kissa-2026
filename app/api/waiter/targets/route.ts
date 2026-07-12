@@ -20,7 +20,6 @@ export async function GET(req: NextRequest) {
       select: {
         id: true,
         orderNo: true,
-        tableNo: true,
         createdAt: true,
         specialNote: true,
         items: {
@@ -34,7 +33,7 @@ export async function GET(req: NextRequest) {
           orderBy: [{ id: "asc" }]
         }
       },
-      orderBy: [{ tableNo: "asc" }, { createdAt: "asc" }]
+      orderBy: [{ orderNo: "asc" }]
     });
 
     const takeoutOrdersRaw = await prisma.order.findMany({
@@ -86,7 +85,6 @@ export async function GET(req: NextRequest) {
       dineInOrders: dineInOrdersRaw.map((order) => ({
         id: order.id,
         orderNo: order.orderNo,
-        tableNo: order.tableNo,
         createdAt: order.createdAt,
         specialNote: order.specialNote,
         readyItems: order.items.map((item) => ({
