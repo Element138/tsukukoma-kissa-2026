@@ -75,7 +75,7 @@ import { cn } from "@/lib/utils";
 
 type Actor = {
   id: string;
-  actorType: "POS" | "KITCHEN" | "WAITER" | "MENU_DISPLAY" | "ADMIN";
+  actorType: "POS" | "KITCHEN" | "WAITER" | "MENU_DISPLAY" | "ORDER_DISPLAY" | "ADMIN";
   label: string;
   isActive: boolean;
   online: boolean;
@@ -1410,6 +1410,9 @@ export default function AdminPage() {
                               <SelectItem value="MENU_DISPLAY">
                                 メニュー表示
                               </SelectItem>
+                              <SelectItem value="ORDER_DISPLAY">
+                                注文表示
+                              </SelectItem>
                             </SelectContent>
                           </Select>
                         </label>
@@ -1557,7 +1560,8 @@ export default function AdminPage() {
                           </label>
                         )}
                         {actor.id !== "admin" &&
-                          actor.actorType !== "MENU_DISPLAY" && (
+                          actor.actorType !== "MENU_DISPLAY" &&
+                          actor.actorType !== "ORDER_DISPLAY" && (
                             <div className="ml-auto">
                               <IconActionButton
                                 label="削除"

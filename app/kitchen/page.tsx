@@ -40,7 +40,7 @@ type KitchenMenuRow = {
 
 type KitchenActor = {
   id: string;
-  actorType: "POS" | "KITCHEN" | "WAITER" | "MENU_DISPLAY" | "ADMIN";
+  actorType: "POS" | "KITCHEN" | "WAITER" | "MENU_DISPLAY" | "ORDER_DISPLAY" | "ADMIN";
   label: string;
   isActive: boolean;
   kitchenEnabled: boolean;

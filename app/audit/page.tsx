@@ -194,6 +194,8 @@ export default function AuditPage() {
                   <SelectItem value="POS">POS</SelectItem>
                   <SelectItem value="KITCHEN">キッチン</SelectItem>
                   <SelectItem value="WAITER">カウンター</SelectItem>
+                  <SelectItem value="MENU_DISPLAY">メニュー表示</SelectItem>
+                  <SelectItem value="ORDER_DISPLAY">注文表示</SelectItem>
                   <SelectItem value="ADMIN">管理者</SelectItem>
                 </SelectContent>
               </Select>

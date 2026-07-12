@@ -13,6 +13,7 @@ enum ActorType {
   KITCHEN
   WAITER
   MENU_DISPLAY
+  ORDER_DISPLAY
   ADMIN
 }
 

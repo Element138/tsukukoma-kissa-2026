@@ -259,7 +259,7 @@ export async function toggleKitchenState(
   db: DbClient,
   params: {
     actorId: string;
-    actorType: "KITCHEN" | "ADMIN" | "POS" | "WAITER" | "MENU_DISPLAY";
+    actorType: "KITCHEN" | "ADMIN" | "POS" | "WAITER" | "MENU_DISPLAY" | "ORDER_DISPLAY";
     kitchenId: string;
     kitchenEnabled: boolean;
   }
@@ -320,7 +320,7 @@ export async function reassignQueuedFromDisabledKitchen(
   db: DbClient,
   params: {
     actorId: string;
-    actorType: "KITCHEN" | "ADMIN" | "POS" | "WAITER" | "MENU_DISPLAY";
+    actorType: "KITCHEN" | "ADMIN" | "POS" | "WAITER" | "MENU_DISPLAY" | "ORDER_DISPLAY";
     fromKitchenId: string;
     toKitchenId: string;
   }

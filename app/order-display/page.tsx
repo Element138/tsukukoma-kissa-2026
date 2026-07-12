@@ -74,7 +74,7 @@ function tileTone(order: DisplayOrder) {
 }
 
 export default function OrderDisplayPage() {
-  const { loading, session } = useSession(["MENU_DISPLAY"]);
+  const { loading, session } = useSession(["ORDER_DISPLAY"]);
   const { notify } = useToast();
   const [readyOrders, setReadyOrders] = useState<DisplayOrder[]>([]);
   const [unreadyOrders, setUnreadyOrders] = useState<DisplayOrder[]>([]);

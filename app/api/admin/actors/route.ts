@@ -24,7 +24,7 @@ const actorPublicSelect = {
   kitchenDisplayOrder: true
 } as const;
 
-function makeActorId(actorType: "POS" | "KITCHEN" | "WAITER" | "MENU_DISPLAY" | "ADMIN") {
+function makeActorId(actorType: "POS" | "KITCHEN" | "WAITER" | "MENU_DISPLAY" | "ORDER_DISPLAY" | "ADMIN") {
   const suffix = randomUUID().replace(/-/g, "").slice(0, 10);
   return `${actorType.toLowerCase()}-${suffix}`;
 }
@@ -78,14 +78,14 @@ export async function POST(req: NextRequest) {
 
       trace("tx.create.start");
       const actor = await prisma.$transaction(async (tx) => {
-        if (body.actorType === "MENU_DISPLAY") {
+        if (body.actorType === "MENU_DISPLAY" || body.actorType === "ORDER_DISPLAY") {
           const existingCount = await tx.actor.count({
             where: {
-              actorType: "MENU_DISPLAY"
+              actorType: body.actorType
             }
           });
           if (existingCount > 0) {
-            throw new AppError(409, "MENU_DISPLAY_SINGLETON", "MENU_DISPLAY account can only be created once");
+            throw new AppError(409, "DISPLAY_SINGLETON", `${body.actorType} account can only be created once`);
           }
         }
 
@@ -254,8 +254,8 @@ export async function DELETE(req: NextRequest) {
           throw new AppError(404, "ACTOR_NOT_FOUND", "Actor not found");
         }
 
-        if (existing.actorType === "MENU_DISPLAY") {
-          throw new AppError(400, "INVALID_OPERATION", "MENU_DISPLAY actor cannot be deleted");
+        if (existing.actorType === "MENU_DISPLAY" || existing.actorType === "ORDER_DISPLAY") {
+          throw new AppError(400, "INVALID_OPERATION", `${existing.actorType} actor cannot be deleted`);
         }
 
         await tx.actor.update({

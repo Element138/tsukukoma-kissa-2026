@@ -36,6 +36,7 @@ const ERROR_MESSAGE_JA: Record<string, string> = {
   INVALID_SOURCE_KITCHEN: "移管元キッチンが無効です",
   NOT_KITCHEN_ACTOR: "対象アクターはキッチンではありません",
   MENU_DISPLAY_SINGLETON: "メニュー表示アカウントは 1 つのみ作成できます",
+  DISPLAY_SINGLETON: "表示アカウントは種類ごとに 1 つのみ作成できます",
 
   ACTOR_NOT_FOUND: "アクターが見つかりません",
   CATEGORY_NOT_FOUND: "カテゴリが見つかりません",

@@ -8,6 +8,8 @@
       return "/counter";
     case "MENU_DISPLAY":
       return "/menu-display";
+    case "ORDER_DISPLAY":
+      return "/order-display";
     case "ADMIN":
       return "/admin";
     default:

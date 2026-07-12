@@ -21,6 +21,7 @@ const DEFAULT_ALLOWED_STATIC_CHANNELS: Record<ActorType, Set<StaticRealtimeChann
   KITCHEN: new Set(["orders", "menus", "assignments", "actors"]),
   WAITER: new Set(["orders", "counter", "actors"]),
   MENU_DISPLAY: new Set(["menus", "categories", "orders"]),
+  ORDER_DISPLAY: new Set(["orders"]),
   ADMIN: new Set(STATIC_REALTIME_CHANNELS)
 };
 

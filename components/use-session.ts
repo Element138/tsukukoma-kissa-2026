@@ -7,7 +7,7 @@ import { ApiError, apiFetch, isAuthError } from "@/lib/client";
 type SessionPayload = {
   actor: {
     actorId: string;
-    actorType: "POS" | "KITCHEN" | "WAITER" | "MENU_DISPLAY" | "ADMIN";
+    actorType: "POS" | "KITCHEN" | "WAITER" | "MENU_DISPLAY" | "ORDER_DISPLAY" | "ADMIN";
     label: string;
   };
   offlineActors: Array<{ actorId: string; actorType: string; label: string }>;

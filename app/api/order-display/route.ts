@@ -17,7 +17,7 @@ function isUnreadyOrder(items: Array<{ status: string }>) {
 
 export async function GET(req: NextRequest) {
   try {
-    await requireSession(req, { actorTypes: ["MENU_DISPLAY", "ADMIN"] });
+    await requireSession(req, { actorTypes: ["ORDER_DISPLAY", "ADMIN"] });
 
     const orders = await prisma.order.findMany({
       where: {

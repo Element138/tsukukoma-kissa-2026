@@ -3,6 +3,7 @@
   KITCHEN: "キッチン",
   WAITER: "カウンター",
   MENU_DISPLAY: "メニュー表示",
+  ORDER_DISPLAY: "注文表示",
   ADMIN: "管理者",
 };
 

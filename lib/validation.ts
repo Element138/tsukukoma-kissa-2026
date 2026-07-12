@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const actorTypeSchema = z.enum(["POS", "KITCHEN", "WAITER", "MENU_DISPLAY", "ADMIN"]);
+export const actorTypeSchema = z.enum(["POS", "KITCHEN", "WAITER", "MENU_DISPLAY", "ORDER_DISPLAY", "ADMIN"]);
 
 export const loginSchema = z.object({
   actorId: z.string().min(1).max(64),

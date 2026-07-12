@@ -7,7 +7,7 @@ import { minutesFromNow, now } from "@/lib/time";
 
 export const SESSION_COOKIE = "kissa_session";
 const SESSION_TTL_MINUTES = 10;
-const MENU_DISPLAY_TTL_MINUTES = 60 * 12;
+const DISPLAY_TTL_MINUTES = 60 * 12;
 const HEARTBEAT_TOUCH_MS = 10_000;
 
 type SessionActor = {
@@ -46,7 +46,7 @@ const SESSION_FAILURE_MESSAGE: Record<SessionFailureCode, string> = {
 };
 
 function sessionTtlMinutes(actorType: ActorType) {
-  return actorType === "MENU_DISPLAY" ? MENU_DISPLAY_TTL_MINUTES : SESSION_TTL_MINUTES;
+  return actorType === "MENU_DISPLAY" || actorType === "ORDER_DISPLAY" ? DISPLAY_TTL_MINUTES : SESSION_TTL_MINUTES;
 }
 
 function isStale(ts: Date | null | undefined) {
@@ -64,7 +64,7 @@ export function setSessionCookie(response: NextResponse, token: string, actorTyp
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    ...(actorType === "MENU_DISPLAY"
+    ...(actorType === "MENU_DISPLAY" || actorType === "ORDER_DISPLAY"
       ? {
           expires: minutesFromNow(sessionTtlMinutes(actorType))
         }
@@ -127,7 +127,7 @@ async function touchSession(session: Session & { actor: SessionActor }) {
     where: { sessionId: session.sessionId },
     data: {
       lastActivityAt: now(),
-      ...(session.actor.actorType === "MENU_DISPLAY"
+      ...(session.actor.actorType === "MENU_DISPLAY" || session.actor.actorType === "ORDER_DISPLAY"
         ? {}
         : {
             expiresAt: minutesFromNow(SESSION_TTL_MINUTES)
@@ -193,7 +193,7 @@ export async function requireSession(
 export async function createSession(actor: { id: string; actorType: ActorType }, tx?: Prisma.TransactionClient) {
   const db = tx ?? prisma;
 
-  if (actor.actorType !== "MENU_DISPLAY") {
+  if (actor.actorType !== "MENU_DISPLAY" && actor.actorType !== "ORDER_DISPLAY") {
     await db.session.updateMany({
       where: {
         actorId: actor.id,
