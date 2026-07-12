@@ -1319,6 +1319,13 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   letter-spacing: -0.02em;
 }
 
+.kitchen-queued-headline {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  white-space: nowrap;
+}
+
 .kitchen-cap-inline {
   display: flex;
   align-items: center;
@@ -1478,14 +1485,18 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   top: 0;
   bottom: 0;
   z-index: 1;
-  width: 12.5%;
+  width: 16.6667%;
   min-width: 42px;
   border: 0;
-  background: rgba(8, 94, 67, 0.9);
-  color: #fff;
+  background: rgba(216, 244, 233, 0.95);
+  color: #0c664a;
   display: grid;
   place-items: center;
   cursor: pointer;
+}
+
+.ready-edge-control:hover {
+  background: rgba(190, 235, 217, 0.98);
 }
 
 .ready-edge-control svg {

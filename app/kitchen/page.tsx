@@ -478,11 +478,11 @@ export default function KitchenPage() {
                     </div>
 
                     <div className="kitchen-menu-metrics">
-                      <div>
-                        <div className="kitchen-queued-big">
+                      <div className="kitchen-queued-headline">
+                        <span className="kitchen-queued-big">
                           {menu.queuedCount}
-                        </div>
-                        個調理待ち
+                        </span>
+                        <span>個調理待ち</span>
                       </div>
                       <div className="kitchen-cap-inline">
                         <span className="kitchen-cap-summary">
@@ -647,8 +647,8 @@ export default function KitchenPage() {
                             )
                           }
                         >
-                          調理済みにする
-                          {menu.queuedCount > 1 ? `（${readyQuantity}個）` : ""}
+                          {menu.queuedCount > 1 ? readyQuantity : 1}
+                          個調理済みにする
                         </button>
                         {menu.queuedCount > 1 ? (
                           <button
