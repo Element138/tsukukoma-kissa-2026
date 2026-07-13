@@ -10,6 +10,8 @@ import { broadcastInvalidation, CHANNEL_GROUPS } from "@/lib/server/realtime-bro
 const updateSchema = z.object({
   pageDisplaySeconds: z.number().int().min(6).max(120),
   counterReadyGraceMinutes: z.number().int().min(0).max(60),
+  orderDisplayMarqueeText: z.string().max(240),
+  orderDisplayMarqueeSpeedSeconds: z.number().int().min(8).max(90),
 });
 
 async function ensureSetting() {
@@ -19,6 +21,8 @@ async function ensureSetting() {
       id: 1,
       menuDisplayPageSeconds: 18,
       counterReadyGraceMinutes: 3,
+      orderDisplayMarqueeText: "",
+      orderDisplayMarqueeSpeedSeconds: 24,
     },
     update: {},
   });
@@ -26,13 +30,18 @@ async function ensureSetting() {
 
 export async function GET(req: NextRequest) {
   try {
-    await requireSession(req, { actorTypes: ["ADMIN", "MENU_DISPLAY"] });
+    await requireSession(req, {
+      actorTypes: ["ADMIN", "MENU_DISPLAY", "ORDER_DISPLAY"],
+    });
 
     const setting = await ensureSetting();
     return ok({
       settings: {
         pageDisplaySeconds: setting.menuDisplayPageSeconds,
         counterReadyGraceMinutes: setting.counterReadyGraceMinutes,
+        orderDisplayMarqueeText: setting.orderDisplayMarqueeText,
+        orderDisplayMarqueeSpeedSeconds:
+          setting.orderDisplayMarqueeSpeedSeconds,
       },
     });
   } catch (error) {
@@ -52,6 +61,9 @@ export async function PATCH(req: NextRequest) {
         data: {
           menuDisplayPageSeconds: body.pageDisplaySeconds,
           counterReadyGraceMinutes: body.counterReadyGraceMinutes,
+          orderDisplayMarqueeText: body.orderDisplayMarqueeText.trim(),
+          orderDisplayMarqueeSpeedSeconds:
+            body.orderDisplayMarqueeSpeedSeconds,
         },
       });
 
@@ -64,17 +76,23 @@ export async function PATCH(req: NextRequest) {
         beforeJson: {
           menuDisplayPageSeconds: before.menuDisplayPageSeconds,
           counterReadyGraceMinutes: before.counterReadyGraceMinutes,
+          orderDisplayMarqueeText: before.orderDisplayMarqueeText,
+          orderDisplayMarqueeSpeedSeconds:
+            before.orderDisplayMarqueeSpeedSeconds,
         },
         afterJson: {
           menuDisplayPageSeconds: updated.menuDisplayPageSeconds,
           counterReadyGraceMinutes: updated.counterReadyGraceMinutes,
+          orderDisplayMarqueeText: updated.orderDisplayMarqueeText,
+          orderDisplayMarqueeSpeedSeconds:
+            updated.orderDisplayMarqueeSpeedSeconds,
         },
         result: "SUCCESS",
       });
 
       await broadcastInvalidation(
         tx,
-        CHANNEL_GROUPS.ORDER_FLOW,
+        ["settings", ...CHANNEL_GROUPS.ORDER_FLOW],
         "settings",
         "display_settings_updated",
       );
@@ -86,6 +104,9 @@ export async function PATCH(req: NextRequest) {
       settings: {
         pageDisplaySeconds: setting.menuDisplayPageSeconds,
         counterReadyGraceMinutes: setting.counterReadyGraceMinutes,
+        orderDisplayMarqueeText: setting.orderDisplayMarqueeText,
+        orderDisplayMarqueeSpeedSeconds:
+          setting.orderDisplayMarqueeSpeedSeconds,
       },
     });
   } catch (error) {

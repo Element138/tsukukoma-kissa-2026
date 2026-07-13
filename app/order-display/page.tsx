@@ -22,6 +22,11 @@ type OrderDisplayPayload = {
   unreadyOrders: DisplayOrder[];
 };
 
+type OrderDisplaySettings = {
+  orderDisplayMarqueeText: string;
+  orderDisplayMarqueeSpeedSeconds: number;
+};
+
 type Callout = {
   key: number;
   orderNo: number;
@@ -38,6 +43,7 @@ type QueuedCall = {
 };
 
 const ORDER_AGE_LONG_WAIT_MS = 20 * 60 * 1000;
+const CALLOUT_MIN_VISIBLE_MS = 5200;
 const CALLOUT_FADE_OUT_MS = 450;
 const CALL_BURST_WINDOW_MS = 5000;
 const CALL_ASSETS = {
@@ -99,10 +105,10 @@ function tileTone(order: DisplayOrder) {
 
 function orderNumberStyle(orderNo: number) {
   const digitCount = String(orderNo).length;
-  const scale = Math.min(1, 2.55 / Math.max(1, digitCount));
+  const scale = Math.min(1, 2.9 / Math.max(1, digitCount));
   return {
     "--order-no-scale": String(scale),
-    "--order-no-fit-size": `${145 / Math.max(1, digitCount)}cqw`,
+    "--order-no-fit-size": `${160 / Math.max(1, digitCount)}cqw`,
   } as CSSProperties;
 }
 
@@ -111,6 +117,10 @@ export default function OrderDisplayPage() {
   const { notify } = useToast();
   const [readyOrders, setReadyOrders] = useState<DisplayOrder[]>([]);
   const [unreadyOrders, setUnreadyOrders] = useState<DisplayOrder[]>([]);
+  const [settings, setSettings] = useState<OrderDisplaySettings>({
+    orderDisplayMarqueeText: "",
+    orderDisplayMarqueeSpeedSeconds: 24,
+  });
   const [callout, setCallout] = useState<Callout | null>(null);
   const reloadInFlightRef = useRef(false);
   const queuedReloadRef = useRef(false);
@@ -140,7 +150,9 @@ export default function OrderDisplayPage() {
     };
     setCallout(activeCall);
 
+    const visibleStartedAt = Date.now();
     await playOrderCallAudio(activeCall);
+    await wait(Math.max(0, CALLOUT_MIN_VISIBLE_MS - (Date.now() - visibleStartedAt)));
     setCallout((current) =>
       current?.key === activeCall.key ? { ...current, exiting: true } : current,
     );
@@ -226,11 +238,27 @@ export default function OrderDisplayPage() {
     }
   };
 
+  const reloadSettings = async () => {
+    try {
+      const data = await apiFetch<{ settings: OrderDisplaySettings }>(
+        "/api/admin/menu-display-settings",
+      );
+      setSettings(data.settings);
+    } catch (e) {
+      notify({
+        level: "error",
+        message:
+          e instanceof Error ? e.message : "注文表示設定の更新に失敗しました",
+      });
+    }
+  };
+
   useEffect(() => {
     if (!session) {
       return;
     }
     void reload();
+    void reloadSettings();
   }, [session]);
 
   useEffect(() => {
@@ -245,12 +273,17 @@ export default function OrderDisplayPage() {
 
   useRealtimeSubscription({
     enabled: Boolean(session),
-    channels: ["orders"],
-    onEvent: () => {
+    channels: ["orders", "settings"],
+    onEvent: (event) => {
+      if (event.channel === "settings") {
+        void reloadSettings();
+        return;
+      }
       void reload();
     },
     onResync: () => {
       void reload();
+      void reloadSettings();
     },
   });
 
@@ -266,6 +299,7 @@ export default function OrderDisplayPage() {
     () => [...unreadyOrders].sort((a, b) => a.orderNo - b.orderNo),
     [unreadyOrders],
   );
+  const marqueeText = settings.orderDisplayMarqueeText.trim();
   if (loading || !session) {
     return <LoadingScreen />;
   }
@@ -277,6 +311,7 @@ export default function OrderDisplayPage() {
         hasOrders ? "has-orders" : "no-orders",
         hasReady ? "has-ready" : "no-ready",
         hasUnready ? "has-unready" : "no-unready",
+        marqueeText ? "has-marquee" : "no-marquee",
       ].join(" ")}
     >
       <div className="order-display-empty">注文はありません</div>
@@ -333,6 +368,23 @@ export default function OrderDisplayPage() {
           </div>
         </section>
       </div>
+
+      {marqueeText && (
+        <aside
+          className="order-display-marquee"
+          style={
+            {
+              "--marquee-duration": `${settings.orderDisplayMarqueeSpeedSeconds}s`,
+            } as CSSProperties
+          }
+        >
+          <div className="order-display-marquee-track">
+            <span>{marqueeText}</span>
+            <span>{marqueeText}</span>
+            <span>{marqueeText}</span>
+          </div>
+        </aside>
+      )}
 
       {callout && (
         <div

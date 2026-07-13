@@ -38,8 +38,7 @@ export function deriveOrderStatus(params: {
     return allReadyOrServed ? "AWAITING_SERVING" : "PREPARING";
   }
 
-  const hasReady = params.items.some((i) => i.status === "READY");
-  return hasReady ? "AWAITING_SERVING" : "PREPARING";
+  return "PREPARING";
 }
 
 export function aggregateOrderPrice(items: Array<{ unitPriceJpy: number }>): number {

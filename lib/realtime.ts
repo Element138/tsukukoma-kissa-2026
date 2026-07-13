@@ -5,7 +5,8 @@ export const STATIC_REALTIME_CHANNELS = [
   "categories",
   "actors",
   "assignments",
-  "audit"
+  "audit",
+  "settings"
 ] as const;
 
 export type StaticRealtimeChannel = (typeof STATIC_REALTIME_CHANNELS)[number];

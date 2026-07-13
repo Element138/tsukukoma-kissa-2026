@@ -305,6 +305,8 @@ model AppSetting {
   id                            Int      @id
   menuDisplayPageSeconds        Int      @default(18)
   counterReadyGraceMinutes      Int      @default(3)
+  orderDisplayMarqueeText       String   @default("") @db.VarChar(240)
+  orderDisplayMarqueeSpeedSeconds Int    @default(24)
   createdAt                     DateTime @default(now())
   updatedAt                     DateTime @updatedAt
 }

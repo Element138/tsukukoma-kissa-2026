@@ -36,7 +36,7 @@ export const PAYMENT_STATUS_LABEL: Record<string, string> = {
 export const ORDER_STATUS_LABEL: Record<string, string> = {
   PENDING: "保留",
   PREPARING: "調理中",
-  AWAITING_SERVING: "提供待ち",
+  AWAITING_SERVING: "受け取り待ち",
   COMPLETED: "完了",
   FAILED: "失敗",
   CANCELED: "失敗(旧取消)",
