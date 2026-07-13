@@ -54,7 +54,7 @@ const CALL_ASSETS = {
   melody: "/audio/order-call/call-melody.wav",
   waitLong: "/audio/order-call/wait-long.mp3",
   continued: "/audio/order-call/continued.mp3",
-  prepared: "/audio/order-call/prepared.mp3",
+  preparedCounter: "/audio/order-call/prepared-counter.mp3",
   counter: "/audio/order-call/counter.mp3",
 };
 
@@ -133,8 +133,7 @@ async function playOrderCallAudio(call: Callout, melodyVolume: number) {
       : null,
     numberAudio,
     customerAudio,
-    call.followsPrevious ? null : preloadAudio(CALL_ASSETS.prepared),
-    CALL_ASSETS.counter,
+    call.followsPrevious ? CALL_ASSETS.counter : CALL_ASSETS.preparedCounter,
   ].filter(Boolean) as Array<string | HTMLAudioElement>;
 
   for (const part of parts) {
