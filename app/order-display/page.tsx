@@ -50,6 +50,7 @@ const CALL_BURST_WINDOW_MS = 5000;
 const UNREADY_SCROLL_DURATION_MS = 36_000;
 const READY_SCROLL_DURATION_MS = 28_000;
 const ORDER_DISPLAY_REFRESH_MS = 5_000;
+const MELODY_GAIN_BOOST = 2.4;
 const CALL_ASSETS = {
   melody: "/audio/order-call/call-melody.wav",
   waitLong: "/audio/order-call/wait-long.mp3",
@@ -57,6 +58,9 @@ const CALL_ASSETS = {
   preparedCounter: "/audio/order-call/prepared-counter.mp3",
   counter: "/audio/order-call/counter.mp3",
 };
+
+let orderCallAudioContext: AudioContext | null = null;
+const decodedAudioBuffers = new Map<string, Promise<AudioBuffer>>();
 
 function wait(ms: number) {
   return new Promise<void>((resolve) => window.setTimeout(resolve, ms));
@@ -100,6 +104,67 @@ function preloadAudio(src: string, volume = 1) {
   return audio;
 }
 
+function getOrderCallAudioContext() {
+  if (!orderCallAudioContext) {
+    const AudioContextConstructor =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext?: typeof AudioContext })
+        .webkitAudioContext;
+    if (!AudioContextConstructor) {
+      throw new Error("Web Audio is unavailable");
+    }
+    orderCallAudioContext = new AudioContextConstructor();
+  }
+  return orderCallAudioContext;
+}
+
+function loadDecodedAudioBuffer(src: string) {
+  const existing = decodedAudioBuffers.get(src);
+  if (existing) {
+    return existing;
+  }
+
+  const bufferPromise = fetch(src, {
+    credentials: "include",
+    cache: "force-cache",
+  })
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error(`Audio preload failed: ${response.status}`);
+      }
+      return response.arrayBuffer();
+    })
+    .then((arrayBuffer) =>
+      getOrderCallAudioContext().decodeAudioData(arrayBuffer),
+    );
+  decodedAudioBuffers.set(src, bufferPromise);
+  return bufferPromise;
+}
+
+async function playAudioBuffer(src: string, gainValue: number) {
+  const audioContext = getOrderCallAudioContext();
+  await audioContext.resume();
+  if (audioContext.state === "suspended") {
+    throw new Error("Web Audio playback is suspended");
+  }
+  const audioBuffer = await loadDecodedAudioBuffer(src);
+
+  return new Promise<void>((resolve) => {
+    const source = audioContext.createBufferSource();
+    const gainNode = audioContext.createGain();
+    source.buffer = audioBuffer;
+    gainNode.gain.value = Math.max(0, gainValue);
+    source.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    source.onended = () => {
+      source.disconnect();
+      gainNode.disconnect();
+      resolve();
+    };
+    source.start();
+  });
+}
+
 function orderNumberAudioSrc(orderNo: number, part: "number" | "customer") {
   return `/api/order-display/audio/${part}/${encodeURIComponent(String(orderNo))}`;
 }
@@ -124,10 +189,18 @@ async function playOrderCallAudio(call: Callout, melodyVolume: number) {
     waitForAudioReady(numberAudio),
     waitForAudioReady(customerAudio),
   ]);
+  if (!call.followsPrevious) {
+    await playAudioBuffer(
+      CALL_ASSETS.melody,
+      melodyVolume * MELODY_GAIN_BOOST,
+    ).catch(() =>
+      playAudioElement(preloadAudio(CALL_ASSETS.melody, melodyVolume)),
+    );
+  }
   const parts = [
     call.followsPrevious
       ? preloadAudio(CALL_ASSETS.continued)
-      : preloadAudio(CALL_ASSETS.melody, melodyVolume),
+      : null,
     isLongWait && !call.followsPrevious
       ? preloadAudio(CALL_ASSETS.waitLong)
       : null,
