@@ -49,7 +49,7 @@ export async function GET(
     const { part: rawPart, orderNo: rawOrderNo } = await context.params;
     const part = parsePart(rawPart);
     const orderNo = parseOrderNo(rawOrderNo);
-    const pathname = `order-call/numbers/${part}-${orderNo}.mp3`;
+    const pathname = `order-call/numbers/v2/${part}-${orderNo}.mp3`;
     const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
 
     if (blobToken) {

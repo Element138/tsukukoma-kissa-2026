@@ -27,6 +27,7 @@ type Callout = {
   orderNo: number;
   createdAt: string;
   followsPrevious: boolean;
+  exiting?: boolean;
 };
 
 type QueuedCall = {
@@ -37,7 +38,7 @@ type QueuedCall = {
 };
 
 const ORDER_AGE_LONG_WAIT_MS = 20 * 60 * 1000;
-const AUDIO_GAP_MS = 180;
+const CALLOUT_FADE_OUT_MS = 450;
 const CALL_BURST_WINDOW_MS = 5000;
 const CALL_ASSETS = {
   bell: "/audio/order-call/notification.wav",
@@ -47,7 +48,7 @@ const CALL_ASSETS = {
   counter: "/audio/order-call/counter.mp3",
 };
 
-function delay(ms: number) {
+function wait(ms: number) {
   return new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 }
 
@@ -81,11 +82,8 @@ async function playOrderCallAudio(call: Callout) {
     CALL_ASSETS.counter,
   ].filter(Boolean) as string[];
 
-  for (const [index, src] of parts.entries()) {
+  for (const src of parts) {
     await playAudio(src);
-    if (index < parts.length - 1) {
-      await delay(AUDIO_GAP_MS);
-    }
   }
 }
 
@@ -101,8 +99,11 @@ function tileTone(order: DisplayOrder) {
 
 function orderNumberStyle(orderNo: number) {
   const digitCount = String(orderNo).length;
-  const scale = Math.min(1, 3.4 / Math.max(1, digitCount));
-  return { "--order-no-scale": String(scale) } as CSSProperties;
+  const scale = Math.min(1, 2.55 / Math.max(1, digitCount));
+  return {
+    "--order-no-scale": String(scale),
+    "--order-no-fit-size": `${145 / Math.max(1, digitCount)}cqw`,
+  } as CSSProperties;
 }
 
 export default function OrderDisplayPage() {
@@ -119,8 +120,6 @@ export default function OrderDisplayPage() {
   const callQueueRef = useRef<QueuedCall[]>([]);
   const callInFlightRef = useRef(false);
   const lastCallEndedAtRef = useRef(0);
-  const unreadyGridRef = useRef<HTMLDivElement | null>(null);
-  const readyGridRef = useRef<HTMLDivElement | null>(null);
 
   const processCallQueue = async () => {
     if (callInFlightRef.current) {
@@ -142,6 +141,10 @@ export default function OrderDisplayPage() {
     setCallout(activeCall);
 
     await playOrderCallAudio(activeCall);
+    setCallout((current) =>
+      current?.key === activeCall.key ? { ...current, exiting: true } : current,
+    );
+    await wait(CALLOUT_FADE_OUT_MS);
     setCallout((current) =>
       current?.key === activeCall.key ? null : current,
     );
@@ -263,55 +266,6 @@ export default function OrderDisplayPage() {
     () => [...unreadyOrders].sort((a, b) => a.orderNo - b.orderNo),
     [unreadyOrders],
   );
-  const scrollSignature = useMemo(
-    () =>
-      [
-        orderedReady.map((order) => order.id).join(","),
-        orderedUnready.map((order) => order.id).join(","),
-      ].join("|"),
-    [orderedReady, orderedUnready],
-  );
-
-  useEffect(() => {
-    const grids = [unreadyGridRef.current, readyGridRef.current].filter(
-      Boolean,
-    ) as HTMLDivElement[];
-    const animations: Animation[] = [];
-    const raf = window.requestAnimationFrame(() => {
-      for (const grid of grids) {
-        grid.style.transform = "translateY(0px)";
-        const overflowPx = Math.max(0, grid.scrollHeight - grid.clientHeight + 2);
-        if (overflowPx <= 1) {
-          continue;
-        }
-        animations.push(
-          grid.animate(
-            [
-              { transform: "translateY(0px)", offset: 0 },
-              { transform: "translateY(0px)", offset: 0.16 },
-              { transform: `translateY(${-overflowPx}px)`, offset: 0.58 },
-              { transform: `translateY(${-overflowPx}px)`, offset: 0.76 },
-              { transform: "translateY(0px)", offset: 0.98 },
-              { transform: "translateY(0px)", offset: 1 },
-            ],
-            {
-              duration: Math.max(18_000, overflowPx * 55),
-              easing: "linear",
-              iterations: Infinity,
-            },
-          ),
-        );
-      }
-    });
-
-    return () => {
-      window.cancelAnimationFrame(raf);
-      for (const animation of animations) {
-        animation.cancel();
-      }
-    };
-  }, [scrollSignature, hasReady, hasUnready]);
-
   if (loading || !session) {
     return <LoadingScreen />;
   }
@@ -343,7 +297,6 @@ export default function OrderDisplayPage() {
           {hasUnready ? (
             <div
               className="order-display-tile-grid order-display-unready-grid"
-              ref={unreadyGridRef}
             >
               {orderedUnready.map((order) => (
                 <article
@@ -369,7 +322,6 @@ export default function OrderDisplayPage() {
           </header>
           <div
             className={`order-display-ready-grid order-display-ready-grid-${readyMode}`}
-            ref={readyGridRef}
           >
             {orderedReady.map((order) => (
               <article key={order.id} className="order-display-ready-tile">
@@ -383,7 +335,13 @@ export default function OrderDisplayPage() {
       </div>
 
       {callout && (
-        <div key={callout.key} className="order-display-callout">
+        <div
+          key={callout.key}
+          className={[
+            "order-display-callout",
+            callout.exiting ? "is-exiting" : "",
+          ].join(" ")}
+        >
           <span>カウンターにお越しください</span>
           <strong style={orderNumberStyle(callout.orderNo)}>
             {callout.orderNo}

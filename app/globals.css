@@ -1808,7 +1808,6 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   gap: clamp(12px, 1.6vw, 24px);
   align-content: stretch;
   overflow: visible;
-  will-change: transform;
   transition:
     gap 0.85s cubic-bezier(0.22, 1, 0.36, 1),
     padding 0.85s cubic-bezier(0.22, 1, 0.36, 1);
@@ -1822,6 +1821,7 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
 .order-display-unready-tile,
 .order-display-ready-tile {
   min-width: 0;
+  container-type: inline-size;
   border-radius: 8px;
   display: grid;
   align-content: center;
@@ -1863,9 +1863,15 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
 
 .order-display-unready-tile strong {
   color: #6b7280;
-  font-size: calc(clamp(3.2rem, 7vw, 7rem) * var(--order-no-scale, 1));
+  display: block;
+  max-width: 100%;
+  font-size: min(
+    calc(clamp(2.7rem, 5.9vw, 5.8rem) * var(--order-no-scale, 1)),
+    var(--order-no-fit-size, 100cqw)
+  );
   line-height: 0.92;
-  font-weight: 900;
+  font-weight: 760;
+  font-variant-numeric: tabular-nums;
   letter-spacing: 0;
 }
 
@@ -1898,27 +1904,35 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
 }
 
 .order-display-ready-tile strong {
-  color: #0f766e;
-  background: linear-gradient(90deg, #0f766e 0%, #20b486 30%, #b9f5d8 48%, #08705f 66%, #0f766e 100%);
-  background-size: 260% 100%;
+  color: #0c7a66;
+  background: linear-gradient(90deg, #0b6f61 0%, #12a878 48%, #0a715f 100%);
   background-clip: text;
   -webkit-background-clip: text;
-  font-size: calc(clamp(7rem, 18vw, 22rem) * var(--order-no-scale, 1));
+  display: block;
+  max-width: 100%;
+  font-size: min(
+    calc(clamp(6rem, 15vw, 18rem) * var(--order-no-scale, 1)),
+    var(--order-no-fit-size, 100cqw)
+  );
   line-height: 0.82;
   font-weight: 900;
+  font-variant-numeric: tabular-nums;
   letter-spacing: 0;
   -webkit-text-fill-color: transparent;
-  animation: ready-number-flow 6.5s linear infinite;
 }
 
 .order-display-ready-grid-tiled .order-display-ready-tile strong {
-  font-size: calc(clamp(4.2rem, 8.5vw, 9.4rem) * var(--order-no-scale, 1));
+  font-size: min(
+    calc(clamp(3.7rem, 7.2vw, 7.8rem) * var(--order-no-scale, 1)),
+    var(--order-no-fit-size, 100cqw)
+  );
 }
 
 .order-display-callout {
   position: absolute;
   inset: 0;
   z-index: 5;
+  container-type: inline-size;
   display: grid;
   place-items: center;
   align-content: center;
@@ -1927,7 +1941,11 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   background:
     linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(255, 247, 218, 0.98)),
     #fff;
-  animation: order-callout 7.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: order-callout-in 0.58s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.order-display-callout.is-exiting {
+  animation: order-callout-out 0.45s ease both;
 }
 
 .order-display-callout span {
@@ -1937,16 +1955,19 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
 }
 
 .order-display-callout strong {
-  background: linear-gradient(90deg, #0f766e 0%, #20b486 30%, #d4ffe7 48%, #08705f 66%, #0f766e 100%);
-  background-size: 260% 100%;
+  background: linear-gradient(90deg, #0b6f61 0%, #14ad7c 48%, #0a715f 100%);
   background-clip: text;
   -webkit-background-clip: text;
-  font-size: calc(clamp(12rem, 35vw, 36rem) * var(--order-no-scale, 1));
+  max-width: 100%;
+  font-size: min(
+    calc(clamp(10rem, 30vw, 32rem) * var(--order-no-scale, 1)),
+    var(--order-no-fit-size, 100cqw)
+  );
   line-height: 0.78;
   font-weight: 900;
+  font-variant-numeric: tabular-nums;
   letter-spacing: 0;
   -webkit-text-fill-color: transparent;
-  animation: ready-number-flow 6.5s linear infinite;
 }
 
 @keyframes order-tile-in {
@@ -1956,21 +1977,25 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   }
 }
 
-@keyframes order-callout {
+@keyframes order-callout-in {
   0% {
     opacity: 0;
     transform: scale(1.035);
   }
-  12%,
   100% {
     opacity: 1;
     transform: scale(1);
   }
 }
 
-@keyframes ready-number-flow {
-  to {
-    background-position: -260% 0;
+@keyframes order-callout-out {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.985);
   }
 }
 

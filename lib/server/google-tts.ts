@@ -42,7 +42,7 @@ export async function synthesizeJapaneseSpeechMp3(text: string) {
       },
       audioConfig: {
         audioEncoding: "MP3",
-        speakingRate: 0.92,
+        speakingRate: 1.14,
         pitch: 0,
       },
     }),
