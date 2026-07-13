@@ -48,6 +48,8 @@ const CALLOUT_MIN_VISIBLE_MS = 5200;
 const CALLOUT_FADE_OUT_MS = 450;
 const CALL_BURST_WINDOW_MS = 5000;
 const UNREADY_SCROLL_DURATION_MS = 36_000;
+const READY_SCROLL_DURATION_MS = 28_000;
+const ORDER_DISPLAY_REFRESH_MS = 5_000;
 const CALL_ASSETS = {
   melody: "/audio/order-call/call-melody.wav",
   waitLong: "/audio/order-call/wait-long.mp3",
@@ -65,6 +67,27 @@ function playAudioElement(audio: HTMLAudioElement) {
     audio.onended = () => resolve();
     audio.onerror = () => resolve();
     void audio.play().catch(() => resolve());
+  });
+}
+
+function waitForAudioReady(audio: HTMLAudioElement) {
+  if (audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+    return Promise.resolve();
+  }
+
+  return new Promise<void>((resolve) => {
+    const cleanup = () => {
+      audio.removeEventListener("canplaythrough", onReady);
+      audio.removeEventListener("canplay", onReady);
+      audio.removeEventListener("error", onReady);
+    };
+    const onReady = () => {
+      cleanup();
+      resolve();
+    };
+    audio.addEventListener("canplaythrough", onReady, { once: true });
+    audio.addEventListener("canplay", onReady, { once: true });
+    audio.addEventListener("error", onReady, { once: true });
   });
 }
 
@@ -96,11 +119,17 @@ async function playOrderCallAudio(call: Callout, melodyVolume: number) {
   const customerAudio = preloadAudio(
     orderNumberAudioSrc(call.orderNo, "customer"),
   );
+  await Promise.all([
+    waitForAudioReady(numberAudio),
+    waitForAudioReady(customerAudio),
+  ]);
   const parts = [
     call.followsPrevious
       ? preloadAudio(CALL_ASSETS.continued)
       : preloadAudio(CALL_ASSETS.melody, melodyVolume),
-    isLongWait ? preloadAudio(CALL_ASSETS.waitLong) : null,
+    isLongWait && !call.followsPrevious
+      ? preloadAudio(CALL_ASSETS.waitLong)
+      : null,
     numberAudio,
     customerAudio,
     CALL_ASSETS.counter,
@@ -146,7 +175,10 @@ export default function OrderDisplayPage() {
   const [callout, setCallout] = useState<Callout | null>(null);
   const unreadyViewportRef = useRef<HTMLDivElement | null>(null);
   const unreadyTrackRef = useRef<HTMLDivElement | null>(null);
+  const readyViewportRef = useRef<HTMLDivElement | null>(null);
+  const readyTrackRef = useRef<HTMLDivElement | null>(null);
   const unreadyAnimationsRef = useRef<Animation[]>([]);
+  const readyAnimationsRef = useRef<Animation[]>([]);
   const reloadInFlightRef = useRef(false);
   const queuedReloadRef = useRef(false);
   const didBootstrapRef = useRef(false);
@@ -293,7 +325,7 @@ export default function OrderDisplayPage() {
     }
     const timer = setInterval(() => {
       void reload();
-    }, 15_000);
+    }, ORDER_DISPLAY_REFRESH_MS);
     return () => clearInterval(timer);
   }, [session]);
 
@@ -311,6 +343,7 @@ export default function OrderDisplayPage() {
       void reload();
       void reloadSettings();
     },
+    fallbackIntervalMs: ORDER_DISPLAY_REFRESH_MS,
   });
 
   const hasReady = readyOrders.length > 0;
@@ -327,6 +360,15 @@ export default function OrderDisplayPage() {
   );
   const readyColumns = Math.min(3, Math.max(1, readyOrders.length));
   const marqueeText = settings.orderDisplayMarqueeText.trim();
+  const readyLayoutSignature = orderedReady
+    .map((order) => `${order.id}:${order.orderNo}`)
+    .join("|");
+  const unreadyLayoutSignature = orderedUnready
+    .map(
+      (order) =>
+        `${order.id}:${order.orderNo}:${order.itemCount}:${order.queuedItemCount}`,
+    )
+    .join("|");
 
   useEffect(() => {
     for (const animation of unreadyAnimationsRef.current) {
@@ -377,9 +419,8 @@ export default function OrderDisplayPage() {
         [
           { transform: "translateY(0px)", offset: 0 },
           { transform: "translateY(0px)", offset: 0.14 },
-          { transform: `translateY(${-overflowPx}px)`, offset: 0.72 },
+          { transform: `translateY(${-overflowPx}px)`, offset: 0.64 },
           { transform: `translateY(${-overflowPx}px)`, offset: 0.84 },
-          { transform: "translateY(0px)", offset: 0.98 },
           { transform: "translateY(0px)", offset: 1 },
         ],
         {
@@ -410,7 +451,82 @@ export default function OrderDisplayPage() {
       }
       unreadyAnimationsRef.current = [];
     };
-  }, [orderedUnready]);
+  }, [unreadyLayoutSignature]);
+
+  useEffect(() => {
+    for (const animation of readyAnimationsRef.current) {
+      animation.cancel();
+    }
+    readyAnimationsRef.current = [];
+
+    const viewport = readyViewportRef.current;
+    const track = readyTrackRef.current;
+    if (!viewport || !track || orderedReady.length === 0) {
+      return;
+    }
+
+    let raf = 0;
+    const updateLayout = () => {
+      for (const animation of readyAnimationsRef.current) {
+        animation.cancel();
+      }
+      readyAnimationsRef.current = [];
+      track.style.transform = "translateY(0px)";
+
+      const viewportStyle = window.getComputedStyle(viewport);
+      const viewportPaddingY =
+        (Number.parseFloat(viewportStyle.paddingTop) || 0) +
+        (Number.parseFloat(viewportStyle.paddingBottom) || 0);
+      const visibleHeight = Math.max(
+        0,
+        viewport.clientHeight - viewportPaddingY,
+      );
+      const overflowPx = Math.max(0, track.scrollHeight - visibleHeight + 2);
+      if (overflowPx <= 1) {
+        return;
+      }
+
+      const duration = Math.max(
+        READY_SCROLL_DURATION_MS,
+        Math.round(overflowPx * 80),
+      );
+      const animation = track.animate(
+        [
+          { transform: "translateY(0px)", offset: 0 },
+          { transform: "translateY(0px)", offset: 0.14 },
+          { transform: `translateY(${-overflowPx}px)`, offset: 0.64 },
+          { transform: `translateY(${-overflowPx}px)`, offset: 0.84 },
+          { transform: "translateY(0px)", offset: 1 },
+        ],
+        {
+          duration,
+          easing: "linear",
+          iterations: Infinity,
+          fill: "both",
+        },
+      );
+      readyAnimationsRef.current = [animation];
+    };
+
+    const scheduleUpdate = () => {
+      window.cancelAnimationFrame(raf);
+      raf = window.requestAnimationFrame(updateLayout);
+    };
+
+    const resizeObserver = new ResizeObserver(scheduleUpdate);
+    resizeObserver.observe(viewport);
+    resizeObserver.observe(track);
+    scheduleUpdate();
+
+    return () => {
+      window.cancelAnimationFrame(raf);
+      resizeObserver.disconnect();
+      for (const animation of readyAnimationsRef.current) {
+        animation.cancel();
+      }
+      readyAnimationsRef.current = [];
+    };
+  }, [readyLayoutSignature, readyMode, readyColumns]);
 
   if (loading || !session) {
     return <LoadingScreen />;
@@ -485,16 +601,19 @@ export default function OrderDisplayPage() {
           <header className="order-display-panel-header">
             <span>カウンターにお越しください</span>
           </header>
-          <div
-            className={`order-display-ready-grid order-display-ready-grid-${readyMode}`}
-          >
-            {orderedReady.map((order) => (
-              <article key={order.id} className="order-display-ready-tile">
-                <strong style={orderNumberStyle(order.orderNo)}>
-                  {order.orderNo}
-                </strong>
-              </article>
-            ))}
+          <div ref={readyViewportRef} className="order-display-ready-viewport">
+            <div
+              ref={readyTrackRef}
+              className={`order-display-ready-grid order-display-ready-grid-${readyMode}`}
+            >
+              {orderedReady.map((order) => (
+                <article key={order.id} className="order-display-ready-tile">
+                  <strong style={orderNumberStyle(order.orderNo)}>
+                    {order.orderNo}
+                  </strong>
+                </article>
+              ))}
+            </div>
           </div>
         </section>
       </div>

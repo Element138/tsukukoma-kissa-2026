@@ -46,10 +46,28 @@ async function findCachedAudio(pathname: string, token: string): Promise<CacheLo
   }
 }
 
-function redirectWithCacheStatus(url: string, status: string) {
-  const response = NextResponse.redirect(url, 307);
-  response.headers.set("x-order-audio-cache", status);
-  return response;
+function audioResponse(audio: BodyInit, cacheStatus: string) {
+  return new NextResponse(audio, {
+    headers: {
+      "content-type": "audio/mpeg",
+      "cache-control": "public, max-age=31536000, immutable",
+      "x-order-audio-cache": cacheStatus,
+    },
+  });
+}
+
+async function fetchCachedAudio(url: string): Promise<ArrayBuffer | null> {
+  try {
+    const response = await fetch(url, { cache: "force-cache" });
+    if (!response.ok) {
+      console.error("order number audio cache download failed", response.status);
+      return null;
+    }
+    return response.arrayBuffer();
+  } catch (error) {
+    console.error("order number audio cache download failed", error);
+    return null;
+  }
 }
 
 export async function GET(
@@ -69,7 +87,11 @@ export async function GET(
       const cached = await findCachedAudio(pathname, blobToken);
       cacheStatus = cached.status;
       if (cached.status === "hit") {
-        return redirectWithCacheStatus(cached.url, "hit");
+        const cachedAudio = await fetchCachedAudio(cached.url);
+        if (cachedAudio) {
+          return audioResponse(cachedAudio, "hit");
+        }
+        cacheStatus = "download-error";
       }
     }
 
@@ -77,7 +99,7 @@ export async function GET(
 
     if (blobToken) {
       try {
-        const uploaded = await put(pathname, audio, {
+        await put(pathname, audio, {
           token: blobToken,
           access: "public",
           contentType: "audio/mpeg",
@@ -85,8 +107,8 @@ export async function GET(
           allowOverwrite: true,
           cacheControlMaxAge: 31536000,
         });
-        return redirectWithCacheStatus(
-          uploaded.url,
+        return audioResponse(
+          audio,
           cacheStatus === "error" ? "lookup-error-uploaded" : "uploaded",
         );
       } catch (error) {
@@ -96,13 +118,7 @@ export async function GET(
       }
     }
 
-    return new NextResponse(audio, {
-      headers: {
-        "content-type": "audio/mpeg",
-        "cache-control": "public, max-age=31536000, immutable",
-        "x-order-audio-cache": cacheStatus,
-      },
-    });
+    return audioResponse(audio, cacheStatus);
   } catch (error) {
     return fail(error);
   }

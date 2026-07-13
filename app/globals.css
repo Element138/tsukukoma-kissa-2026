@@ -1741,7 +1741,7 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
 }
 
 .order-display-screen.has-ready .order-display-panels {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 2.08fr);
 }
 
 .order-display-screen.has-marquee .order-display-panels {
@@ -1825,6 +1825,12 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   min-height: 0;
   overflow: hidden;
   padding: clamp(12px, 2vh, 24px) clamp(20px, 4vw, 56px) clamp(26px, 4vh, 54px);
+}
+
+.order-display-ready-viewport {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .order-display-unready-grid {
@@ -1948,19 +1954,12 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   box-shadow: none;
 }
 
+.order-display-ready-grid {
+  will-change: transform;
+}
+
 .order-display-ready-tile strong {
   color: #0c7a66;
-  background: linear-gradient(
-    90deg,
-    #0b6f61 0%,
-    #15986f 26%,
-    #41c78f 50%,
-    #15986f 74%,
-    #0b6f61 100%
-  );
-  background-size: 220% 100%;
-  background-clip: text;
-  -webkit-background-clip: text;
   display: block;
   max-width: 100%;
   font-size: min(
@@ -1971,8 +1970,6 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   font-weight: 900;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
-  -webkit-text-fill-color: transparent;
-  animation: ready-number-shimmer 8s ease-in-out infinite;
 }
 
 .order-display-ready-grid-tiled .order-display-ready-tile strong {
@@ -2009,17 +2006,7 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
 }
 
 .order-display-callout strong {
-  background: linear-gradient(
-    90deg,
-    #0b6f61 0%,
-    #17a879 28%,
-    #58d99d 50%,
-    #17a879 72%,
-    #0b6f61 100%
-  );
-  background-size: 220% 100%;
-  background-clip: text;
-  -webkit-background-clip: text;
+  color: #0c7a66;
   max-width: 100%;
   font-size: min(
     calc(clamp(10rem, 30vw, 32rem) * var(--order-no-scale, 1)),
@@ -2029,8 +2016,6 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   font-weight: 900;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
-  -webkit-text-fill-color: transparent;
-  animation: ready-number-shimmer 8s ease-in-out infinite;
 }
 
 .order-display-marquee {
@@ -2088,18 +2073,6 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   100% {
     opacity: 0;
     transform: scale(0.985);
-  }
-}
-
-@keyframes ready-number-shimmer {
-  0% {
-    background-position: 0% 0;
-  }
-  50% {
-    background-position: 100% 0;
-  }
-  100% {
-    background-position: 0% 0;
   }
 }
 

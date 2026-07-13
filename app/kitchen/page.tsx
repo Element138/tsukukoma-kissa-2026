@@ -40,7 +40,13 @@ type KitchenMenuRow = {
 
 type KitchenActor = {
   id: string;
-  actorType: "POS" | "KITCHEN" | "WAITER" | "MENU_DISPLAY" | "ORDER_DISPLAY" | "ADMIN";
+  actorType:
+    | "POS"
+    | "KITCHEN"
+    | "WAITER"
+    | "MENU_DISPLAY"
+    | "ORDER_DISPLAY"
+    | "ADMIN";
   label: string;
   isActive: boolean;
   kitchenEnabled: boolean;
@@ -216,6 +222,10 @@ export default function KitchenPage() {
 
   const submitReady = async (menuId: string, quantity: number) => {
     setBusy(true);
+    setReadyQuantityByMenuId((prev) => ({
+      ...prev,
+      [menuId]: 1,
+    }));
     try {
       const result = await apiFetch<{
         markedReadyCount: number;
@@ -687,7 +697,7 @@ export default function KitchenPage() {
                             <div>
                               <strong>注文 #{order.orderNo}</strong>
                               <span className="muted">
-                                注文から {formatMss(orderElapsed)}
+                                {formatMss(orderElapsed)} 経過
                               </span>
                             </div>
                             <button
@@ -697,7 +707,7 @@ export default function KitchenPage() {
                               onClick={() => void submitItemReady(order.itemId)}
                             >
                               <Check aria-hidden="true" />
-                              <span>調理済み</span>
+                              <span>調理済みにする</span>
                             </button>
                           </div>
                         );
