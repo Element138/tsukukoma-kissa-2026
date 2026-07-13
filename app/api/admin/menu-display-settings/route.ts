@@ -12,6 +12,7 @@ const updateSchema = z.object({
   counterReadyGraceMinutes: z.number().int().min(0).max(60),
   orderDisplayMarqueeText: z.string().max(240),
   orderDisplayMarqueeSpeedSeconds: z.number().int().min(8).max(90),
+  orderCallVolume: z.number().min(0).max(1),
 });
 
 async function ensureSetting() {
@@ -23,6 +24,7 @@ async function ensureSetting() {
       counterReadyGraceMinutes: 3,
       orderDisplayMarqueeText: "",
       orderDisplayMarqueeSpeedSeconds: 24,
+      orderCallVolume: 0.8,
     },
     update: {},
   });
@@ -42,6 +44,7 @@ export async function GET(req: NextRequest) {
         orderDisplayMarqueeText: setting.orderDisplayMarqueeText,
         orderDisplayMarqueeSpeedSeconds:
           setting.orderDisplayMarqueeSpeedSeconds,
+        orderCallVolume: setting.orderCallVolume,
       },
     });
   } catch (error) {
@@ -64,6 +67,7 @@ export async function PATCH(req: NextRequest) {
           orderDisplayMarqueeText: body.orderDisplayMarqueeText.trim(),
           orderDisplayMarqueeSpeedSeconds:
             body.orderDisplayMarqueeSpeedSeconds,
+          orderCallVolume: body.orderCallVolume,
         },
       });
 
@@ -79,6 +83,7 @@ export async function PATCH(req: NextRequest) {
           orderDisplayMarqueeText: before.orderDisplayMarqueeText,
           orderDisplayMarqueeSpeedSeconds:
             before.orderDisplayMarqueeSpeedSeconds,
+          orderCallVolume: before.orderCallVolume,
         },
         afterJson: {
           menuDisplayPageSeconds: updated.menuDisplayPageSeconds,
@@ -86,6 +91,7 @@ export async function PATCH(req: NextRequest) {
           orderDisplayMarqueeText: updated.orderDisplayMarqueeText,
           orderDisplayMarqueeSpeedSeconds:
             updated.orderDisplayMarqueeSpeedSeconds,
+          orderCallVolume: updated.orderCallVolume,
         },
         result: "SUCCESS",
       });
@@ -107,6 +113,7 @@ export async function PATCH(req: NextRequest) {
         orderDisplayMarqueeText: setting.orderDisplayMarqueeText,
         orderDisplayMarqueeSpeedSeconds:
           setting.orderDisplayMarqueeSpeedSeconds,
+        orderCallVolume: setting.orderCallVolume,
       },
     });
   } catch (error) {

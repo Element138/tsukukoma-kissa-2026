@@ -307,6 +307,7 @@ model AppSetting {
   counterReadyGraceMinutes      Int      @default(3)
   orderDisplayMarqueeText       String   @default("") @db.VarChar(240)
   orderDisplayMarqueeSpeedSeconds Int    @default(24)
+  orderCallVolume               Float    @default(0.8)
   createdAt                     DateTime @default(now())
   updatedAt                     DateTime @updatedAt
 }

@@ -133,6 +133,7 @@ type MenuDisplaySettings = {
   counterReadyGraceMinutes: number;
   orderDisplayMarqueeText: string;
   orderDisplayMarqueeSpeedSeconds: number;
+  orderCallVolume: number;
 };
 
 type MenuCoverUploadData = {
@@ -186,6 +187,12 @@ const dangerConfirm = (message: string) => window.confirm(message);
 
 function sanitizeIntegerInput(value: string) {
   return value.replace(/[^\d]/g, "");
+}
+
+function sanitizeDecimalInput(value: string) {
+  const normalized = value.replace(/[^\d.]/g, "");
+  const [head, ...tail] = normalized.split(".");
+  return tail.length > 0 ? `${head}.${tail.join("")}` : head;
 }
 
 function replaceExtensionWithWebp(filename: string) {
@@ -483,6 +490,8 @@ export default function AdminPage() {
     orderDisplayMarqueeSpeedSecondsDraft,
     setOrderDisplayMarqueeSpeedSecondsDraft,
   ] = useState("24");
+  const [orderCallVolumePercentDraft, setOrderCallVolumePercentDraft] =
+    useState("80");
   const [menuAvailabilityBusyId, setMenuAvailabilityBusyId] = useState<
     string | null
   >(null);
@@ -670,6 +679,7 @@ export default function AdminPage() {
     menuEdits,
     menuDisplaySettings,
     counterReadyGraceMinutesDraft,
+    orderCallVolumePercentDraft,
     orderDisplayMarqueeSpeedSecondsDraft,
     orderDisplayMarqueeTextDraft,
     pageDisplaySecondsDraft,
@@ -750,6 +760,19 @@ export default function AdminPage() {
           return prev;
         }
         return String(settings.settings.orderDisplayMarqueeSpeedSeconds);
+      });
+      setOrderCallVolumePercentDraft((prev) => {
+        const previousServerValue =
+          menuDisplaySettings == null
+            ? null
+            : Math.round(menuDisplaySettings.orderCallVolume * 100);
+        if (
+          previousServerValue != null &&
+          prev !== String(previousServerValue)
+        ) {
+          return prev;
+        }
+        return String(Math.round(settings.settings.orderCallVolume * 100));
       });
       setCategoryNameDrafts((prev) =>
         Object.fromEntries(
@@ -1075,6 +1098,7 @@ export default function AdminPage() {
     let pageDisplaySeconds: number;
     let counterReadyGraceMinutes: number;
     let orderDisplayMarqueeSpeedSeconds: number;
+    let orderCallVolume: number;
     const orderDisplayMarqueeText = orderDisplayMarqueeTextDraft.trim();
     try {
       pageDisplaySeconds = toPositiveFiniteNumber(
@@ -1104,6 +1128,15 @@ export default function AdminPage() {
           max: 90,
         },
       );
+      orderCallVolume =
+        toPositiveFiniteNumber(
+          orderCallVolumePercentDraft,
+          "呼び出しメロディ音量",
+          {
+            min: 0,
+            max: 100,
+          },
+        ) / 100;
     } catch (error) {
       notifyError(error, "設定値を確認してください");
       return;
@@ -1119,6 +1152,7 @@ export default function AdminPage() {
             counterReadyGraceMinutes,
             orderDisplayMarqueeText,
             orderDisplayMarqueeSpeedSeconds,
+            orderCallVolume,
           }),
         },
       );
@@ -1132,6 +1166,9 @@ export default function AdminPage() {
       );
       setOrderDisplayMarqueeSpeedSecondsDraft(
         String(data.settings.orderDisplayMarqueeSpeedSeconds),
+      );
+      setOrderCallVolumePercentDraft(
+        String(Math.round(data.settings.orderCallVolume * 100)),
       );
       notify({ level: "success", message: "表示サイクル設定を保存しました" });
     } catch (e) {
@@ -1177,6 +1214,7 @@ export default function AdminPage() {
     let nextCounterReadyGraceMinutes: number | null = null;
     let nextOrderDisplayMarqueeText: string | null = null;
     let nextOrderDisplayMarqueeSpeedSeconds: number | null = null;
+    let nextOrderCallVolume: number | null = null;
 
     try {
       for (const menu of activeMenus) {
@@ -1253,6 +1291,7 @@ export default function AdminPage() {
       const draftSeconds = Number(pageDisplaySecondsDraft);
       const draftGraceMinutes = Number(counterReadyGraceMinutesDraft);
       const draftMarqueeSpeed = Number(orderDisplayMarqueeSpeedSecondsDraft);
+      const draftCallVolumePercent = Number(orderCallVolumePercentDraft);
       const draftMarqueeText = orderDisplayMarqueeTextDraft.trim();
       const displaySettingDirty =
         menuDisplaySettings != null &&
@@ -1263,9 +1302,12 @@ export default function AdminPage() {
           draftMarqueeText !== menuDisplaySettings.orderDisplayMarqueeText ||
           orderDisplayMarqueeSpeedSecondsDraft.trim() !==
             String(menuDisplaySettings.orderDisplayMarqueeSpeedSeconds) ||
+          orderCallVolumePercentDraft.trim() !==
+            String(Math.round(menuDisplaySettings.orderCallVolume * 100)) ||
           !Number.isFinite(draftSeconds) ||
           !Number.isFinite(draftGraceMinutes) ||
-          !Number.isFinite(draftMarqueeSpeed));
+          !Number.isFinite(draftMarqueeSpeed) ||
+          !Number.isFinite(draftCallVolumePercent));
       nextDisplaySeconds = displaySettingDirty
         ? toPositiveFiniteNumber(pageDisplaySecondsDraft, "表示時間", {
             integer: true,
@@ -1298,6 +1340,16 @@ export default function AdminPage() {
             },
           )
         : null;
+      nextOrderCallVolume = displaySettingDirty
+        ? toPositiveFiniteNumber(
+            orderCallVolumePercentDraft,
+            "呼び出しメロディ音量",
+            {
+              min: 0,
+              max: 100,
+            },
+          ) / 100
+        : null;
 
       if (
         categoryUpdates.length === 0 &&
@@ -1305,7 +1357,8 @@ export default function AdminPage() {
         nextDisplaySeconds == null &&
         nextCounterReadyGraceMinutes == null &&
         nextOrderDisplayMarqueeText == null &&
-        nextOrderDisplayMarqueeSpeedSeconds == null
+        nextOrderDisplayMarqueeSpeedSeconds == null &&
+        nextOrderCallVolume == null
       ) {
         return;
       }
@@ -1337,7 +1390,8 @@ export default function AdminPage() {
         nextDisplaySeconds != null &&
         nextCounterReadyGraceMinutes != null &&
         nextOrderDisplayMarqueeText != null &&
-        nextOrderDisplayMarqueeSpeedSeconds != null
+        nextOrderDisplayMarqueeSpeedSeconds != null &&
+        nextOrderCallVolume != null
       ) {
         const data = await apiFetch<{ settings: MenuDisplaySettings }>(
           "/api/admin/menu-display-settings",
@@ -1349,6 +1403,7 @@ export default function AdminPage() {
               orderDisplayMarqueeText: nextOrderDisplayMarqueeText,
               orderDisplayMarqueeSpeedSeconds:
                 nextOrderDisplayMarqueeSpeedSeconds,
+              orderCallVolume: nextOrderCallVolume,
             }),
           },
         );
@@ -1362,6 +1417,9 @@ export default function AdminPage() {
         );
         setOrderDisplayMarqueeSpeedSecondsDraft(
           String(data.settings.orderDisplayMarqueeSpeedSeconds),
+        );
+        setOrderCallVolumePercentDraft(
+          String(Math.round(data.settings.orderCallVolume * 100)),
         );
       }
 
@@ -1380,6 +1438,7 @@ export default function AdminPage() {
     menuDisplaySettings,
     menuEdits,
     notifyError,
+    orderCallVolumePercentDraft,
     orderDisplayMarqueeSpeedSecondsDraft,
     orderDisplayMarqueeTextDraft,
     pageDisplaySecondsDraft,
@@ -3122,6 +3181,15 @@ export default function AdminPage() {
                 className="max-w-xs"
                 inputMode="numeric"
               />
+              <InputField
+                label="呼び出しメロディ音量 (%)"
+                value={orderCallVolumePercentDraft}
+                onChange={(value) =>
+                  setOrderCallVolumePercentDraft(sanitizeDecimalInput(value))
+                }
+                className="max-w-xs"
+                inputMode="decimal"
+              />
               <Button
                 type="button"
                 className="admin-save-button"
@@ -3135,14 +3203,16 @@ export default function AdminPage() {
                     orderDisplayMarqueeTextDraft.trim() ===
                       menuDisplaySettings.orderDisplayMarqueeText &&
                     Number(orderDisplayMarqueeSpeedSecondsDraft) ===
-                      menuDisplaySettings.orderDisplayMarqueeSpeedSeconds)
+                      menuDisplaySettings.orderDisplayMarqueeSpeedSeconds &&
+                    Number(orderCallVolumePercentDraft) ===
+                      Math.round(menuDisplaySettings.orderCallVolume * 100))
                 }
               >
                 <Save20Regular />
                 設定を保存
               </Button>
               <span className="text-xs text-muted-foreground">
-                表示 6〜120 秒 / 呼び出し猶予 0〜60 分 / テロップ 8〜90 秒
+                表示 6〜120 秒 / 呼び出し猶予 0〜60 分 / テロップ 8〜90 秒 / 音量 0〜100%
               </span>
             </CardContent>
           </Card>

@@ -25,6 +25,7 @@ type OrderDisplayPayload = {
 type OrderDisplaySettings = {
   orderDisplayMarqueeText: string;
   orderDisplayMarqueeSpeedSeconds: number;
+  orderCallVolume: number;
 };
 
 type Callout = {
@@ -46,9 +47,9 @@ const ORDER_AGE_LONG_WAIT_MS = 20 * 60 * 1000;
 const CALLOUT_MIN_VISIBLE_MS = 5200;
 const CALLOUT_FADE_OUT_MS = 450;
 const CALL_BURST_WINDOW_MS = 5000;
+const UNREADY_SCROLL_DURATION_MS = 36_000;
 const CALL_ASSETS = {
-  bell: "/audio/order-call/notification.wav",
-  waitNormal: "/audio/order-call/wait-normal.mp3",
+  melody: "/audio/order-call/call-melody.wav",
   waitLong: "/audio/order-call/wait-long.mp3",
   continued: "/audio/order-call/continued.mp3",
   counter: "/audio/order-call/counter.mp3",
@@ -58,38 +59,57 @@ function wait(ms: number) {
   return new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 }
 
-function playAudio(src: string) {
+function playAudioElement(audio: HTMLAudioElement) {
   return new Promise<void>((resolve) => {
-    const audio = new Audio(src);
-    audio.preload = "auto";
+    audio.currentTime = 0;
     audio.onended = () => resolve();
     audio.onerror = () => resolve();
     void audio.play().catch(() => resolve());
   });
 }
 
+function preloadAudio(src: string, volume = 1) {
+  const audio = new Audio(src);
+  audio.preload = "auto";
+  audio.volume = Math.max(0, Math.min(1, volume));
+  audio.load();
+  return audio;
+}
+
 function orderNumberAudioSrc(orderNo: number, part: "number" | "customer") {
   return `/api/order-display/audio/${part}/${encodeURIComponent(String(orderNo))}`;
 }
 
-async function playOrderCallAudio(call: Callout) {
+function warmOrderNumberAudio(orderNo: number) {
+  for (const part of ["number", "customer"] as const) {
+    void fetch(orderNumberAudioSrc(orderNo, part), {
+      credentials: "include",
+      cache: "force-cache",
+    }).catch(() => {});
+  }
+}
+
+async function playOrderCallAudio(call: Callout, melodyVolume: number) {
   const isLongWait =
     Date.now() - new Date(call.createdAt).getTime() >= ORDER_AGE_LONG_WAIT_MS;
-  const parts = [
-    CALL_ASSETS.bell,
-    call.followsPrevious
-      ? CALL_ASSETS.continued
-      : isLongWait
-        ? CALL_ASSETS.waitLong
-        : CALL_ASSETS.waitNormal,
-    orderNumberAudioSrc(call.orderNo, "number"),
+  const numberAudio = preloadAudio(orderNumberAudioSrc(call.orderNo, "number"));
+  const customerAudio = preloadAudio(
     orderNumberAudioSrc(call.orderNo, "customer"),
-    call.followsPrevious && isLongWait ? CALL_ASSETS.waitLong : null,
+  );
+  const parts = [
+    call.followsPrevious
+      ? preloadAudio(CALL_ASSETS.continued)
+      : preloadAudio(CALL_ASSETS.melody, melodyVolume),
+    isLongWait ? preloadAudio(CALL_ASSETS.waitLong) : null,
+    numberAudio,
+    customerAudio,
     CALL_ASSETS.counter,
-  ].filter(Boolean) as string[];
+  ].filter(Boolean) as Array<string | HTMLAudioElement>;
 
-  for (const src of parts) {
-    await playAudio(src);
+  for (const part of parts) {
+    await playAudioElement(
+      typeof part === "string" ? preloadAudio(part) : part,
+    );
   }
 }
 
@@ -120,8 +140,13 @@ export default function OrderDisplayPage() {
   const [settings, setSettings] = useState<OrderDisplaySettings>({
     orderDisplayMarqueeText: "",
     orderDisplayMarqueeSpeedSeconds: 24,
+    orderCallVolume: 0.8,
   });
+  const [showUnreadyBird, setShowUnreadyBird] = useState(false);
   const [callout, setCallout] = useState<Callout | null>(null);
+  const unreadyViewportRef = useRef<HTMLDivElement | null>(null);
+  const unreadyTrackRef = useRef<HTMLDivElement | null>(null);
+  const unreadyAnimationsRef = useRef<Animation[]>([]);
   const reloadInFlightRef = useRef(false);
   const queuedReloadRef = useRef(false);
   const didBootstrapRef = useRef(false);
@@ -151,7 +176,7 @@ export default function OrderDisplayPage() {
     setCallout(activeCall);
 
     const visibleStartedAt = Date.now();
-    await playOrderCallAudio(activeCall);
+    await playOrderCallAudio(activeCall, settings.orderCallVolume);
     await wait(Math.max(0, CALLOUT_MIN_VISIBLE_MS - (Date.now() - visibleStartedAt)));
     setCallout((current) =>
       current?.key === activeCall.key ? { ...current, exiting: true } : current,
@@ -171,6 +196,7 @@ export default function OrderDisplayPage() {
   const enqueueCalls = (orders: DisplayOrder[]) => {
     const now = Date.now();
     for (const order of orders.sort((a, b) => a.orderNo - b.orderNo)) {
+      warmOrderNumberAudio(order.orderNo);
       const followsPrevious =
         callInFlightRef.current ||
         callQueueRef.current.length > 0 ||
@@ -299,7 +325,93 @@ export default function OrderDisplayPage() {
     () => [...unreadyOrders].sort((a, b) => a.orderNo - b.orderNo),
     [unreadyOrders],
   );
+  const readyColumns = Math.min(3, Math.max(1, readyOrders.length));
   const marqueeText = settings.orderDisplayMarqueeText.trim();
+
+  useEffect(() => {
+    for (const animation of unreadyAnimationsRef.current) {
+      animation.cancel();
+    }
+    unreadyAnimationsRef.current = [];
+
+    const viewport = unreadyViewportRef.current;
+    const track = unreadyTrackRef.current;
+    if (!viewport || !track || orderedUnready.length === 0) {
+      setShowUnreadyBird(false);
+      return;
+    }
+
+    let raf = 0;
+    const updateLayout = () => {
+      for (const animation of unreadyAnimationsRef.current) {
+        animation.cancel();
+      }
+      unreadyAnimationsRef.current = [];
+      track.style.transform = "translateY(0px)";
+
+      const viewportStyle = window.getComputedStyle(viewport);
+      const viewportPaddingY =
+        (Number.parseFloat(viewportStyle.paddingTop) || 0) +
+        (Number.parseFloat(viewportStyle.paddingBottom) || 0);
+      const visibleHeight = Math.max(
+        0,
+        viewport.clientHeight - viewportPaddingY,
+      );
+      const overflowPx = Math.max(0, track.scrollHeight - visibleHeight + 2);
+      const spareHeight = Math.max(0, visibleHeight - track.scrollHeight);
+      const canShowBird =
+        overflowPx <= 1 &&
+        spareHeight >= visibleHeight * 0.34 &&
+        viewport.clientWidth >= 340;
+      setShowUnreadyBird(canShowBird);
+
+      if (overflowPx <= 1) {
+        return;
+      }
+
+      const duration = Math.max(
+        UNREADY_SCROLL_DURATION_MS,
+        Math.round(overflowPx * 90),
+      );
+      const animation = track.animate(
+        [
+          { transform: "translateY(0px)", offset: 0 },
+          { transform: "translateY(0px)", offset: 0.14 },
+          { transform: `translateY(${-overflowPx}px)`, offset: 0.72 },
+          { transform: `translateY(${-overflowPx}px)`, offset: 0.84 },
+          { transform: "translateY(0px)", offset: 0.98 },
+          { transform: "translateY(0px)", offset: 1 },
+        ],
+        {
+          duration,
+          easing: "linear",
+          iterations: Infinity,
+          fill: "both",
+        },
+      );
+      unreadyAnimationsRef.current = [animation];
+    };
+
+    const scheduleUpdate = () => {
+      window.cancelAnimationFrame(raf);
+      raf = window.requestAnimationFrame(updateLayout);
+    };
+
+    const resizeObserver = new ResizeObserver(scheduleUpdate);
+    resizeObserver.observe(viewport);
+    resizeObserver.observe(track);
+    scheduleUpdate();
+
+    return () => {
+      window.cancelAnimationFrame(raf);
+      resizeObserver.disconnect();
+      for (const animation of unreadyAnimationsRef.current) {
+        animation.cancel();
+      }
+      unreadyAnimationsRef.current = [];
+    };
+  }, [orderedUnready]);
+
   if (loading || !session) {
     return <LoadingScreen />;
   }
@@ -321,28 +433,46 @@ export default function OrderDisplayPage() {
         style={
           {
             "--ready-count": String(Math.max(1, readyOrders.length)),
+            "--ready-columns": String(readyColumns),
             "--unready-count": String(Math.max(1, unreadyOrders.length)),
           } as CSSProperties
         }
       >
-        <section className="order-display-panel order-display-panel-unready">
+        <section
+          className={[
+            "order-display-panel order-display-panel-unready",
+            showUnreadyBird ? "has-bird" : "no-bird",
+          ].join(" ")}
+        >
           <header className="order-display-panel-header">
             <span>調理中です</span>
           </header>
           {hasUnready ? (
             <div
-              className="order-display-tile-grid order-display-unready-grid"
+              ref={unreadyViewportRef}
+              className="order-display-unready-viewport"
             >
-              {orderedUnready.map((order) => (
-                <article
-                  key={order.id}
-                  className={`order-display-unready-tile ${tileTone(order)}`}
-                >
-                  <strong style={orderNumberStyle(order.orderNo)}>
-                    {order.orderNo}
-                  </strong>
-                </article>
-              ))}
+              <div
+                ref={unreadyTrackRef}
+                className="order-display-tile-grid order-display-unready-grid"
+              >
+                {orderedUnready.map((order) => (
+                  <article
+                    key={order.id}
+                    className={`order-display-unready-tile ${tileTone(order)}`}
+                  >
+                    <strong style={orderNumberStyle(order.orderNo)}>
+                      {order.orderNo}
+                    </strong>
+                  </article>
+                ))}
+              </div>
+              <img
+                className="order-display-unready-bird"
+                src="/images/order-display-bird.png"
+                alt=""
+                aria-hidden="true"
+              />
             </div>
           ) : (
             <div className="order-display-panel-empty">

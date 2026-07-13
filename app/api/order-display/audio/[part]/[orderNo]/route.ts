@@ -28,16 +28,28 @@ function textForPart(part: AudioPart, orderNo: number) {
   return part === "number" ? `${orderNo}番。` : `${orderNo}番のお客様。`;
 }
 
-async function findCachedAudio(pathname: string, token: string) {
+type CacheLookup =
+  | { status: "hit"; url: string }
+  | { status: "miss" }
+  | { status: "error" };
+
+async function findCachedAudio(pathname: string, token: string): Promise<CacheLookup> {
   try {
-    return await head(pathname, { token });
+    const cached = await head(pathname, { token });
+    return { status: "hit", url: cached.url };
   } catch (error) {
     if (error instanceof BlobNotFoundError) {
-      return null;
+      return { status: "miss" };
     }
     console.error("order number audio cache lookup failed", error);
-    return null;
+    return { status: "error" };
   }
+}
+
+function redirectWithCacheStatus(url: string, status: string) {
+  const response = NextResponse.redirect(url, 307);
+  response.headers.set("x-order-audio-cache", status);
+  return response;
 }
 
 export async function GET(
@@ -51,11 +63,13 @@ export async function GET(
     const orderNo = parseOrderNo(rawOrderNo);
     const pathname = `order-call/numbers/v2/${part}-${orderNo}.mp3`;
     const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
+    let cacheStatus = blobToken ? "miss" : "disabled";
 
     if (blobToken) {
       const cached = await findCachedAudio(pathname, blobToken);
-      if (cached) {
-        return NextResponse.redirect(cached.url, 307);
+      cacheStatus = cached.status;
+      if (cached.status === "hit") {
+        return redirectWithCacheStatus(cached.url, "hit");
       }
     }
 
@@ -71,9 +85,14 @@ export async function GET(
           allowOverwrite: true,
           cacheControlMaxAge: 31536000,
         });
-        return NextResponse.redirect(uploaded.url, 307);
+        return redirectWithCacheStatus(
+          uploaded.url,
+          cacheStatus === "error" ? "lookup-error-uploaded" : "uploaded",
+        );
       } catch (error) {
         console.error("order number audio cache upload failed", error);
+        cacheStatus =
+          cacheStatus === "error" ? "lookup-and-upload-error" : "upload-error";
       }
     }
 
@@ -81,6 +100,7 @@ export async function GET(
       headers: {
         "content-type": "audio/mpeg",
         "cache-control": "public, max-age=31536000, immutable",
+        "x-order-audio-cache": cacheStatus,
       },
     });
   } catch (error) {
