@@ -1693,9 +1693,21 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   overflow: hidden;
   color: #111827;
   background:
-    radial-gradient(circle at 12% 18%, rgba(132, 204, 255, 0.34), transparent 34%),
-    radial-gradient(circle at 86% 78%, rgba(52, 211, 153, 0.2), transparent 30%),
-    linear-gradient(115deg, rgba(240, 249, 255, 0.98), rgba(221, 238, 255, 0.98)),
+    radial-gradient(
+      circle at 12% 18%,
+      rgba(132, 204, 255, 0.34),
+      transparent 34%
+    ),
+    radial-gradient(
+      circle at 86% 78%,
+      rgba(52, 211, 153, 0.2),
+      transparent 30%
+    ),
+    linear-gradient(
+      115deg,
+      rgba(240, 249, 255, 0.98),
+      rgba(221, 238, 255, 0.98)
+    ),
     linear-gradient(180deg, #f2f9ff, #deecfb);
 }
 
@@ -1764,7 +1776,11 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
 
 .order-display-panel-unready {
   background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.92), rgba(238, 246, 255, 0.94)),
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(238, 246, 255, 0.94)
+    ),
     #f7fbff;
   border: 1px solid rgba(15, 23, 42, 0.12);
 }
@@ -1772,7 +1788,11 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
 .order-display-panel-ready {
   color: #0f172a;
   background:
-    linear-gradient(140deg, rgba(255, 231, 187, 0.98), rgba(255, 246, 224, 0.96)),
+    linear-gradient(
+      140deg,
+      rgba(255, 231, 187, 0.98),
+      rgba(255, 246, 224, 0.96)
+    ),
     #fff0d4;
   border: 1px solid rgba(194, 92, 12, 0.22);
 }
@@ -1849,9 +1869,9 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   left: clamp(22px, 3.6vw, 58px);
   bottom: clamp(18px, 3vh, 46px);
   z-index: 0;
-  height: 25%;
-  max-height: 260px;
-  max-width: 34%;
+  height: 34%;
+  max-height: 320px;
+  max-width: 40%;
   object-fit: contain;
   opacity: 0;
   pointer-events: none;
@@ -1990,7 +2010,11 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   gap: clamp(14px, 2vw, 28px);
   color: #000;
   background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(255, 247, 218, 0.98)),
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.98),
+      rgba(255, 247, 218, 0.98)
+    ),
     #fff;
   animation: order-callout-in 0.58s cubic-bezier(0.22, 1, 0.36, 1) both;
 }

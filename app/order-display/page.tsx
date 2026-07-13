@@ -54,6 +54,7 @@ const CALL_ASSETS = {
   melody: "/audio/order-call/call-melody.wav",
   waitLong: "/audio/order-call/wait-long.mp3",
   continued: "/audio/order-call/continued.mp3",
+  prepared: "/audio/order-call/prepared.mp3",
   counter: "/audio/order-call/counter.mp3",
 };
 
@@ -132,6 +133,7 @@ async function playOrderCallAudio(call: Callout, melodyVolume: number) {
       : null,
     numberAudio,
     customerAudio,
+    call.followsPrevious ? null : preloadAudio(CALL_ASSETS.prepared),
     CALL_ASSETS.counter,
   ].filter(Boolean) as Array<string | HTMLAudioElement>;
 
@@ -599,7 +601,7 @@ export default function OrderDisplayPage() {
 
         <section className="order-display-panel order-display-panel-ready">
           <header className="order-display-panel-header">
-            <span>カウンターにお越しください</span>
+            <span>カウンターへお越しください</span>
           </header>
           <div ref={readyViewportRef} className="order-display-ready-viewport">
             <div
@@ -643,7 +645,7 @@ export default function OrderDisplayPage() {
             callout.exiting ? "is-exiting" : "",
           ].join(" ")}
         >
-          <span>カウンターにお越しください</span>
+          <span>カウンターへお越しください</span>
           <strong style={orderNumberStyle(callout.orderNo)}>
             {callout.orderNo}
           </strong>
