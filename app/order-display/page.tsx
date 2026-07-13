@@ -51,7 +51,7 @@ const UNREADY_SCROLL_DURATION_MS = 36_000;
 const READY_SCROLL_DURATION_MS = 28_000;
 const ORDER_DISPLAY_REFRESH_MS = 5_000;
 const CALL_ASSETS = {
-  melody: "/audio/order-call/call-melody-boosted.wav",
+  melody: "/audio/order-call/call-melody-song-20260714.wav",
   waitLong: "/audio/order-call/wait-long.mp3",
   continued: "/audio/order-call/continued.mp3",
   preparedCounter: "/audio/order-call/prepared-counter.mp3",
