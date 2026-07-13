@@ -25,41 +25,67 @@ type OrderDisplayPayload = {
 type Callout = {
   key: number;
   orderNo: number;
+  createdAt: string;
+  followsPrevious: boolean;
 };
 
-const CALLOUT_MS = 3200;
+type QueuedCall = {
+  id: string;
+  orderNo: number;
+  createdAt: string;
+  followsPrevious: boolean;
+};
 
-function playCallTone() {
-  try {
-    const AudioContextCtor =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext?: typeof AudioContext })
-        .webkitAudioContext;
-    if (!AudioContextCtor) {
-      return;
+const ORDER_AGE_LONG_WAIT_MS = 20 * 60 * 1000;
+const AUDIO_GAP_MS = 180;
+const CALL_BURST_WINDOW_MS = 5000;
+const CALL_ASSETS = {
+  bell: "/audio/order-call/notification.wav",
+  waitNormal: "/audio/order-call/wait-normal.mp3",
+  waitLong: "/audio/order-call/wait-long.mp3",
+  continued: "/audio/order-call/continued.mp3",
+  counter: "/audio/order-call/counter.mp3",
+};
+
+function delay(ms: number) {
+  return new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+}
+
+function playAudio(src: string) {
+  return new Promise<void>((resolve) => {
+    const audio = new Audio(src);
+    audio.preload = "auto";
+    audio.onended = () => resolve();
+    audio.onerror = () => resolve();
+    void audio.play().catch(() => resolve());
+  });
+}
+
+function orderNumberAudioSrc(orderNo: number, part: "number" | "customer") {
+  return `/api/order-display/audio/${part}/${encodeURIComponent(String(orderNo))}`;
+}
+
+async function playOrderCallAudio(call: Callout) {
+  const isLongWait =
+    Date.now() - new Date(call.createdAt).getTime() >= ORDER_AGE_LONG_WAIT_MS;
+  const parts = [
+    CALL_ASSETS.bell,
+    call.followsPrevious
+      ? CALL_ASSETS.continued
+      : isLongWait
+        ? CALL_ASSETS.waitLong
+        : CALL_ASSETS.waitNormal,
+    orderNumberAudioSrc(call.orderNo, "number"),
+    orderNumberAudioSrc(call.orderNo, "customer"),
+    call.followsPrevious && isLongWait ? CALL_ASSETS.waitLong : null,
+    CALL_ASSETS.counter,
+  ].filter(Boolean) as string[];
+
+  for (const [index, src] of parts.entries()) {
+    await playAudio(src);
+    if (index < parts.length - 1) {
+      await delay(AUDIO_GAP_MS);
     }
-
-    const audio = new AudioContextCtor();
-    const gain = audio.createGain();
-    gain.gain.setValueAtTime(0.0001, audio.currentTime);
-    gain.connect(audio.destination);
-
-    const notes = [659.25, 880, 987.77];
-    notes.forEach((frequency, index) => {
-      const start = audio.currentTime + index * 0.18;
-      const oscillator = audio.createOscillator();
-      oscillator.type = "sine";
-      oscillator.frequency.setValueAtTime(frequency, start);
-      oscillator.connect(gain);
-      gain.gain.exponentialRampToValueAtTime(0.18, start + 0.03);
-      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.22);
-      oscillator.start(start);
-      oscillator.stop(start + 0.26);
-    });
-
-    window.setTimeout(() => void audio.close(), 1200);
-  } catch {
-    // Browsers may block audio until the display has had a user gesture.
   }
 }
 
@@ -73,6 +99,12 @@ function tileTone(order: DisplayOrder) {
   return "calm";
 }
 
+function orderNumberStyle(orderNo: number) {
+  const digitCount = String(orderNo).length;
+  const scale = Math.min(1, 3.4 / Math.max(1, digitCount));
+  return { "--order-no-scale": String(scale) } as CSSProperties;
+}
+
 export default function OrderDisplayPage() {
   const { loading, session } = useSession(["ORDER_DISPLAY"]);
   const { notify } = useToast();
@@ -84,6 +116,60 @@ export default function OrderDisplayPage() {
   const didBootstrapRef = useRef(false);
   const previousReadyIdsRef = useRef<Set<string>>(new Set());
   const previousUnreadyIdsRef = useRef<Set<string>>(new Set());
+  const callQueueRef = useRef<QueuedCall[]>([]);
+  const callInFlightRef = useRef(false);
+  const lastCallEndedAtRef = useRef(0);
+  const unreadyGridRef = useRef<HTMLDivElement | null>(null);
+  const readyGridRef = useRef<HTMLDivElement | null>(null);
+
+  const processCallQueue = async () => {
+    if (callInFlightRef.current) {
+      return;
+    }
+
+    const nextCall = callQueueRef.current.shift();
+    if (!nextCall) {
+      return;
+    }
+
+    callInFlightRef.current = true;
+    const activeCall: Callout = {
+      key: Date.now(),
+      orderNo: nextCall.orderNo,
+      createdAt: nextCall.createdAt,
+      followsPrevious: nextCall.followsPrevious,
+    };
+    setCallout(activeCall);
+
+    await playOrderCallAudio(activeCall);
+    setCallout((current) =>
+      current?.key === activeCall.key ? null : current,
+    );
+    lastCallEndedAtRef.current = Date.now();
+    callInFlightRef.current = false;
+
+    if (callQueueRef.current.length > 0) {
+      void processCallQueue();
+    }
+  };
+
+  const enqueueCalls = (orders: DisplayOrder[]) => {
+    const now = Date.now();
+    for (const order of orders.sort((a, b) => a.orderNo - b.orderNo)) {
+      const followsPrevious =
+        callInFlightRef.current ||
+        callQueueRef.current.length > 0 ||
+        (lastCallEndedAtRef.current > 0 &&
+          now - lastCallEndedAtRef.current <= CALL_BURST_WINDOW_MS);
+      callQueueRef.current.push({
+        id: order.id,
+        orderNo: order.orderNo,
+        createdAt: order.createdAt,
+        followsPrevious,
+      });
+    }
+    void processCallQueue();
+  };
 
   const applyPayload = (payload: OrderDisplayPayload) => {
     const nextReadyIds = new Set(payload.readyOrders.map((order) => order.id));
@@ -94,19 +180,13 @@ export default function OrderDisplayPage() {
     const previousUnreadyIds = previousUnreadyIdsRef.current;
 
     if (didBootstrapRef.current) {
-      const newlyReady = payload.readyOrders.find(
+      const newlyReady = payload.readyOrders.filter(
         (order) =>
           !previousReadyIds.has(order.id) && previousUnreadyIds.has(order.id),
       );
 
-      if (newlyReady) {
-        setCallout({ key: Date.now(), orderNo: newlyReady.orderNo });
-        playCallTone();
-        window.setTimeout(() => {
-          setCallout((current) =>
-            current?.orderNo === newlyReady.orderNo ? null : current,
-          );
-        }, CALLOUT_MS);
+      if (newlyReady.length > 0) {
+        enqueueCalls(newlyReady);
       }
     }
 
@@ -150,6 +230,16 @@ export default function OrderDisplayPage() {
     void reload();
   }, [session]);
 
+  useEffect(() => {
+    if (!session) {
+      return;
+    }
+    const timer = setInterval(() => {
+      void reload();
+    }, 15_000);
+    return () => clearInterval(timer);
+  }, [session]);
+
   useRealtimeSubscription({
     enabled: Boolean(session),
     channels: ["orders"],
@@ -173,6 +263,54 @@ export default function OrderDisplayPage() {
     () => [...unreadyOrders].sort((a, b) => a.orderNo - b.orderNo),
     [unreadyOrders],
   );
+  const scrollSignature = useMemo(
+    () =>
+      [
+        orderedReady.map((order) => order.id).join(","),
+        orderedUnready.map((order) => order.id).join(","),
+      ].join("|"),
+    [orderedReady, orderedUnready],
+  );
+
+  useEffect(() => {
+    const grids = [unreadyGridRef.current, readyGridRef.current].filter(
+      Boolean,
+    ) as HTMLDivElement[];
+    const animations: Animation[] = [];
+    const raf = window.requestAnimationFrame(() => {
+      for (const grid of grids) {
+        grid.style.transform = "translateY(0px)";
+        const overflowPx = Math.max(0, grid.scrollHeight - grid.clientHeight + 2);
+        if (overflowPx <= 1) {
+          continue;
+        }
+        animations.push(
+          grid.animate(
+            [
+              { transform: "translateY(0px)", offset: 0 },
+              { transform: "translateY(0px)", offset: 0.16 },
+              { transform: `translateY(${-overflowPx}px)`, offset: 0.58 },
+              { transform: `translateY(${-overflowPx}px)`, offset: 0.76 },
+              { transform: "translateY(0px)", offset: 0.98 },
+              { transform: "translateY(0px)", offset: 1 },
+            ],
+            {
+              duration: Math.max(18_000, overflowPx * 55),
+              easing: "linear",
+              iterations: Infinity,
+            },
+          ),
+        );
+      }
+    });
+
+    return () => {
+      window.cancelAnimationFrame(raf);
+      for (const animation of animations) {
+        animation.cancel();
+      }
+    };
+  }, [scrollSignature, hasReady, hasUnready]);
 
   if (loading || !session) {
     return <LoadingScreen />;
@@ -203,14 +341,18 @@ export default function OrderDisplayPage() {
             <span>調理中です</span>
           </header>
           {hasUnready ? (
-            <div className="order-display-tile-grid order-display-unready-grid">
+            <div
+              className="order-display-tile-grid order-display-unready-grid"
+              ref={unreadyGridRef}
+            >
               {orderedUnready.map((order) => (
                 <article
                   key={order.id}
                   className={`order-display-unready-tile ${tileTone(order)}`}
                 >
-                  <span className="order-display-tile-label">注文番号</span>
-                  <strong>{order.orderNo}</strong>
+                  <strong style={orderNumberStyle(order.orderNo)}>
+                    {order.orderNo}
+                  </strong>
                 </article>
               ))}
             </div>
@@ -227,11 +369,13 @@ export default function OrderDisplayPage() {
           </header>
           <div
             className={`order-display-ready-grid order-display-ready-grid-${readyMode}`}
+            ref={readyGridRef}
           >
             {orderedReady.map((order) => (
               <article key={order.id} className="order-display-ready-tile">
-                <span>注文番号</span>
-                <strong>{order.orderNo}</strong>
+                <strong style={orderNumberStyle(order.orderNo)}>
+                  {order.orderNo}
+                </strong>
               </article>
             ))}
           </div>
@@ -241,7 +385,9 @@ export default function OrderDisplayPage() {
       {callout && (
         <div key={callout.key} className="order-display-callout">
           <span>カウンターにお越しください</span>
-          <strong>{callout.orderNo}</strong>
+          <strong style={orderNumberStyle(callout.orderNo)}>
+            {callout.orderNo}
+          </strong>
         </div>
       )}
     </main>

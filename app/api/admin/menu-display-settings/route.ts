@@ -9,6 +9,7 @@ import { broadcastInvalidation, CHANNEL_GROUPS } from "@/lib/server/realtime-bro
 
 const updateSchema = z.object({
   pageDisplaySeconds: z.number().int().min(6).max(120),
+  counterReadyGraceMinutes: z.number().int().min(0).max(60),
 });
 
 async function ensureSetting() {
@@ -17,6 +18,7 @@ async function ensureSetting() {
     create: {
       id: 1,
       menuDisplayPageSeconds: 18,
+      counterReadyGraceMinutes: 3,
     },
     update: {},
   });
@@ -30,6 +32,7 @@ export async function GET(req: NextRequest) {
     return ok({
       settings: {
         pageDisplaySeconds: setting.menuDisplayPageSeconds,
+        counterReadyGraceMinutes: setting.counterReadyGraceMinutes,
       },
     });
   } catch (error) {
@@ -48,6 +51,7 @@ export async function PATCH(req: NextRequest) {
         where: { id: 1 },
         data: {
           menuDisplayPageSeconds: body.pageDisplaySeconds,
+          counterReadyGraceMinutes: body.counterReadyGraceMinutes,
         },
       });
 
@@ -59,18 +63,20 @@ export async function PATCH(req: NextRequest) {
         entityId: "1",
         beforeJson: {
           menuDisplayPageSeconds: before.menuDisplayPageSeconds,
+          counterReadyGraceMinutes: before.counterReadyGraceMinutes,
         },
         afterJson: {
           menuDisplayPageSeconds: updated.menuDisplayPageSeconds,
+          counterReadyGraceMinutes: updated.counterReadyGraceMinutes,
         },
         result: "SUCCESS",
       });
 
       await broadcastInvalidation(
         tx,
-        CHANNEL_GROUPS.MENUS,
+        CHANNEL_GROUPS.ORDER_FLOW,
         "settings",
-        "menu_display_page_seconds_updated",
+        "display_settings_updated",
       );
 
       return updated;
@@ -79,6 +85,7 @@ export async function PATCH(req: NextRequest) {
     return ok({
       settings: {
         pageDisplaySeconds: setting.menuDisplayPageSeconds,
+        counterReadyGraceMinutes: setting.counterReadyGraceMinutes,
       },
     });
   } catch (error) {

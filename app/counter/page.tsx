@@ -19,6 +19,8 @@ type DineInOrder = {
   createdAt: string;
   specialNote: string | null;
   readyItems: Array<{ id: string; name: string }>;
+  servedItemGroups: Array<{ name: string; count: number }>;
+  unreadyItemGroups: Array<{ name: string; count: number }>;
   readyItemCount: number;
   itemCount: number;
 };
@@ -66,6 +68,10 @@ function bundleTakeoutItems(names: string[]) {
   return [...counts.entries()]
     .sort((a, b) => a[0].localeCompare(b[0], "ja"))
     .map(([name, count]) => `${count} × ${name}`);
+}
+
+function formatItemGroup(group: { name: string; count: number }) {
+  return group.count > 1 ? `${group.count} × ${group.name}` : group.name;
 }
 
 export default function CounterPage() {
@@ -121,6 +127,16 @@ export default function CounterPage() {
     const timer = setInterval(() => setTickNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (!session) {
+      return;
+    }
+    const timer = setInterval(() => {
+      void reload();
+    }, 15_000);
+    return () => clearInterval(timer);
+  }, [session]);
 
   useRealtimeSubscription({
     enabled: Boolean(session),
@@ -304,6 +320,26 @@ export default function CounterPage() {
                           >
                             提供
                           </button>
+                        </div>
+                      ))}
+                      {order.servedItemGroups.map((group) => (
+                        <div
+                          key={`served-${group.name}`}
+                          className="list-item counter-item-muted"
+                          style={{ padding: "8px 10px" }}
+                        >
+                          <span>{formatItemGroup(group)}</span>
+                          <span className="badge served">提供済</span>
+                        </div>
+                      ))}
+                      {order.unreadyItemGroups.map((group) => (
+                        <div
+                          key={`unready-${group.name}`}
+                          className="list-item counter-item-muted"
+                          style={{ padding: "8px 10px" }}
+                        >
+                          <span>{formatItemGroup(group)}</span>
+                          <span className="badge queued">調理中</span>
                         </div>
                       ))}
                     </div>

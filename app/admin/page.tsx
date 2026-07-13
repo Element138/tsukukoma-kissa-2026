@@ -130,6 +130,7 @@ type MenuEdit = {
 };
 type MenuDisplaySettings = {
   pageDisplaySeconds: number;
+  counterReadyGraceMinutes: number;
 };
 
 type MenuCoverUploadData = {
@@ -472,6 +473,8 @@ export default function AdminPage() {
   const [menuDisplaySettings, setMenuDisplaySettings] =
     useState<MenuDisplaySettings | null>(null);
   const [pageDisplaySecondsDraft, setPageDisplaySecondsDraft] = useState("18");
+  const [counterReadyGraceMinutesDraft, setCounterReadyGraceMinutesDraft] =
+    useState("3");
   const [menuAvailabilityBusyId, setMenuAvailabilityBusyId] = useState<
     string | null
   >(null);
@@ -633,11 +636,15 @@ export default function AdminPage() {
     });
 
     const draftSeconds = Number(pageDisplaySecondsDraft);
+    const draftGraceMinutes = Number(counterReadyGraceMinutesDraft);
     const displaySettingDirty =
       menuDisplaySettings != null &&
       (pageDisplaySecondsDraft.trim() !==
         String(menuDisplaySettings.pageDisplaySeconds) ||
-        !Number.isFinite(draftSeconds));
+        counterReadyGraceMinutesDraft.trim() !==
+          String(menuDisplaySettings.counterReadyGraceMinutes) ||
+        !Number.isFinite(draftSeconds) ||
+        !Number.isFinite(draftGraceMinutes));
 
     return categoryDirty || menuDirty || displaySettingDirty;
   }, [
@@ -648,6 +655,7 @@ export default function AdminPage() {
     categoryNameDrafts,
     menuEdits,
     menuDisplaySettings,
+    counterReadyGraceMinutesDraft,
     pageDisplaySecondsDraft,
   ]);
 
@@ -693,6 +701,17 @@ export default function AdminPage() {
           return prev;
         }
         return String(settings.settings.pageDisplaySeconds);
+      });
+      setCounterReadyGraceMinutesDraft((prev) => {
+        const previousServerValue =
+          menuDisplaySettings?.counterReadyGraceMinutes;
+        if (
+          previousServerValue != null &&
+          prev !== String(previousServerValue)
+        ) {
+          return prev;
+        }
+        return String(settings.settings.counterReadyGraceMinutes);
       });
       setCategoryNameDrafts((prev) =>
         Object.fromEntries(
@@ -1016,6 +1035,7 @@ export default function AdminPage() {
 
   const saveMenuDisplaySettings = async () => {
     let pageDisplaySeconds: number;
+    let counterReadyGraceMinutes: number;
     try {
       pageDisplaySeconds = toPositiveFiniteNumber(
         pageDisplaySecondsDraft,
@@ -1026,8 +1046,17 @@ export default function AdminPage() {
           max: 120,
         },
       );
+      counterReadyGraceMinutes = toPositiveFiniteNumber(
+        counterReadyGraceMinutesDraft,
+        "店内の部分提供待ち時間",
+        {
+          integer: true,
+          min: 0,
+          max: 60,
+        },
+      );
     } catch (error) {
-      notifyError(error, "表示時間は 6〜120 秒で入力してください");
+      notifyError(error, "設定値を確認してください");
       return;
     }
 
@@ -1038,11 +1067,15 @@ export default function AdminPage() {
           method: "PATCH",
           body: JSON.stringify({
             pageDisplaySeconds,
+            counterReadyGraceMinutes,
           }),
         },
       );
       setMenuDisplaySettings(data.settings);
       setPageDisplaySecondsDraft(String(data.settings.pageDisplaySeconds));
+      setCounterReadyGraceMinutesDraft(
+        String(data.settings.counterReadyGraceMinutes),
+      );
       notify({ level: "success", message: "表示サイクル設定を保存しました" });
     } catch (e) {
       notify({
@@ -1084,6 +1117,7 @@ export default function AdminPage() {
       parsedInput: ReturnType<typeof parseMenuInput>;
     }> = [];
     let nextDisplaySeconds: number | null = null;
+    let nextCounterReadyGraceMinutes: number | null = null;
 
     try {
       for (const menu of activeMenus) {
@@ -1158,11 +1192,15 @@ export default function AdminPage() {
       }
 
       const draftSeconds = Number(pageDisplaySecondsDraft);
+      const draftGraceMinutes = Number(counterReadyGraceMinutesDraft);
       const displaySettingDirty =
         menuDisplaySettings != null &&
         (pageDisplaySecondsDraft.trim() !==
           String(menuDisplaySettings.pageDisplaySeconds) ||
-          !Number.isFinite(draftSeconds));
+          counterReadyGraceMinutesDraft.trim() !==
+            String(menuDisplaySettings.counterReadyGraceMinutes) ||
+          !Number.isFinite(draftSeconds) ||
+          !Number.isFinite(draftGraceMinutes));
       nextDisplaySeconds = displaySettingDirty
         ? toPositiveFiniteNumber(pageDisplaySecondsDraft, "表示時間", {
             integer: true,
@@ -1170,11 +1208,23 @@ export default function AdminPage() {
             max: 120,
           })
         : null;
+      nextCounterReadyGraceMinutes = displaySettingDirty
+        ? toPositiveFiniteNumber(
+            counterReadyGraceMinutesDraft,
+            "店内の部分提供待ち時間",
+            {
+              integer: true,
+              min: 0,
+              max: 60,
+            },
+          )
+        : null;
 
       if (
         categoryUpdates.length === 0 &&
         menuUpdates.length === 0 &&
-        nextDisplaySeconds == null
+        nextDisplaySeconds == null &&
+        nextCounterReadyGraceMinutes == null
       ) {
         return;
       }
@@ -1202,18 +1252,22 @@ export default function AdminPage() {
         await patchMenu(menuUpdate.menuId, menuUpdate.parsedInput);
       }
 
-      if (nextDisplaySeconds != null) {
+      if (nextDisplaySeconds != null && nextCounterReadyGraceMinutes != null) {
         const data = await apiFetch<{ settings: MenuDisplaySettings }>(
           "/api/admin/menu-display-settings",
           {
             method: "PATCH",
             body: JSON.stringify({
               pageDisplaySeconds: nextDisplaySeconds,
+              counterReadyGraceMinutes: nextCounterReadyGraceMinutes,
             }),
           },
         );
         setMenuDisplaySettings(data.settings);
         setPageDisplaySecondsDraft(String(data.settings.pageDisplaySeconds));
+        setCounterReadyGraceMinutesDraft(
+          String(data.settings.counterReadyGraceMinutes),
+        );
       }
 
       notify({ level: "success", message: "変更をすべて保存しました" });
@@ -1227,6 +1281,7 @@ export default function AdminPage() {
     categoryBadgeColorDrafts,
     categoryBadgeTextDrafts,
     categoryNameDrafts,
+    counterReadyGraceMinutesDraft,
     menuDisplaySettings,
     menuEdits,
     notifyError,
@@ -2928,9 +2983,9 @@ export default function AdminPage() {
           </Card>
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm">メニュー表示サイクル</CardTitle>
+              <CardTitle className="text-sm">表示・提供タイミング</CardTitle>
               <CardDescription>
-                ページ表示時間 (秒) に応じてスクロール速度を自動調整
+                メニュー表示の切替と、店内注文を部分提供待ちに出す時間
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-wrap items-end gap-2">
@@ -2943,20 +2998,33 @@ export default function AdminPage() {
                 className="max-w-xs"
                 inputMode="numeric"
               />
+              <InputField
+                label="店内の部分提供待ち時間 (分)"
+                value={counterReadyGraceMinutesDraft}
+                onChange={(value) =>
+                  setCounterReadyGraceMinutesDraft(sanitizeIntegerInput(value))
+                }
+                className="max-w-xs"
+                inputMode="numeric"
+              />
               <Button
                 type="button"
                 className="admin-save-button"
                 onClick={() => void saveMenuDisplaySettings()}
                 disabled={
                   menuDisplaySettings == null ||
-                  Number(pageDisplaySecondsDraft) ===
-                    menuDisplaySettings.pageDisplaySeconds
+                  (Number(pageDisplaySecondsDraft) ===
+                    menuDisplaySettings.pageDisplaySeconds &&
+                    Number(counterReadyGraceMinutesDraft) ===
+                      menuDisplaySettings.counterReadyGraceMinutes)
                 }
               >
                 <Save20Regular />
                 設定を保存
               </Button>
-              <span className="text-xs text-muted-foreground">6〜120 秒</span>
+              <span className="text-xs text-muted-foreground">
+                表示 6〜120 秒 / 部分提供 0〜60 分
+              </span>
             </CardContent>
           </Card>
           <Card>

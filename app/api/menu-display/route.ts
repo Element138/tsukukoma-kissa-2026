@@ -22,7 +22,11 @@ export async function GET(req: NextRequest) {
       }),
       prisma.appSetting.upsert({
         where: { id: 1 },
-        create: { id: 1, menuDisplayPageSeconds: 18 },
+        create: {
+          id: 1,
+          menuDisplayPageSeconds: 18,
+          counterReadyGraceMinutes: 3,
+        },
         update: {},
       }),
     ]);
@@ -74,6 +78,7 @@ export async function GET(req: NextRequest) {
       categories: result,
       settings: {
         pageDisplaySeconds: setting.menuDisplayPageSeconds,
+        counterReadyGraceMinutes: setting.counterReadyGraceMinutes,
       },
     });
   } catch (error) {
