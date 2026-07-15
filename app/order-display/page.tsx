@@ -121,17 +121,29 @@ async function playOrderCallAudio(call: Callout, melodyVolume: number) {
   const customerAudio = preloadAudio(
     orderNumberAudioSrc(call.orderNo, "customer"),
   );
-  await Promise.all([
+  const orderNumberAudioReady = Promise.all([
     waitForAudioReady(numberAudio),
     waitForAudioReady(customerAudio),
   ]);
-  const parts = [
+
+  const introParts = [
     call.followsPrevious
       ? preloadAudio(CALL_ASSETS.continued)
       : preloadAudio(CALL_ASSETS.melody, melodyVolume),
     isLongWait && !call.followsPrevious
       ? preloadAudio(CALL_ASSETS.waitLong)
       : null,
+  ].filter(Boolean) as Array<string | HTMLAudioElement>;
+
+  for (const part of introParts) {
+    await playAudioElement(
+      typeof part === "string" ? preloadAudio(part) : part,
+    );
+  }
+
+  await orderNumberAudioReady;
+
+  const parts = [
     numberAudio,
     customerAudio,
     call.followsPrevious ? CALL_ASSETS.counter : CALL_ASSETS.preparedCounter,
