@@ -5,6 +5,7 @@ import { apiFetch } from "@/lib/client";
 import { LoadingScreen } from "@/components/loading-screen";
 import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
 import { useSession } from "@/components/use-session";
+import { useWakeLock } from "@/components/use-wake-lock";
 import { useToast } from "@/components/toast";
 
 type DisplayOrder = {
@@ -165,6 +166,7 @@ function orderNumberStyle(orderNo: number) {
 export default function OrderDisplayPage() {
   const { loading, session } = useSession(["ORDER_DISPLAY"]);
   const { notify } = useToast();
+  useWakeLock(Boolean(session));
   const [readyOrders, setReadyOrders] = useState<DisplayOrder[]>([]);
   const [unreadyOrders, setUnreadyOrders] = useState<DisplayOrder[]>([]);
   const [settings, setSettings] = useState<OrderDisplaySettings>({

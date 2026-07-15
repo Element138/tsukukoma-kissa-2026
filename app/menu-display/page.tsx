@@ -14,6 +14,7 @@ import { TerminalBanner } from "@/components/terminal-banner";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { LoadingScreen } from "@/components/loading-screen";
 import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
+import { useWakeLock } from "@/components/use-wake-lock";
 import {
   formatAllergenNotice,
   type SpecifiedAllergenKey,
@@ -296,6 +297,7 @@ function buildRenderChunks(text: string) {
 export default function MenuDisplayPage() {
   const { loading, session } = useSession(["MENU_DISPLAY"]);
   const { notify, clearByPrefix } = useToast();
+  useWakeLock(Boolean(session));
 
   const [categories, setCategories] = useState<DisplayCategory[]>([]);
   const [settings, setSettings] =
