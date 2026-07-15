@@ -48,7 +48,7 @@ const CALLOUT_MIN_VISIBLE_MS = 5200;
 const CALLOUT_FADE_OUT_MS = 450;
 const CALL_BURST_WINDOW_MS = 5000;
 const UNREADY_SCROLL_DURATION_MS = 36_000;
-const READY_SCROLL_DURATION_MS = 28_000;
+const READY_SCROLL_DURATION_MS = 14_000;
 const ORDER_DISPLAY_REFRESH_MS = 5_000;
 const CALL_ASSETS = {
   melody: "/audio/order-call/call-melody-song-20260714.wav",
@@ -489,7 +489,7 @@ export default function OrderDisplayPage() {
 
       const duration = Math.max(
         READY_SCROLL_DURATION_MS,
-        Math.round(overflowPx * 80),
+        Math.round(overflowPx * 40),
       );
       const animation = track.animate(
         [
