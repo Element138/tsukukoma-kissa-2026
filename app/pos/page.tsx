@@ -656,6 +656,7 @@ export default function PosPage() {
       notify({
         level: "success",
         message: `注文 #${data.order.orderNo} を登録しました（${labelOf(PAYMENT_STATUS_LABEL, data.order.paymentStatus)} / ${labelOf(ORDER_STATUS_LABEL, data.order.orderStatus)}）`,
+        durationMs: 15000,
       });
 
       if (data.square?.deepLink) {
