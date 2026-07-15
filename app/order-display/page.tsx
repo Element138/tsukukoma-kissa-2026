@@ -34,6 +34,7 @@ type Callout = {
   orderNo: number;
   createdAt: string;
   followsPrevious: boolean;
+  callCount: number;
   exiting?: boolean;
 };
 
@@ -42,9 +43,10 @@ type QueuedCall = {
   orderNo: number;
   createdAt: string;
   followsPrevious: boolean;
+  callCount: number;
 };
 
-const ORDER_AGE_LONG_WAIT_MS = 20 * 60 * 1000;
+const ORDER_AGE_LONG_WAIT_MS = 25 * 60 * 1000;
 const CALLOUT_MIN_VISIBLE_MS = 5200;
 const CALLOUT_FADE_OUT_MS = 450;
 const CALL_BURST_WINDOW_MS = 5000;
@@ -54,6 +56,7 @@ const ORDER_DISPLAY_REFRESH_MS = 5_000;
 const CALL_ASSETS = {
   melody: "/audio/order-call/call-melody-song-20260714.wav",
   waitLong: "/audio/order-call/wait-long.mp3",
+  repeatedCallApology: "/audio/order-call/repeated-call-apology.mp3",
   continued: "/audio/order-call/continued.mp3",
   preparedCounter: "/audio/order-call/prepared-counter.mp3",
   counter: "/audio/order-call/counter.mp3",
@@ -117,6 +120,8 @@ function warmOrderNumberAudio(orderNo: number) {
 async function playOrderCallAudio(call: Callout, melodyVolume: number) {
   const isLongWait =
     Date.now() - new Date(call.createdAt).getTime() >= ORDER_AGE_LONG_WAIT_MS;
+  const shouldPlayRepeatedCallApology =
+    call.callCount >= 3 && !call.followsPrevious;
   const numberAudio = preloadAudio(orderNumberAudioSrc(call.orderNo, "number"));
   const customerAudio = preloadAudio(
     orderNumberAudioSrc(call.orderNo, "customer"),
@@ -130,7 +135,10 @@ async function playOrderCallAudio(call: Callout, melodyVolume: number) {
     call.followsPrevious
       ? preloadAudio(CALL_ASSETS.continued)
       : preloadAudio(CALL_ASSETS.melody, melodyVolume),
-    isLongWait && !call.followsPrevious
+    shouldPlayRepeatedCallApology
+      ? preloadAudio(CALL_ASSETS.repeatedCallApology)
+      : null,
+    isLongWait && !call.followsPrevious && !shouldPlayRepeatedCallApology
       ? preloadAudio(CALL_ASSETS.waitLong)
       : null,
   ].filter(Boolean) as Array<string | HTMLAudioElement>;
@@ -202,6 +210,7 @@ export default function OrderDisplayPage() {
   const callQueueRef = useRef<QueuedCall[]>([]);
   const callInFlightRef = useRef(false);
   const lastCallEndedAtRef = useRef(0);
+  const orderCallCountsRef = useRef<Map<number, number>>(new Map());
 
   const processCallQueue = async () => {
     if (callInFlightRef.current) {
@@ -219,6 +228,7 @@ export default function OrderDisplayPage() {
       orderNo: nextCall.orderNo,
       createdAt: nextCall.createdAt,
       followsPrevious: nextCall.followsPrevious,
+      callCount: nextCall.callCount,
     };
     setCallout(activeCall);
 
@@ -244,6 +254,8 @@ export default function OrderDisplayPage() {
     const now = Date.now();
     for (const order of orders.sort((a, b) => a.orderNo - b.orderNo)) {
       warmOrderNumberAudio(order.orderNo);
+      const callCount = (orderCallCountsRef.current.get(order.orderNo) ?? 0) + 1;
+      orderCallCountsRef.current.set(order.orderNo, callCount);
       const followsPrevious =
         callInFlightRef.current ||
         callQueueRef.current.length > 0 ||
@@ -254,6 +266,7 @@ export default function OrderDisplayPage() {
         orderNo: order.orderNo,
         createdAt: order.createdAt,
         followsPrevious,
+        callCount,
       });
     }
     void processCallQueue();
