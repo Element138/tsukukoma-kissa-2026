@@ -12,6 +12,10 @@ import { useWakeLock } from "@/components/use-wake-lock";
 import { useToast } from "@/components/toast";
 import { Card } from "@/components/ui/card";
 import { ACTOR_TYPE_LABEL, labelOf } from "@/lib/labels";
+import {
+  LIVE_QUEUE_DANGER_SECONDS,
+  LIVE_QUEUE_WARN_SECONDS,
+} from "@/lib/experience-thresholds";
 
 type DineInOrder = {
   id: string;
@@ -43,10 +47,10 @@ function formatMss(totalSeconds: number) {
 }
 
 function queueTone(seconds: number) {
-  if (seconds >= 600) {
+  if (seconds >= LIVE_QUEUE_DANGER_SECONDS) {
     return "danger";
   }
-  if (seconds >= 240) {
+  if (seconds >= LIVE_QUEUE_WARN_SECONDS) {
     return "warn";
   }
   return "safe";

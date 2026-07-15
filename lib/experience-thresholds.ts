@@ -1,0 +1,5 @@
+export const LIVE_QUEUE_WARN_SECONDS = 10 * 60;
+export const LIVE_QUEUE_DANGER_SECONDS = 20 * 60;
+
+export const SALES_LATE_WARN_SECONDS = 25 * 60;
+export const SALES_LATE_DANGER_SECONDS = 40 * 60;
