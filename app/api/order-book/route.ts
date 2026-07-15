@@ -5,7 +5,6 @@ import { requireSession } from "@/lib/server/auth";
 import { fail, ok } from "@/lib/response";
 import { triggerPaymentWatchdogBestEffort } from "@/lib/server/payment-watchdog-trigger";
 import { parseAgeRangesToCounts } from "@/lib/age-groups";
-import { getMenuCapStates } from "@/lib/domain/menu-cap";
 import { deriveOrderProcessingTrace } from "@/lib/domain/order-processing-trace";
 
 const querySchema = z.object({
@@ -144,6 +143,7 @@ export async function GET(req: NextRequest) {
         name: string;
         ordered: number;
         queued: number;
+        totalSoldPriceJpy: number;
       }
     >();
 
@@ -159,15 +159,19 @@ export async function GET(req: NextRequest) {
           name: item.name,
           ordered: 0,
           queued: 0,
+          totalSoldPriceJpy: 0,
         };
 
         if (item.status === "QUEUED") {
           existing.ordered += 1;
           existing.queued += 1;
+          existing.totalSoldPriceJpy += item.unitPriceJpy;
         } else if (item.status === "READY") {
           existing.ordered += 1;
+          existing.totalSoldPriceJpy += item.unitPriceJpy;
         } else if (item.status === "SERVED") {
           existing.ordered += 1;
+          existing.totalSoldPriceJpy += item.unitPriceJpy;
         }
         menuCountsMap.set(key, existing);
       }
@@ -185,28 +189,36 @@ export async function GET(req: NextRequest) {
       },
     });
     const countedMenuById = new Map(countedMenus.map((menu) => [menu.id, menu]));
-    const capStateByMenuId = await getMenuCapStates(
-      prisma,
-      countedMenus.map((menu) => ({
-        menuId: menu.id,
-        dailyOrderCap: menu.dailyOrderCap ?? null,
-      })),
-    );
 
     const menuCounts = [...menuCountsMap.values()]
       .map((row) => {
         const menu = countedMenuById.get(row.menuId);
-        const capState = capStateByMenuId.get(row.menuId);
+        const cap = menu?.dailyOrderCap ?? null;
         return {
           menuId: row.menuId,
           name: menu?.name ?? row.name,
-          ordered: capState?.todayCount ?? 0,
+          ordered: row.ordered,
           queued: row.queued,
-          cap: capState?.dailyOrderCap ?? null,
-          toCap: capState?.remainingUntilCap ?? null,
+          totalSoldPriceJpy: row.totalSoldPriceJpy,
+          cap,
+          toCap: cap == null ? null : Math.max(0, cap - row.ordered),
         };
       })
       .sort((a, b) => a.name.localeCompare(b.name, "ja"));
+
+    const menuTotals = menuCounts.reduce(
+      (acc, row) => {
+        acc.ordered += row.ordered;
+        acc.queued += row.queued;
+        acc.totalSoldPriceJpy += row.totalSoldPriceJpy;
+        return acc;
+      },
+      {
+        ordered: 0,
+        queued: 0,
+        totalSoldPriceJpy: 0,
+      },
+    );
 
     const incidents = await prisma.paymentIncident.findMany({
       where: {
@@ -233,6 +245,7 @@ export async function GET(req: NextRequest) {
     return ok({
       orders: rows,
       menuCounts,
+      menuTotals,
       incidents: incidents.map((incident) => ({
         id: incident.id,
         orderId: incident.orderId,

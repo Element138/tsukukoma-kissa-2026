@@ -2317,6 +2317,42 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   z-index: 1;
 }
 
+.order-book-day-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.order-book-day-input {
+  width: 148px;
+  height: 36px;
+}
+
+.order-book-day-arrow {
+  width: 36px;
+  height: 36px;
+  padding: 0 !important;
+}
+
+.order-book-day-arrow svg {
+  width: 18px;
+  height: 18px;
+}
+
+.order-book-today-btn {
+  height: 36px;
+  padding-block: 0 !important;
+}
+
+.order-book-total-row th {
+  position: static;
+  background: #eef6f5;
+  border-top: 2px solid rgba(15, 118, 110, 0.22);
+  font-weight: 900;
+}
+
 .admin-shell {
   display: grid;
   gap: 12px;

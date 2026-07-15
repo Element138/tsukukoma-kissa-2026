@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { apiFetch, fmtJpy } from "@/lib/client";
 import { useSession } from "@/components/use-session";
 import { TerminalBanner } from "@/components/terminal-banner";
@@ -60,8 +61,15 @@ type MenuCountRow = {
   name: string;
   ordered: number;
   queued: number;
+  totalSoldPriceJpy: number;
   cap: number | null;
   toCap: number | null;
+};
+
+type MenuTotals = {
+  ordered: number;
+  queued: number;
+  totalSoldPriceJpy: number;
 };
 
 type PaymentIncidentRow = {
@@ -169,6 +177,43 @@ function failureReasonLabel(reasonType: string | null) {
   }
 }
 
+const TOKYO_TZ = "Asia/Tokyo";
+const TOKYO_DAY_MS = 24 * 60 * 60 * 1000;
+
+function tokyoDateKey(date = new Date()) {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: TOKYO_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  return formatter.format(date);
+}
+
+function addDaysToDateKey(dateKey: string, days: number) {
+  const next = new Date(`${dateKey}T00:00:00+09:00`);
+  next.setUTCDate(next.getUTCDate() + days);
+  return tokyoDateKey(next);
+}
+
+function tokyoDayRangeIso(dateKey: string) {
+  const start = new Date(`${dateKey}T00:00:00+09:00`);
+  return {
+    from: start.toISOString(),
+    to: new Date(start.getTime() + TOKYO_DAY_MS - 1).toISOString(),
+  };
+}
+
+function formatDateLabel(dateKey: string) {
+  return new Date(`${dateKey}T00:00:00+09:00`).toLocaleDateString("ja-JP", {
+    timeZone: TOKYO_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    weekday: "short",
+  });
+}
+
 export default function OrderBookPage() {
   const { loading, session } = useSession([
     "POS",
@@ -180,10 +225,16 @@ export default function OrderBookPage() {
 
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [menuCounts, setMenuCounts] = useState<MenuCountRow[]>([]);
+  const [menuTotals, setMenuTotals] = useState<MenuTotals>({
+    ordered: 0,
+    queued: 0,
+    totalSoldPriceJpy: 0,
+  });
   const [incidents, setIncidents] = useState<PaymentIncidentRow[]>([]);
   const [status, setStatus] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
   const [qOrderNo, setQOrderNo] = useState("");
+  const [selectedDate, setSelectedDate] = useState(() => tokyoDateKey());
   const [tickNow, setTickNow] = useState(Date.now());
   const reloadInFlightRef = useRef(false);
   const queuedReloadRef = useRef(false);
@@ -202,14 +253,25 @@ export default function OrderBookPage() {
       if (status) params.set("status", status);
       if (paymentMethod) params.set("paymentMethod", paymentMethod);
       if (qOrderNo) params.set("orderNo", qOrderNo);
+      const range = tokyoDayRangeIso(selectedDate);
+      params.set("from", range.from);
+      params.set("to", range.to);
 
       const data = await apiFetch<{
         orders: OrderRow[];
         menuCounts: MenuCountRow[];
+        menuTotals: MenuTotals;
         incidents: PaymentIncidentRow[];
       }>(`/api/order-book?${params.toString()}`);
       setOrders(data.orders);
       setMenuCounts(data.menuCounts);
+      setMenuTotals(
+        data.menuTotals ?? {
+          ordered: 0,
+          queued: 0,
+          totalSoldPriceJpy: 0,
+        },
+      );
       setIncidents(data.incidents ?? []);
     } catch (e) {
       notify({
@@ -229,7 +291,7 @@ export default function OrderBookPage() {
   useEffect(() => {
     if (!session) return;
     void reload();
-  }, [session, status, paymentMethod, qOrderNo]);
+  }, [session, status, paymentMethod, qOrderNo, selectedDate]);
 
   useEffect(() => {
     const timer = setInterval(() => setTickNow(Date.now()), 1000);
@@ -461,7 +523,50 @@ export default function OrderBookPage() {
 
           <div className="card" style={{ marginBottom: 14 }}>
             <div className="row between wrap" style={{ marginBottom: 8 }}>
-              <strong>本日の提供数</strong>
+              <div>
+                <strong>メニュー別 日別集計</strong>
+                <div className="muted">{formatDateLabel(selectedDate)}</div>
+              </div>
+              <div className="order-book-day-switcher">
+                <button
+                  type="button"
+                  className="ghost-btn order-book-day-arrow"
+                  aria-label="前日"
+                  onClick={() =>
+                    setSelectedDate((value) => addDaysToDateKey(value, -1))
+                  }
+                >
+                  <ChevronLeft aria-hidden="true" />
+                </button>
+                <Input
+                  aria-label="集計日"
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      setSelectedDate(e.target.value);
+                    }
+                  }}
+                  className="order-book-day-input"
+                />
+                <button
+                  type="button"
+                  className="ghost-btn order-book-day-arrow"
+                  aria-label="翌日"
+                  onClick={() =>
+                    setSelectedDate((value) => addDaysToDateKey(value, 1))
+                  }
+                >
+                  <ChevronRight aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  className="ghost-btn order-book-today-btn"
+                  onClick={() => setSelectedDate(tokyoDateKey())}
+                >
+                  今日
+                </button>
+              </div>
             </div>
             <div className="table-scroll">
               <table className="table">
@@ -469,6 +574,7 @@ export default function OrderBookPage() {
                   <tr>
                     <th>メニュー</th>
                     <th>注文済み</th>
+                    <th>売上</th>
                     <th>(うち調理待ち)</th>
                     <th>上限</th>
                     <th>上限まで残り</th>
@@ -479,6 +585,7 @@ export default function OrderBookPage() {
                     <tr key={item.menuId}>
                       <td>{item.name}</td>
                       <td>{item.ordered}</td>
+                      <td>{fmtJpy(item.totalSoldPriceJpy)}</td>
                       <td>{item.queued}</td>
                       <td>{item.cap == null ? "∞" : item.cap}</td>
                       <td>{item.toCap == null ? "-" : item.toCap}</td>
@@ -486,12 +593,24 @@ export default function OrderBookPage() {
                   ))}
                   {menuCounts.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="muted">
+                      <td colSpan={6} className="muted">
                         対象データがありません
                       </td>
                     </tr>
                   ) : null}
                 </tbody>
+                {menuCounts.length > 0 ? (
+                  <tfoot>
+                    <tr className="order-book-total-row">
+                      <th>合計</th>
+                      <th>{menuTotals.ordered}</th>
+                      <th>{fmtJpy(menuTotals.totalSoldPriceJpy)}</th>
+                      <th>{menuTotals.queued}</th>
+                      <th>-</th>
+                      <th>-</th>
+                    </tr>
+                  </tfoot>
+                ) : null}
               </table>
             </div>
           </div>
