@@ -28,10 +28,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  LIVE_QUEUE_DANGER_SECONDS,
-  LIVE_QUEUE_WARN_SECONDS,
-} from "@/lib/experience-thresholds";
 
 type OrderRow = {
   id: string;
@@ -134,10 +130,10 @@ function orderAgeClass(
   if (paymentStatus === "AWAITING") {
     return "";
   }
-  if (elapsedSec >= LIVE_QUEUE_DANGER_SECONDS) {
+  if (elapsedSec >= 600) {
     return "order-age-danger";
   }
-  if (elapsedSec >= LIVE_QUEUE_WARN_SECONDS) {
+  if (elapsedSec >= 240) {
     return "order-age-warn";
   }
   return "order-age-safe";
@@ -452,9 +448,6 @@ export default function OrderBookPage() {
               >
                 更新
               </button>
-              <Link href="/sales" className="btn-link ghost-btn">
-                売上
-              </Link>
               <a href="/api/order-book/export" className="btn-link ghost-btn">
                 CSV出力
               </a>

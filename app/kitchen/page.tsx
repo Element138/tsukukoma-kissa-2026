@@ -16,10 +16,6 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { Check, Minus, Plus } from "lucide-react";
-import {
-  LIVE_QUEUE_DANGER_SECONDS,
-  LIVE_QUEUE_WARN_SECONDS,
-} from "@/lib/experience-thresholds";
 
 type KitchenMenuRow = {
   menuId: string;
@@ -73,10 +69,10 @@ function formatMss(totalSeconds: number) {
 }
 
 function queueTone(seconds: number) {
-  if (seconds >= LIVE_QUEUE_DANGER_SECONDS) {
+  if (seconds >= 600) {
     return "danger";
   }
-  if (seconds >= LIVE_QUEUE_WARN_SECONDS) {
+  if (seconds >= 240) {
     return "warn";
   }
   return "safe";

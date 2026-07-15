@@ -36,27 +36,6 @@ export function tokyoDayRangeUtc(date = now()) {
   };
 }
 
-export function tokyoDayRangeUtcFromDateKey(dateKey: string) {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey);
-  if (!match) {
-    throw new Error(`Invalid Tokyo date key: ${dateKey}`);
-  }
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  const startMs = Date.UTC(year, month - 1, day, 0, 0, 0) - TOKYO_OFFSET_MINUTES * 60_000;
-  return {
-    dateKey,
-    start: new Date(startMs),
-    end: new Date(startMs + TOKYO_DAY_MS),
-  };
-}
-
-export function addDaysToTokyoDateKey(dateKey: string, days: number) {
-  const { start } = tokyoDayRangeUtcFromDateKey(dateKey);
-  return tokyoDateKey(new Date(start.getTime() + days * TOKYO_DAY_MS));
-}
-
 export function minutesFromNow(minutes: number): Date {
   return new Date(Date.now() + minutes * 60_000);
 }
