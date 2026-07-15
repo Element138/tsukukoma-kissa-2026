@@ -7,10 +7,10 @@ import { synthesizeJapaneseSpeechMp3 } from "@/lib/server/google-tts";
 
 export const runtime = "nodejs";
 
-type AudioPart = "number" | "customer";
+type AudioPart = "number" | "customer" | "extreme-long-wait";
 
 function parsePart(raw: string): AudioPart {
-  if (raw === "number" || raw === "customer") {
+  if (raw === "number" || raw === "customer" || raw === "extreme-long-wait") {
     return raw;
   }
   throw new AppError(400, "VALIDATION_ERROR", "Invalid audio part");
@@ -24,8 +24,24 @@ function parseOrderNo(raw: string) {
   return orderNo;
 }
 
-function textForPart(part: AudioPart, orderNo: number) {
+function textForPart(part: AudioPart, orderNo: number | null) {
+  if (part === "extreme-long-wait") {
+    return "大変長らくお待たせして、申し訳ございませんでした。";
+  }
+  if (orderNo == null) {
+    throw new AppError(400, "VALIDATION_ERROR", "Invalid order number");
+  }
   return part === "number" ? `${orderNo}番。` : `${orderNo}番のお客様。`;
+}
+
+function cachePathForPart(part: AudioPart, orderNo: number | null) {
+  if (part === "extreme-long-wait") {
+    return "order-call/prompts/v1/extreme-long-wait-apology.mp3";
+  }
+  if (orderNo == null) {
+    throw new AppError(400, "VALIDATION_ERROR", "Invalid order number");
+  }
+  return `order-call/numbers/v2/${part}-${orderNo}.mp3`;
 }
 
 type CacheLookup =
@@ -78,8 +94,9 @@ export async function GET(
     await requireSession(req, { actorTypes: ["ORDER_DISPLAY", "ADMIN"] });
     const { part: rawPart, orderNo: rawOrderNo } = await context.params;
     const part = parsePart(rawPart);
-    const orderNo = parseOrderNo(rawOrderNo);
-    const pathname = `order-call/numbers/v2/${part}-${orderNo}.mp3`;
+    const orderNo =
+      part === "extreme-long-wait" ? null : parseOrderNo(rawOrderNo);
+    const pathname = cachePathForPart(part, orderNo);
     const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
     let cacheStatus = blobToken ? "miss" : "disabled";
 

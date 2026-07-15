@@ -47,15 +47,18 @@ type QueuedCall = {
 };
 
 const ORDER_AGE_LONG_WAIT_MS = 25 * 60 * 1000;
+const ORDER_AGE_EXTREME_LONG_WAIT_MS = 40 * 60 * 1000;
 const CALLOUT_MIN_VISIBLE_MS = 5200;
 const CALLOUT_FADE_OUT_MS = 450;
 const CALL_BURST_WINDOW_MS = 5000;
 const UNREADY_SCROLL_DURATION_MS = 36_000;
 const READY_SCROLL_DURATION_MS = 14_000;
 const ORDER_DISPLAY_REFRESH_MS = 5_000;
+const CALL_MELODY_VOLUME_SCALE = 0.95;
 const CALL_ASSETS = {
   melody: "/audio/order-call/call-melody-song-20260714.wav",
   waitLong: "/audio/order-call/wait-long.mp3",
+  waitExtremeLongApology: "/api/order-display/audio/extreme-long-wait/1",
   repeatedCallApology: "/audio/order-call/repeated-call-apology.mp3",
   continued: "/audio/order-call/continued.mp3",
   preparedCounter: "/audio/order-call/prepared-counter.mp3",
@@ -118,8 +121,9 @@ function warmOrderNumberAudio(orderNo: number) {
 }
 
 async function playOrderCallAudio(call: Callout, melodyVolume: number) {
-  const isLongWait =
-    Date.now() - new Date(call.createdAt).getTime() >= ORDER_AGE_LONG_WAIT_MS;
+  const orderAgeMs = Date.now() - new Date(call.createdAt).getTime();
+  const isLongWait = orderAgeMs >= ORDER_AGE_LONG_WAIT_MS;
+  const isExtremeLongWait = orderAgeMs >= ORDER_AGE_EXTREME_LONG_WAIT_MS;
   const shouldPlayRepeatedCallApology =
     call.callCount >= 3 && !call.followsPrevious;
   const numberAudio = preloadAudio(orderNumberAudioSrc(call.orderNo, "number"));
@@ -134,11 +138,20 @@ async function playOrderCallAudio(call: Callout, melodyVolume: number) {
   const introParts = [
     call.followsPrevious
       ? preloadAudio(CALL_ASSETS.continued)
-      : preloadAudio(CALL_ASSETS.melody, melodyVolume),
+      : preloadAudio(
+          CALL_ASSETS.melody,
+          melodyVolume * CALL_MELODY_VOLUME_SCALE,
+        ),
     shouldPlayRepeatedCallApology
       ? preloadAudio(CALL_ASSETS.repeatedCallApology)
       : null,
-    isLongWait && !call.followsPrevious && !shouldPlayRepeatedCallApology
+    isExtremeLongWait && !call.followsPrevious && !shouldPlayRepeatedCallApology
+      ? preloadAudio(CALL_ASSETS.waitExtremeLongApology)
+      : null,
+    isLongWait &&
+    !isExtremeLongWait &&
+    !call.followsPrevious &&
+    !shouldPlayRepeatedCallApology
       ? preloadAudio(CALL_ASSETS.waitLong)
       : null,
   ].filter(Boolean) as Array<string | HTMLAudioElement>;
@@ -155,6 +168,9 @@ async function playOrderCallAudio(call: Callout, melodyVolume: number) {
     numberAudio,
     customerAudio,
     call.followsPrevious ? CALL_ASSETS.counter : CALL_ASSETS.preparedCounter,
+    call.followsPrevious && isExtremeLongWait
+      ? CALL_ASSETS.waitExtremeLongApology
+      : null,
   ].filter(Boolean) as Array<string | HTMLAudioElement>;
 
   for (const part of parts) {
