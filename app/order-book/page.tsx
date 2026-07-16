@@ -448,6 +448,9 @@ export default function OrderBookPage() {
               >
                 更新
               </button>
+              <Link href={{ pathname: "/sales" }} className="btn-link ghost-btn">
+                売上・待ち時間
+              </Link>
               <a href="/api/order-book/export" className="btn-link ghost-btn">
                 CSV出力
               </a>
