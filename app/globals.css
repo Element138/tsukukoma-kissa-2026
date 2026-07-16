@@ -2652,6 +2652,18 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   vector-effect: non-scaling-stroke;
 }
 
+.sales-step-point {
+  cursor: pointer;
+  outline: none;
+}
+
+.sales-step-point:hover .sales-step-dot,
+.sales-step-point:focus .sales-step-dot {
+  fill: #d8f1ee;
+  stroke: #122033;
+  stroke-width: 2.5;
+}
+
 .sales-chart-empty {
   position: absolute;
   inset: 0;
@@ -2734,10 +2746,6 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   stroke-width: 2.5;
 }
 
-.sales-plot-tooltip-object {
-  overflow: visible;
-}
-
 .sales-plot-tooltip {
   width: 228px;
   min-height: 58px;
@@ -2748,6 +2756,21 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   color: var(--ink);
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.16);
   font-family: var(--font-inter), var(--font-zen-kaku), sans-serif;
+}
+
+.sales-plot-tooltip-overlay {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.sales-plot-tooltip-overlay.is-above {
+  transform: translate(-50%, calc(-100% - 10px));
+}
+
+.sales-plot-tooltip-overlay.is-below {
+  transform: translate(-50%, 12px);
 }
 
 .sales-plot-tooltip > div {

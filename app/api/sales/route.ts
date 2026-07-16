@@ -224,15 +224,15 @@ export async function GET(req: NextRequest) {
         }
       }
 
-      const readyTimes = activeItems
-        .map((item) => item.readyAt)
+      const firstServedTimes = activeItems
+        .map((item) => item.servedAt)
         .filter((value): value is Date => Boolean(value));
-      if (readyTimes.length > 0) {
+      if (firstServedTimes.length > 0) {
         const finishedAt = new Date(
-          Math.min(...readyTimes.map((value) => value.getTime())),
+          Math.min(...firstServedTimes.map((value) => value.getTime())),
         );
         waitPoints.push({
-          key: "order:first-call",
+          key: "order:first-serving",
           orderId: order.id,
           orderNo: order.orderNo,
           confirmedAt,
@@ -277,13 +277,13 @@ export async function GET(req: NextRequest) {
     const waitSummaries = [
       summaryFor(
         "order:complete",
-        "注文・提供完了",
+        "注文（提供完了）",
         waitPoints.filter((point) => point.key === "order:complete"),
       ),
       summaryFor(
-        "order:first-call",
-        "注文・初回調理完了",
-        waitPoints.filter((point) => point.key === "order:first-call"),
+        "order:first-serving",
+        "注文（初回提供）",
+        waitPoints.filter((point) => point.key === "order:first-serving"),
       ),
       ...menus.map((menu) =>
         summaryFor(
