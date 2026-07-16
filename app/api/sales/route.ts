@@ -33,6 +33,35 @@ function jstDayRange(dateKey: string) {
   };
 }
 
+function tightChartRange(
+  hardStart: Date,
+  hardEnd: Date,
+  lifetimes: Array<{ start: Date; end: Date }>,
+) {
+  if (lifetimes.length === 0) {
+    return { chartStart: hardStart, chartEnd: hardEnd };
+  }
+  const hourMs = 60 * 60 * 1000;
+  const earliest = Math.min(...lifetimes.map((row) => row.start.getTime()));
+  const latest = Math.max(...lifetimes.map((row) => row.end.getTime()));
+  let startMs = Math.max(
+    hardStart.getTime(),
+    Math.floor(earliest / hourMs) * hourMs,
+  );
+  let endMs = Math.min(
+    hardEnd.getTime(),
+    Math.ceil(latest / hourMs) * hourMs,
+  );
+  if (endMs <= startMs) {
+    if (startMs + hourMs <= hardEnd.getTime()) {
+      endMs = startMs + hourMs;
+    } else {
+      startMs = Math.max(hardStart.getTime(), endMs - hourMs);
+    }
+  }
+  return { chartStart: new Date(startMs), chartEnd: new Date(endMs) };
+}
+
 function percentile50(values: number[]) {
   if (values.length === 0) return null;
   const sorted = [...values].sort((a, b) => a - b);
@@ -136,6 +165,7 @@ export async function GET(req: NextRequest) {
       itemId: string | null;
     }> = [];
     const waitPoints: WaitPoint[] = [];
+    const orderLifetimes: Array<{ start: Date; end: Date }> = [];
 
     for (const order of validOrders) {
       const confirmedAt = order.confirmedAt!;
@@ -149,6 +179,14 @@ export async function GET(req: NextRequest) {
       });
 
       const activeItems = order.items.filter((item) => item.status !== "CANCELED");
+      const lastKnownAt = activeItems.reduce((latest, item) => {
+        const itemLatest = Math.max(
+          item.readyAt?.getTime() ?? confirmedAt.getTime(),
+          item.servedAt?.getTime() ?? confirmedAt.getTime(),
+        );
+        return Math.max(latest, itemLatest);
+      }, confirmedAt.getTime());
+      orderLifetimes.push({ start: confirmedAt, end: new Date(lastKnownAt) });
       for (const item of activeItems) {
         const current = menuMap.get(item.menuId) ?? {
           menuId: item.menuId,
@@ -244,7 +282,7 @@ export async function GET(req: NextRequest) {
       ),
       summaryFor(
         "order:first-call",
-        "注文・初回呼出",
+        "注文・初回調理完了",
         waitPoints.filter((point) => point.key === "order:first-call"),
       ),
       ...menus.map((menu) =>
@@ -255,6 +293,17 @@ export async function GET(req: NextRequest) {
         ),
       ),
     ];
+    const tightRange = tightChartRange(
+      range.chartStart,
+      range.chartEnd,
+      orderLifetimes,
+    );
+    const waitYMaxMinutes = Math.max(
+      10,
+      Math.ceil(
+        Math.max(0, ...waitPoints.map((point) => point.waitSeconds / 60)) / 10,
+      ) * 10,
+    );
 
     const paymentIncidents =
       orders.length === 0
@@ -339,6 +388,7 @@ export async function GET(req: NextRequest) {
       date: query.date,
       timezone: "Asia/Tokyo",
       range,
+      chartRange: tightRange,
       totals: {
         orderCount: validOrders.length,
         itemCount: menus.reduce((total, menu) => total + menu.count, 0),
@@ -359,6 +409,7 @@ export async function GET(req: NextRequest) {
       wait: {
         summaries: waitSummaries,
         points: waitPoints,
+        yMaxMinutes: waitYMaxMinutes,
       },
       incidents,
     });

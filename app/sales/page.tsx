@@ -2,6 +2,7 @@
 
 import {
   Suspense,
+  memo,
   useCallback,
   useEffect,
   useMemo,
@@ -49,6 +50,7 @@ import {
   PAYMENT_STATUS_LABEL,
   labelOf,
 } from "@/lib/labels";
+import { AGE_GROUPS, type AgeGroupCounts } from "@/lib/age-groups";
 
 const TOKYO_TZ = "Asia/Tokyo";
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -111,6 +113,7 @@ type SalesData = {
     chartStart: string;
     chartEnd: string;
   };
+  chartRange: { chartStart: string; chartEnd: string };
   totals: {
     orderCount: number;
     itemCount: number;
@@ -120,7 +123,11 @@ type SalesData = {
   };
   menus: MenuSummary[];
   salesEvents: SalesEvent[];
-  wait: { summaries: WaitSummary[]; points: WaitPoint[] };
+  wait: {
+    summaries: WaitSummary[];
+    points: WaitPoint[];
+    yMaxMinutes: number;
+  };
   incidents: SalesIncident[];
 };
 
@@ -135,6 +142,7 @@ type OrderDetail = {
   fulfillmentType: string;
   tableNo: number | null;
   partySize: number;
+  ageGroupCounts: AgeGroupCounts;
   specialNote: string | null;
   paymentMethod: string;
   paymentStatus: string;
@@ -245,7 +253,14 @@ function metricTone(value: number | null, warning: number, danger: number) {
   return "";
 }
 
-const CHART = { width: 920, height: 270, left: 54, right: 18, top: 16, bottom: 38 };
+const CHART = {
+  width: 920,
+  height: 390,
+  left: 54,
+  right: 18,
+  top: 20,
+  bottom: 40,
+};
 
 function xScale(at: number, start: number, end: number) {
   const width = CHART.width - CHART.left - CHART.right;
@@ -257,19 +272,46 @@ function yScale(value: number, max: number) {
   return CHART.top + height - (value / Math.max(1, max)) * height;
 }
 
-function ChartAxes({ yMax, yLabel }: { yMax: number; yLabel: string }) {
+function chartHours(start: number, end: number) {
+  const hours: Array<{ at: number; label: string }> = [];
+  const hourMs = 60 * 60 * 1000;
+  for (let at = start; at <= end; at += hourMs) {
+    hours.push({
+      at,
+      label: new Date(at).toLocaleTimeString("ja-JP", {
+        timeZone: TOKYO_TZ,
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }),
+    });
+  }
+  return hours;
+}
+
+function ChartAxes({
+  yMax,
+  yLabel,
+  start,
+  end,
+}: {
+  yMax: number;
+  yLabel: string;
+  start: number;
+  end: number;
+}) {
   const plotBottom = CHART.height - CHART.bottom;
   const plotRight = CHART.width - CHART.right;
   const yTicks = [0, yMax / 2, yMax];
   return (
     <g className="sales-chart-axes" aria-hidden="true">
-      {Array.from({ length: 10 }, (_, index) => index + 9).map((hour) => {
-        const x = CHART.left + ((hour - 9) / 9) * (plotRight - CHART.left);
+      {chartHours(start, end).map((hour) => {
+        const x = xScale(hour.at, start, end);
         return (
-          <g key={hour}>
+          <g key={hour.at}>
             <line x1={x} x2={x} y1={CHART.top} y2={plotBottom} />
             <text x={x} y={CHART.height - 13} textAnchor="middle">
-              {hour}:00
+              {hour.label}
             </text>
           </g>
         );
@@ -334,9 +376,9 @@ function CumulativeChart({
         className="sales-chart"
         viewBox={`0 0 ${CHART.width} ${CHART.height}`}
         role="img"
-        aria-label={`${label}の累計販売数。09時から18時まで、実時刻で表示`}
+        aria-label={`${label}の累計販売数。注文稼働時間を実時刻で表示`}
       >
-        <ChartAxes yMax={yMax} yLabel="累計" />
+        <ChartAxes yMax={yMax} yLabel="累計" start={startMs} end={endMs} />
         <path className="sales-step-line" d={commands.join(" ")} />
         {dots.map((dot, index) => (
           <circle
@@ -357,31 +399,28 @@ function CumulativeChart({
 
 function WaitChart({
   points,
-  mode,
   start,
   end,
+  yMax,
   onOpenOrder,
 }: {
   points: WaitPoint[];
-  mode: "scatter" | "lines";
   start: string;
   end: string;
+  yMax: number;
   onOpenOrder: (orderId: string) => void;
 }) {
+  const [hovered, setHovered] = useState<{
+    point: WaitPoint;
+    x: number;
+    y: number;
+  } | null>(null);
   const startMs = new Date(start).getTime();
   const endMs = new Date(end).getTime();
   const relevant = points.filter((point) => {
     const confirmed = new Date(point.confirmedAt).getTime();
-    const finished = new Date(point.finishedAt).getTime();
-    return mode === "scatter"
-      ? confirmed >= startMs && confirmed <= endMs
-      : confirmed <= endMs && finished >= startMs;
+    return confirmed >= startMs && confirmed <= endMs;
   });
-  const rawMaxMinutes = Math.max(
-    10,
-    ...relevant.map((point) => point.waitSeconds / 60),
-  );
-  const yMax = Math.max(10, Math.ceil(rawMaxMinutes / 10) * 10);
   const openFromKeyboard = (
     event: React.KeyboardEvent<SVGGElement>,
     orderId: string,
@@ -398,82 +437,72 @@ function WaitChart({
         className="sales-chart sales-wait-chart"
         viewBox={`0 0 ${CHART.width} ${CHART.height}`}
         role="img"
-        aria-label={`${mode === "scatter" ? "確定時刻と最終待ち時間の散布図" : "注文ごとの待ち時間推移"}。09時から18時まで`}
+        aria-label="確定時刻と最終待ち時間の散布図"
       >
-        <ChartAxes yMax={yMax} yLabel="分" />
+        <ChartAxes yMax={yMax} yLabel="分" start={startMs} end={endMs} />
         {relevant.map((point, index) => {
           const confirmedMs = new Date(point.confirmedAt).getTime();
           const finishedMs = new Date(point.finishedAt).getTime();
           const finalMinutes = point.waitSeconds / 60;
-          const color = `hsl(${166 + (index % 7) * 4} ${42 + (index % 4) * 8}% ${30 + (index % 5) * 8}%)`;
+          const color =
+            point.waitSeconds > 40 * 60
+              ? "#d92d20"
+              : point.waitSeconds > 25 * 60
+                ? "#d99a00"
+                : "#11998e";
           const title = `注文 #${point.orderNo} / ${formatTime(point.confirmedAt)} → ${formatTime(point.finishedAt)} / ${formatDuration(point.waitSeconds)}`;
-
-          if (mode === "scatter") {
-            const x1 = xScale(confirmedMs, startMs, endMs);
-            const x2 = xScale(Math.min(finishedMs, endMs), startMs, endMs);
-            const y = yScale(finalMinutes, yMax);
-            return (
-              <g
-                key={`${point.key}:${point.itemId ?? point.orderId}:${index}`}
-                className="sales-wait-point"
-                role="button"
-                tabIndex={0}
-                aria-label={`${title}。注文を開く`}
-                onClick={() => onOpenOrder(point.orderId)}
-                onKeyDown={(event) => openFromKeyboard(event, point.orderId)}
-              >
-                <line
-                  className="sales-wait-extension"
-                  x1={x1}
-                  x2={Math.max(x1, x2)}
-                  y1={y}
-                  y2={y}
-                />
-                <circle cx={x1} cy={y} r={5} style={{ fill: color }}>
-                  <title>{title}</title>
-                </circle>
-              </g>
-            );
-          }
-
-          const visibleStart = Math.max(startMs, confirmedMs);
-          const visibleEnd = Math.min(endMs, finishedMs);
-          const startWait = Math.max(0, (visibleStart - confirmedMs) / 60000);
-          const endWait = Math.max(0, (visibleEnd - confirmedMs) / 60000);
-          const finishIsVisible = finishedMs >= startMs && finishedMs <= endMs;
-          const x1 = xScale(visibleStart, startMs, endMs);
-          const y1 = yScale(startWait, yMax);
-          const x2 = xScale(visibleEnd, startMs, endMs);
-          const y2 = yScale(endWait, yMax);
+          const x1 = xScale(confirmedMs, startMs, endMs);
+          const x2 = xScale(Math.min(finishedMs, endMs), startMs, endMs);
+          const y = yScale(finalMinutes, yMax);
           return (
-            <g key={`${point.key}:${point.itemId ?? point.orderId}:${index}`}>
+            <g
+              key={`${point.key}:${point.itemId ?? point.orderId}:${index}`}
+              className="sales-wait-point"
+              role="button"
+              tabIndex={0}
+              aria-label={`${title}。注文を開く`}
+              onClick={() => onOpenOrder(point.orderId)}
+              onKeyDown={(event) => openFromKeyboard(event, point.orderId)}
+              onMouseEnter={() => setHovered({ point, x: x1, y })}
+              onMouseLeave={() => setHovered(null)}
+              onFocus={() => setHovered({ point, x: x1, y })}
+              onBlur={() => setHovered(null)}
+            >
               <line
-                className="sales-order-wait-line"
+                className="sales-wait-extension"
                 x1={x1}
-                x2={x2}
-                y1={y1}
-                y2={y2}
-                style={{ stroke: color }}
-              >
-                <title>{title}</title>
-              </line>
-              {finishIsVisible && (
-                <g
-                  className="sales-wait-point"
-                  role="button"
-                  tabIndex={0}
-                  aria-label={`${title}。注文を開く`}
-                  onClick={() => onOpenOrder(point.orderId)}
-                  onKeyDown={(event) => openFromKeyboard(event, point.orderId)}
-                >
-                  <circle cx={x2} cy={y2} r={5} style={{ fill: color }}>
-                    <title>{title}</title>
-                  </circle>
-                </g>
-              )}
+                x2={Math.max(x1, x2)}
+                y1={y}
+                y2={y}
+              />
+              <circle cx={x1} cy={y} r={5.5} style={{ fill: color }} />
             </g>
           );
         })}
+        {hovered && (
+          <foreignObject
+            className="sales-plot-tooltip-object"
+            x={Math.min(
+              Math.max(CHART.left, hovered.x - 118),
+              CHART.width - CHART.right - 236,
+            )}
+            y={hovered.y > 88 ? hovered.y - 76 : hovered.y + 12}
+            width={236}
+            height={68}
+            pointerEvents="none"
+          >
+            <div className="sales-plot-tooltip">
+              <div>
+                <strong>注文 #{hovered.point.orderNo}</strong>
+                <b>{formatDuration(hovered.point.waitSeconds)}</b>
+              </div>
+              <span>
+                {hovered.point.menuName ? `${hovered.point.menuName} · ` : ""}
+                {formatTime(hovered.point.confirmedAt)} → {formatTime(hovered.point.finishedAt)}
+              </span>
+            </div>
+          </foreignObject>
+        )}
       </svg>
       {relevant.length === 0 && (
         <div className="sales-chart-empty">完了した待ち時間データなし</div>
@@ -558,13 +587,20 @@ function buildTimeline(order: OrderDetail): TimelineRow[] {
       tone: type.includes("FAILED") ? "danger" : "normal",
     });
   });
+  const servedItems = order.items.filter((item) => item.servedAt);
+  const allItemsServed =
+    order.items.length > 0 && servedItems.length === order.items.length;
+  const lastServedMs = Math.max(
+    0,
+    ...servedItems.map((item) => new Date(item.servedAt!).getTime()),
+  );
   order.items.forEach((item) => {
     if (item.readyAt) {
       rows.push({
         id: `ready:${item.id}`,
         at: item.readyAt,
         type: "ITEM_READY",
-        title: "キッチン完了・呼出",
+        title: "調理完了",
         detail: item.itemNameSnapshot,
         actor: item.kitchenActor?.label ?? null,
       });
@@ -574,7 +610,10 @@ function buildTimeline(order: OrderDetail): TimelineRow[] {
         id: `served:${item.id}`,
         at: item.servedAt,
         type: "ITEM_SERVED",
-        title: "提供完了",
+        title:
+          allItemsServed && new Date(item.servedAt).getTime() === lastServedMs
+            ? "提供完了"
+            : "一部提供完了",
         detail: item.itemNameSnapshot,
         actor: item.servedBy?.label ?? null,
       });
@@ -646,7 +685,7 @@ function TimelineIcon({ type }: { type: string }) {
   return <Clock3 aria-hidden="true" />;
 }
 
-function OrderDrawer({ order, loading, onClose }: {
+const OrderDrawer = memo(function OrderDrawer({ order, loading, onClose }: {
   order: OrderDetail | null;
   loading: boolean;
   onClose: () => void;
@@ -663,9 +702,9 @@ function OrderDrawer({ order, loading, onClose }: {
           <X aria-hidden="true" />
         </button>
       </div>
-      {loading && <div className="sales-drawer-loading">読み込み中…</div>}
+      {loading && !order && <div className="sales-drawer-loading">読み込み中…</div>}
       {!loading && !order && <div className="sales-drawer-loading">注文を取得できませんでした</div>}
-      {order && !loading && (
+      {order && (
         <div className="sales-drawer-body">
           <div className="sales-drawer-summary">
             <div className="row between wrap">
@@ -680,7 +719,21 @@ function OrderDrawer({ order, loading, onClose }: {
               <div><dt>確定</dt><dd>{formatTime(order.confirmedAt)}</dd></div>
               <div><dt>形態</dt><dd>{labelOf(FULFILLMENT_LABEL, order.fulfillmentType)}</dd></div>
               <div><dt>決済</dt><dd>{labelOf(PAYMENT_METHOD_LABEL, order.paymentMethod)}</dd></div>
-              <div><dt>人数</dt><dd>{order.partySize}名</dd></div>
+              <div className="sales-party-meta">
+                <dt>人数</dt>
+                <dd>
+                  <strong>{order.partySize}名</strong>
+                  <span className="sales-age-groups">
+                    {AGE_GROUPS.filter(
+                      (group) => (order.ageGroupCounts[group.key] ?? 0) > 0,
+                    ).map((group) => (
+                      <span key={group.key}>
+                        {group.label} {order.ageGroupCounts[group.key]}
+                      </span>
+                    ))}
+                  </span>
+                </dd>
+              </div>
               <div><dt>担当</dt><dd>{order.createdBy.label}</dd></div>
             </dl>
             {order.specialNote && <div className="sales-note"><StickyNote aria-hidden="true" />{order.specialNote}</div>}
@@ -697,7 +750,7 @@ function OrderDrawer({ order, loading, onClose }: {
                   </div>
                   <div className="sales-item-times">
                     <span>配属 {formatTime(item.kitchenAssignedAt)}</span>
-                    <span>呼出 {formatTime(item.readyAt)}</span>
+                    <span>調理完了 {formatTime(item.readyAt)}</span>
                     <span>提供 {formatTime(item.servedAt)}</span>
                   </div>
                   <div className="muted">{item.kitchenActor?.label ?? "担当未記録"} → {item.servedBy?.label ?? "提供担当未記録"}</div>
@@ -726,7 +779,7 @@ function OrderDrawer({ order, loading, onClose }: {
       )}
     </aside>
   );
-}
+});
 
 function SalesPageContent() {
   const { loading: sessionLoading, session } = useSession([
@@ -747,16 +800,16 @@ function SalesPageContent() {
   const [dataLoading, setDataLoading] = useState(true);
   const [salesMode, setSalesMode] = useState("orders");
   const [waitKey, setWaitKey] = useState("order:complete");
-  const [waitGraph, setWaitGraph] = useState<"scatter" | "lines">("scatter");
   const [detail, setDetail] = useState<OrderDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const sessionActorId = session?.actor.actorId ?? null;
 
   useEffect(() => {
     if (isDateKey(urlDate) && urlDate !== selectedDate) setSelectedDate(urlDate);
   }, [urlDate, selectedDate]);
 
   const reload = useCallback(async () => {
-    if (!session) return;
+    if (!sessionActorId) return;
     setDataLoading(true);
     try {
       const next = await apiFetch<SalesData>(
@@ -771,7 +824,7 @@ function SalesPageContent() {
     } finally {
       setDataLoading(false);
     }
-  }, [notify, selectedDate, session]);
+  }, [notify, selectedDate, sessionActorId]);
 
   useEffect(() => {
     void reload();
@@ -791,12 +844,17 @@ function SalesPageContent() {
   }, [data, salesMode, waitKey]);
 
   useEffect(() => {
-    if (!selectedOrderId || !session) {
+    if (!selectedOrderId || !sessionActorId) {
       setDetail(null);
+      setDetailLoading(false);
       return;
     }
     let active = true;
-    setDetailLoading(true);
+    setDetail((current) => {
+      const keepCurrent = current?.id === selectedOrderId;
+      setDetailLoading(!keepCurrent);
+      return keepCurrent ? current : null;
+    });
     void apiFetch<{ order: OrderDetail }>(
       `/api/sales/orders/${encodeURIComponent(selectedOrderId)}`,
     )
@@ -817,7 +875,7 @@ function SalesPageContent() {
     return () => {
       active = false;
     };
-  }, [notify, selectedOrderId, session]);
+  }, [notify, selectedOrderId, sessionActorId]);
 
   const updateDate = (nextDate: string) => {
     setSelectedDate(nextDate);
@@ -834,12 +892,12 @@ function SalesPageContent() {
     router.push(`/sales?${params.toString()}` as Route, { scroll: false });
   };
 
-  const closeOrder = () => {
+  const closeOrder = useCallback(() => {
     const params = new URLSearchParams(searchParams.toString());
     params.delete("order");
     params.set("date", selectedDate);
     router.replace(`/sales?${params.toString()}` as Route, { scroll: false });
-  };
+  }, [router, searchParams, selectedDate]);
 
   const selectedSalesEvents = useMemo(() => {
     if (!data) return [];
@@ -885,7 +943,12 @@ function SalesPageContent() {
               <div>
                 <span className="sales-kicker">BUSINESS DAY</span>
                 <strong>{formatDay(selectedDate)}</strong>
-                <small>JST 00:00–24:00 集計 / グラフ 09:00–18:00</small>
+                <small>
+                  JST 00:00–24:00 集計 / グラフ{" "}
+                  {data && data.date === selectedDate
+                    ? `${formatTime(data.chartRange.chartStart).slice(0, 5)}–${formatTime(data.chartRange.chartEnd).slice(0, 5)}`
+                    : "09:00–18:00"}
+                </small>
               </div>
               <div className="sales-day-controls">
                 <button type="button" className="ghost-btn sales-icon-btn" aria-label="前日" onClick={() => updateDate(addDateDays(selectedDate, -1))}>
@@ -912,18 +975,6 @@ function SalesPageContent() {
                       <span className="sales-kicker">SALES</span>
                       <h2>売上</h2>
                     </div>
-                    <div className="sales-chart-select">
-                      <span>累計チャート</span>
-                      <Select value={salesMode} onValueChange={setSalesMode}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="orders">注文数</SelectItem>
-                          {data.menus.map((menu) => (
-                            <SelectItem key={menu.menuId} value={`menu:${menu.menuId}`}>{menu.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
                   </div>
                   <div className="sales-metric-strip">
                     <div className="sales-primary-metric"><span>総売上</span><strong>{fmtJpy(data.totals.salesJpy)}</strong></div>
@@ -936,19 +987,50 @@ function SalesPageContent() {
                         <thead><tr><th>メニュー</th><th>点数</th><th>売上</th></tr></thead>
                         <tbody>
                           {data.menus.map((menu) => (
-                            <tr key={menu.menuId}><td>{menu.name}</td><td>{menu.count}</td><td>{fmtJpy(menu.salesJpy)}</td></tr>
+                            <tr
+                              key={menu.menuId}
+                              className={salesMode === `menu:${menu.menuId}` ? "is-selected" : ""}
+                              onClick={() => setSalesMode(`menu:${menu.menuId}`)}
+                            >
+                              <td>{menu.name}</td><td>{menu.count}</td><td>{fmtJpy(menu.salesJpy)}</td>
+                            </tr>
                           ))}
                           {data.menus.length === 0 && <tr><td colSpan={3} className="muted">対象データなし</td></tr>}
                         </tbody>
-                        {data.menus.length > 0 && <tfoot><tr><th>合計</th><th>{data.totals.itemCount}</th><th>{fmtJpy(data.totals.salesJpy)}</th></tr></tfoot>}
+                        {data.menus.length > 0 && (
+                          <tfoot>
+                            <tr
+                              className={salesMode === "orders" ? "is-selected" : ""}
+                              onClick={() => setSalesMode("orders")}
+                            >
+                              <th>注文数チャート</th><th>{data.totals.orderCount}件</th><th>{fmtJpy(data.totals.salesJpy)}</th>
+                            </tr>
+                          </tfoot>
+                        )}
                       </table>
                     </div>
-                    <CumulativeChart
-                      events={selectedSalesEvents}
-                      start={data.range.chartStart}
-                      end={data.range.chartEnd}
-                      label={salesMode === "orders" ? "注文数" : data.menus.find((menu) => `menu:${menu.menuId}` === salesMode)?.name ?? "メニュー"}
-                    />
+                    <div className="sales-chart-column">
+                      <div className="sales-chart-caption sales-sales-chart-caption">
+                        <strong>累計販売</strong>
+                        <div className="sales-chart-select">
+                          <Select value={salesMode} onValueChange={setSalesMode}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="orders">注文数</SelectItem>
+                              {data.menus.map((menu) => (
+                                <SelectItem key={menu.menuId} value={`menu:${menu.menuId}`}>{menu.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <CumulativeChart
+                        events={selectedSalesEvents}
+                        start={data.chartRange.chartStart}
+                        end={data.chartRange.chartEnd}
+                        label={salesMode === "orders" ? "注文数" : data.menus.find((menu) => `menu:${menu.menuId}` === salesMode)?.name ?? "メニュー"}
+                      />
+                    </div>
                   </div>
                 </section>
 
@@ -967,10 +1049,6 @@ function SalesPageContent() {
                           ))}
                         </SelectContent>
                       </Select>
-                      <div className="sales-segmented" aria-label="グラフ形式">
-                        <button type="button" className={waitGraph === "scatter" ? "is-active" : ""} onClick={() => setWaitGraph("scatter")}>散布図</button>
-                        <button type="button" className={waitGraph === "lines" ? "is-active" : ""} onClick={() => setWaitGraph("lines")}>待ち推移</button>
-                      </div>
                     </div>
                   </div>
 
@@ -995,13 +1073,13 @@ function SalesPageContent() {
                     <div>
                       <div className="sales-chart-caption">
                         <strong>{data.wait.summaries.find((row) => row.key === waitKey)?.label}</strong>
-                        <span>{waitGraph === "scatter" ? "点＝注文確定時刻 / 線＝完了まで" : "傾き＝経過時間 / 終点のみ選択可能"}</span>
+                        <span>点＝注文確定時刻 / 線＝完了まで</span>
                       </div>
                       <WaitChart
                         points={selectedWaitPoints}
-                        mode={waitGraph}
-                        start={data.range.chartStart}
-                        end={data.range.chartEnd}
+                        start={data.chartRange.chartStart}
+                        end={data.chartRange.chartEnd}
+                        yMax={data.wait.yMaxMinutes}
                         onOpenOrder={openOrder}
                       />
                     </div>

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireSession } from "@/lib/server/auth";
 import { fail, ok } from "@/lib/response";
 import { AppError } from "@/lib/errors";
+import { parseAgeRangesToCounts } from "@/lib/age-groups";
 
 type RouteContext = { params: Promise<{ orderId: string }> };
 
@@ -58,6 +59,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
     return ok({
       order: {
         ...order,
+        ageGroupCounts: parseAgeRangesToCounts(order.ageRangesJson),
         eventActors: Object.fromEntries(
           eventActors.map((actor) => [actor.id, actor.label]),
         ),
