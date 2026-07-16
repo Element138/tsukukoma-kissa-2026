@@ -1135,6 +1135,7 @@ function SalesPageContent() {
                   <Input
                     type="date"
                     value={selectedDate}
+                    onClick={(event) => event.currentTarget.showPicker?.()}
                     onChange={(event) =>
                       event.target.value && updateDate(event.target.value)
                     }
@@ -1397,7 +1398,7 @@ function SalesPageContent() {
                   <div className="sales-panel-head">
                     <div>
                       <span className="sales-kicker">EXCEPTIONS</span>
-                      <h2>確認事項</h2>
+                      <h2>異常</h2>
                     </div>
                     <div className="sales-exclusion-note">
                       <span>
@@ -1430,7 +1431,7 @@ function SalesPageContent() {
                   ) : (
                     <div className="sales-all-clear">
                       <CheckCircle2 aria-hidden="true" />
-                      確認事項はありません
+                      異常はありません
                     </div>
                   )}
                 </section>
