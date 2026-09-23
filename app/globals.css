@@ -1919,6 +1919,10 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   flex-wrap: wrap;
 }
 
+.order-display-screen.no-ready .order-display-unready-viewport {
+  padding-inline: clamp(20px, 4vw, 56px);
+}
+
 .order-display-screen.no-ready .order-display-unready-tile {
   container-type: normal;
   width: max-content;
