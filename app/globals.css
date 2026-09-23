@@ -2042,6 +2042,11 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   letter-spacing: 0;
 }
 
+.order-display-screen .order-display-order-number {
+  font-family: var(--font-atkinson-hyperlegible-next), sans-serif;
+  font-weight: 700;
+}
+
 .order-display-marquee {
   position: absolute;
   inset-inline: 0;

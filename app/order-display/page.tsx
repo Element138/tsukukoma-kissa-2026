@@ -621,7 +621,10 @@ export default function OrderDisplayPage() {
                     key={order.id}
                     className={`order-display-unready-tile ${tileTone(order)}`}
                   >
-                    <strong style={orderNumberStyle(order.orderNo)}>
+                    <strong
+                      className="order-display-order-number"
+                      style={orderNumberStyle(order.orderNo)}
+                    >
                       {order.orderNo}
                     </strong>
                   </article>
@@ -652,7 +655,10 @@ export default function OrderDisplayPage() {
             >
               {orderedReady.map((order) => (
                 <article key={order.id} className="order-display-ready-tile">
-                  <strong style={orderNumberStyle(order.orderNo)}>
+                  <strong
+                    className="order-display-order-number"
+                    style={orderNumberStyle(order.orderNo)}
+                  >
                     {order.orderNo}
                   </strong>
                 </article>
@@ -688,7 +694,10 @@ export default function OrderDisplayPage() {
           ].join(" ")}
         >
           <span>カウンターへお越しください</span>
-          <strong style={orderNumberStyle(callout.orderNo)}>
+          <strong
+            className="order-display-order-number"
+            style={orderNumberStyle(callout.orderNo)}
+          >
             {callout.orderNo}
           </strong>
         </div>
