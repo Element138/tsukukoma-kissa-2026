@@ -1914,6 +1914,11 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   opacity: 0.62;
 }
 
+.order-display-screen.no-ready
+  .order-display-unready-tile:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
 .order-display-unready-tile.warm {
   background: transparent;
   color: #7a5625;
