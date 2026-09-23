@@ -2040,7 +2040,7 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
 }
 
 .order-display-screen .order-display-order-number {
-  font-family: var(--font-atkinson-hyperlegible-next), sans-serif;
+  font-family: var(--font-inter), sans-serif;
   font-weight: 700;
   font-variant-numeric: proportional-nums;
 }

@@ -1,9 +1,5 @@
 import type { Metadata } from "next";
-import {
-  Atkinson_Hyperlegible_Next,
-  Inter,
-  Zen_Kaku_Gothic_New,
-} from "next/font/google";
+import { Inter, Zen_Kaku_Gothic_New } from "next/font/google";
 import "./globals.css";
 import { ToastProvider } from "@/components/toast";
 
@@ -18,12 +14,6 @@ const zenKaku = Zen_Kaku_Gothic_New({
   variable: "--font-zen-kaku"
 });
 
-const atkinsonHyperlegibleNext = Atkinson_Hyperlegible_Next({
-  subsets: ["latin"],
-  weight: "700",
-  variable: "--font-atkinson-hyperlegible-next",
-});
-
 export const metadata: Metadata = {
   title: "KISSa",
   description: "スマートオペレーション管理システム"
@@ -32,9 +22,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ja">
-      <body
-        className={`${inter.variable} ${zenKaku.variable} ${atkinsonHyperlegibleNext.variable}`}
-      >
+      <body className={`${inter.variable} ${zenKaku.variable}`}>
         <ToastProvider>{children}</ToastProvider>
       </body>
     </html>
