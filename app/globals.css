@@ -1914,9 +1914,15 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   opacity: 0.62;
 }
 
-.order-display-screen.no-ready
-  .order-display-unready-tile:last-child:nth-child(odd) {
-  grid-column: 1 / -1;
+.order-display-screen.no-ready .order-display-unready-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.order-display-screen.no-ready .order-display-unready-tile {
+  container-type: normal;
+  width: max-content;
 }
 
 .order-display-unready-tile.warm {
