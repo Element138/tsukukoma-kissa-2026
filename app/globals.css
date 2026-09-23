@@ -1917,7 +1917,6 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
 .order-display-screen.no-ready .order-display-unready-grid {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
 }
 
 .order-display-screen.no-ready .order-display-unready-tile {
