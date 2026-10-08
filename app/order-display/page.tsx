@@ -58,7 +58,7 @@ const CALL_MELODY_VOLUME_SCALE = 0.95;
 const CALL_ASSETS = {
   melody: "/audio/order-call/call-melody-song-20260714.wav",
   waitLong: "/audio/order-call/wait-long.mp3",
-  waitExtremeLongApology: "/api/order-display/audio/extreme-long-wait/1",
+  waitExtremeLongApology: "/audio/order-call/extreme-long-wait-apology.mp3",
   repeatedCallApology: "/audio/order-call/repeated-call-apology.mp3",
   continued: "/audio/order-call/continued.mp3",
   preparedCounter: "/audio/order-call/prepared-counter.mp3",
@@ -108,6 +108,9 @@ function preloadAudio(src: string, volume = 1) {
 }
 
 function orderNumberAudioSrc(orderNo: number, part: "number" | "customer") {
+  if (Number.isInteger(orderNo) && orderNo >= 1 && orderNo <= 2000) {
+    return `/audio/order-call/numbers/v2/${part}-${orderNo}.mp3`;
+  }
   return `/api/order-display/audio/${part}/${encodeURIComponent(String(orderNo))}`;
 }
 

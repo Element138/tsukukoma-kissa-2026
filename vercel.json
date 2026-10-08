@@ -1,5 +1,13 @@
 {
-  "buildCommand": "npm run vercel-build",
+  "buildCommand": "npx prisma generate && npm run build",
+  "headers": [
+    {
+      "source": "/audio/order-call/numbers/v2/:path*",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    }
+  ],
   "crons": [
     {
       "path": "/api/cron/payment-watchdog",
