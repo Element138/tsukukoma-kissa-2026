@@ -1,0 +1,5 @@
+tmp/
+output/
+tsconfig.tsbuildinfo
+.env*
+scripts/cache-order-audio.cjs
