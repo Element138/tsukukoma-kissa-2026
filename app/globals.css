@@ -3415,6 +3415,68 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   }
 }
 
+.receipt-print-dialog {
+  width: min(520px, calc(100vw - 24px));
+  max-width: 520px;
+  gap: 18px;
+  border-radius: 18px;
+  padding: 24px;
+}
+
+.receipt-print-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.receipt-print-option {
+  min-width: 0;
+  height: auto;
+  min-height: 104px;
+  padding: 18px 14px;
+  white-space: normal;
+}
+
+.receipt-print-option > svg {
+  width: 24px;
+  height: 24px;
+}
+
+.receipt-print-option > span {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+  text-align: left;
+}
+
+.receipt-print-option strong {
+  font-size: 1.05rem;
+}
+
+.receipt-print-option small {
+  font-size: 0.7rem;
+  font-weight: 500;
+  line-height: 1.35;
+  opacity: 0.82;
+}
+
+.receipt-print-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+@media (max-width: 520px) {
+  .receipt-print-options {
+    grid-template-columns: 1fr;
+  }
+
+  .receipt-print-option {
+    min-height: 82px;
+  }
+}
+
 @media (max-width: 1000px) {
   .grid.two,
   .grid.three,

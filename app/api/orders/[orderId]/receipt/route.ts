@@ -1,45 +1,65 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { NextRequest } from "next/server";
+import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { FULFILLMENT_LABEL, PAYMENT_METHOD_LABEL, labelOf } from "@/lib/labels";
-import { fail, ok } from "@/lib/response";
+import { AppError } from "@/lib/errors";
+import { fail } from "@/lib/response";
+import { renderReceiptPdf } from "@/lib/receipt/render-pdf";
+import type { ReceiptLineItem } from "@/lib/receipt/types";
 import { requireSession } from "@/lib/server/auth";
-import { formatTokyo } from "@/lib/time";
 
-function renderReceipt(order: {
-  orderNo: number;
-  fulfillmentType: string;
-  tableNo: number | null;
-  totalPriceJpy: number;
-  paymentMethod: string;
-  createdAt: Date;
-  items: Array<{ itemNameSnapshot: string; unitPriceJpy: number }>;
-}) {
-  const fulfillmentLabel = labelOf(FULFILLMENT_LABEL, order.fulfillmentType);
-  const paymentMethodLabel = labelOf(PAYMENT_METHOD_LABEL, order.paymentMethod);
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-  const lines = [
-    "注文控え",
-    `注文番号: ${order.orderNo}`,
-    `受け渡し: ${fulfillmentLabel}`,
-    order.tableNo ? `テーブル: ${order.tableNo}` : null,
-    `注文時刻: ${formatTokyo(order.createdAt)}`,
-    `決済方法: ${paymentMethodLabel}`,
-    "----------------------",
-    ...order.items.map(
-      (item) =>
-        `${item.itemNameSnapshot}  ${item.unitPriceJpy.toLocaleString("ja-JP")}円`,
+const querySchema = z.object({
+  size: z.enum(["large", "small"]).default("large"),
+});
+
+const fontBytesPromise = Promise.all([
+  readFile(path.join(process.cwd(), "public", "fonts", "Lato-Bold.ttf")),
+  readFile(path.join(process.cwd(), "public", "receipt", "logo.png")),
+  readFile(
+    path.join(
+      process.cwd(),
+      "public",
+      "fonts",
+      "NotoSansJP-Regular.otf",
     ),
-    "----------------------",
-    `合計: ${order.totalPriceJpy.toLocaleString("ja-JP")}円`,
-    order.fulfillmentType === "TAKEOUT"
-      ? `お受け取り番号: ${order.orderNo}`
-      : null,
-  ].filter(Boolean);
+  ),
+  readFile(
+    path.join(
+      process.cwd(),
+      "public",
+      "fonts",
+      "NotoSansJP-Bold.otf",
+    ),
+  ),
+]);
 
-  return lines.join("\n");
+function bundleOrderItems(
+  items: Array<{ itemNameSnapshot: string; unitPriceJpy: number }>,
+) {
+  const bundled = new Map<string, ReceiptLineItem>();
+
+  for (const item of items) {
+    const key = `${item.itemNameSnapshot}\u0000${item.unitPriceJpy}`;
+    const current = bundled.get(key);
+    if (current) {
+      current.quantity += 1;
+    } else {
+      bundled.set(key, {
+        name: item.itemNameSnapshot,
+        unitPriceJpy: item.unitPriceJpy,
+        quantity: 1,
+      });
+    }
+  }
+
+  return [...bundled.values()];
 }
 
-export async function POST(
+export async function GET(
   req: NextRequest,
   context: { params: Promise<{ orderId: string }> },
 ) {
@@ -48,38 +68,73 @@ export async function POST(
       actorTypes: ["POS", "KITCHEN", "WAITER", "ADMIN"],
     });
     const { orderId } = await context.params;
+    const query = querySchema.parse(
+      Object.fromEntries(req.nextUrl.searchParams.entries()),
+    );
 
     const order = await prisma.order.findUnique({
       where: { id: orderId },
-      include: {
+      select: {
+        orderNo: true,
+        createdAt: true,
+        confirmedAt: true,
+        fulfillmentType: true,
+        tableNo: true,
+        paymentMethod: true,
+        paymentStatus: true,
+        orderStatus: true,
+        totalPriceJpy: true,
         items: {
           select: {
             itemNameSnapshot: true,
             unitPriceJpy: true,
           },
+          orderBy: { id: "asc" },
         },
       },
     });
 
     if (!order) {
-      return new Response("対象の注文が見つかりません", { status: 404 });
+      throw new AppError(404, "ORDER_NOT_FOUND", "Order not found");
+    }
+    if (
+      (order.paymentStatus !== "PAID" && order.paymentStatus !== "SKIPPED") ||
+      order.orderStatus === "FAILED" ||
+      order.orderStatus === "CANCELED"
+    ) {
+      throw new AppError(
+        409,
+        "RECEIPT_NOT_AVAILABLE",
+        "会計が完了した注文のみレシートを発行できます",
+      );
     }
 
-    const text = renderReceipt(order);
-    const mode = process.env.RECEIPT_PRINTER_MODE ?? "stub";
+    const [orderNumberFontBytes, logoBytes, regularFontBytes, boldFontBytes] = await fontBytesPromise;
+    const pdfBytes = await renderReceiptPdf({
+      size: query.size,
+      regularFontBytes,
+      boldFontBytes,
+      orderNumberFontBytes,
+      logoBytes,
+      data: {
+        orderNo: order.orderNo,
+        transactionAt: order.confirmedAt ?? order.createdAt,
+        fulfillmentType: order.fulfillmentType,
+        tableNo: order.tableNo,
+        paymentMethod: order.paymentMethod,
+        paymentStatus: order.paymentStatus,
+        totalPriceJpy: order.totalPriceJpy,
+        items: bundleOrderItems(order.items),
+      },
+    });
 
-    if (mode === "stub") {
-      return ok({
-        printed: false,
-        mode,
-        receiptPreview: text,
-      });
-    }
-
-    return ok({
-      printed: true,
-      mode,
-      receiptPreview: text,
+    return new Response(Buffer.from(pdfBytes), {
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `inline; filename="receipt-${order.orderNo}-${query.size}.pdf"`,
+        "Cache-Control": "private, no-store, max-age=0",
+        "X-Content-Type-Options": "nosniff",
+      },
     });
   } catch (error) {
     return fail(error);

@@ -39,6 +39,8 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { buildProtectedMenuNameChunks } from "@/lib/menu-name-line-break";
+import { ReceiptPrintDialog } from "@/components/receipt-print-dialog";
+import type { ReceiptPrintTarget } from "@/lib/receipt/types";
 
 type MenuPayload = {
   menus: Array<{
@@ -195,6 +197,8 @@ export default function PosPage() {
     string | null
   >(null);
   const [debugScenario, setDebugScenario] = useState<DebugScenario>("none");
+  const [receiptPrintTarget, setReceiptPrintTarget] =
+    useState<ReceiptPrintTarget | null>(null);
   const notifiedIncidentIdsRef = useRef<Set<string>>(new Set());
 
   const loadMenus = async () => {
@@ -245,6 +249,10 @@ export default function PosPage() {
     if (data.trackedOrder.paymentStatus === "PAID") {
       resetInputsToDefault();
       setPendingSquareOrderId(null);
+      setReceiptPrintTarget({
+        id: data.trackedOrder.id,
+        orderNo: data.trackedOrder.orderNo,
+      });
       notify({
         level: "success",
         message: `注文 #${data.trackedOrder.orderNo} のSquare決済完了を確認しました`,
@@ -672,6 +680,10 @@ export default function PosPage() {
         await refreshPaymentState(data.order.id);
       } else {
         resetInputsToDefault();
+        setReceiptPrintTarget({
+          id: data.order.id,
+          orderNo: data.order.orderNo,
+        });
       }
     } catch (e) {
       const errorMessage =
@@ -1067,6 +1079,10 @@ export default function PosPage() {
           </Card>
         </div>
       </DashboardShell>
+      <ReceiptPrintDialog
+        target={receiptPrintTarget}
+        onClose={() => setReceiptPrintTarget(null)}
+      />
     </>
   );
 }

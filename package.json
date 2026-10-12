@@ -32,6 +32,7 @@
     "clsx": "^2.1.1",
     "lucide-react": "^0.577.0",
     "next": "^15.2.2",
+    "pdfkit": "^0.20.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tailwind-merge": "^3.5.0",
@@ -39,6 +40,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.13.10",
+    "@types/pdfkit": "^0.17.6",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
     "autoprefixer": "^10.4.27",
