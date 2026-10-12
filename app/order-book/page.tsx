@@ -28,6 +28,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ReceiptPrintDialog } from "@/components/receipt-print-dialog";
+import type { ReceiptPrintTarget } from "@/lib/receipt/types";
 
 type OrderRow = {
   id: string;
@@ -236,6 +238,8 @@ export default function OrderBookPage() {
   const [qOrderNo, setQOrderNo] = useState("");
   const [selectedDate, setSelectedDate] = useState(() => tokyoDateKey());
   const [tickNow, setTickNow] = useState(Date.now());
+  const [receiptPrintTarget, setReceiptPrintTarget] =
+    useState<ReceiptPrintTarget | null>(null);
   const reloadInFlightRef = useRef(false);
   const queuedReloadRef = useRef(false);
   const statusSelectValue = status || "__ALL_STATUS__";
@@ -325,28 +329,8 @@ export default function OrderBookPage() {
     }
   };
 
-  const reprint = async (orderId: string) => {
-    try {
-      const data = await apiFetch<{ printed: boolean; receiptPreview: string }>(
-        `/api/orders/${orderId}/receipt`,
-        {
-          method: "POST",
-        },
-      );
-      notify({
-        level: "success",
-        message: data.printed
-          ? "レシートを印刷しました"
-          : `レシートプレビュー: ${data.receiptPreview}`,
-        durationMs: data.printed ? 3500 : 9000,
-      });
-    } catch (e) {
-      notify({
-        level: "error",
-        message:
-          e instanceof Error ? e.message : "レシート再印刷に失敗しました",
-      });
-    }
+  const reprint = (order: OrderRow) => {
+    setReceiptPrintTarget({ id: order.id, orderNo: order.orderNo });
   };
 
   const dismissIncident = async (incidentId: string) => {
@@ -738,7 +722,13 @@ export default function OrderBookPage() {
                   <button
                     type="button"
                     className="ghost-btn"
-                    onClick={() => reprint(order.id)}
+                    onClick={() => reprint(order)}
+                    disabled={
+                      (order.paymentStatus !== "PAID" &&
+                        order.paymentStatus !== "SKIPPED") ||
+                      order.orderStatus === "FAILED" ||
+                      order.orderStatus === "CANCELED"
+                    }
                   >
                     レシート再印刷
                   </button>
@@ -765,6 +755,10 @@ export default function OrderBookPage() {
           </div>
         </div>
       </DashboardShell>
+      <ReceiptPrintDialog
+        target={receiptPrintTarget}
+        onClose={() => setReceiptPrintTarget(null)}
+      />
     </>
   );
 }
