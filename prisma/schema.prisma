@@ -159,6 +159,7 @@ model Menu {
   assignments     MenuKitchenAssignment[]
   orderItems      OrderItem[]
   dailyCounts     MenuDailyCount[]
+  stock           MenuStock?
 
   @@index([categoryId])
   @@index([availability, isActive])
@@ -181,6 +182,7 @@ model MenuDailyCount {
   menuId     String
   jstDate    String   @db.VarChar(10)
   count      Int      @default(0)
+  cookedCount Int     @default(0)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   menu       Menu     @relation(fields: [menuId], references: [id], onDelete: Cascade)
@@ -196,6 +198,8 @@ model Order {
   createdByActorId       String                @db.VarChar(64)
   idempotencyKey         String?               @unique
   confirmedAt            DateTime?
+  lastCalledAt           DateTime?
+  calls                  OrderCall[]
   canceledAt             DateTime?
   fulfillmentType        FulfillmentType
   tableNo                Int?
@@ -222,6 +226,20 @@ model Order {
   @@index([orderStatus, createdAt])
   @@index([paymentStatus, paymentAwaitDeadlineAt])
   @@index([createdByActorId])
+}
+
+model MenuStock {
+  menuId String @id
+  readyCount Int @default(0)
+  menu Menu @relation(fields: [menuId], references: [id], onDelete: Cascade)
+}
+
+model OrderCall {
+  id Int @id @default(autoincrement())
+  orderId String
+  calledAt DateTime @default(now())
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  @@index([orderId, calledAt])
 }
 
 model OrderItem {
@@ -253,7 +271,7 @@ model UndoOperation {
   operationType        UndoOperationType
   targetEntityType     String            @db.VarChar(64)
   targetEntityId       String            @db.VarChar(120)
-  orderId              String
+  orderId              String?
   expectedOrderVersion Int
   payload              Json
   createdAt            DateTime          @default(now())
@@ -304,7 +322,6 @@ model RealtimeEvent {
 model AppSetting {
   id                            Int      @id
   menuDisplayPageSeconds        Int      @default(18)
-  counterReadyGraceMinutes      Int      @default(3)
   orderDisplayMarqueeText       String   @default("") @db.VarChar(240)
   orderDisplayMarqueeSpeedSeconds Int    @default(24)
   orderCallVolume               Float    @default(0.8)

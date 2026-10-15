@@ -25,7 +25,6 @@ export async function GET(req: NextRequest) {
         create: {
           id: 1,
           menuDisplayPageSeconds: 18,
-          counterReadyGraceMinutes: 3,
           orderDisplayMarqueeText: "",
           orderDisplayMarqueeSpeedSeconds: 24,
         },
@@ -80,7 +79,6 @@ export async function GET(req: NextRequest) {
       categories: result,
       settings: {
         pageDisplaySeconds: setting.menuDisplayPageSeconds,
-        counterReadyGraceMinutes: setting.counterReadyGraceMinutes,
       },
     });
   } catch (error) {

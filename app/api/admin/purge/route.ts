@@ -46,6 +46,8 @@ export async function POST(req: NextRequest) {
     }
 
     const data = await prisma.$transaction(async (tx) => {
+      await tx.menuStock.deleteMany({});
+      await tx.undoOperation.deleteMany({});
       const deletedItems = await tx.orderItem.deleteMany({});
       const deletedOrders = await tx.order.deleteMany({});
       await tx.$executeRaw`ALTER SEQUENCE "Order_orderNo_seq" RESTART WITH 1`;
