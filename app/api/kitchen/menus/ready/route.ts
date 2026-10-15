@@ -18,7 +18,8 @@ export async function POST(req: NextRequest) {
         kitchenId: actor.actorId,
         menuId: body.menuId,
         quantity: body.quantity,
-        idempotencyKey: body.idempotencyKey
+        idempotencyKey: body.idempotencyKey,
+        confirmOverCap: body.confirmOverCap
       });
 
       await broadcastInvalidation(

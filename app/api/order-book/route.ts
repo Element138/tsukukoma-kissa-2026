@@ -112,6 +112,7 @@ export async function GET(req: NextRequest) {
         orderNo: order.orderNo,
         createdAt: order.createdAt,
         confirmedAt: order.confirmedAt,
+        lastCalledAt: order.lastCalledAt,
         completedAt,
         fulfillmentType: order.fulfillmentType,
         tableNo: order.tableNo,

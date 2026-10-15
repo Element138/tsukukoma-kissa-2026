@@ -1,200 +1,32 @@
-﻿import { Prisma, PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 import { assert, AppError } from "@/lib/errors";
-import { now } from "@/lib/time";
 import { recalcAndPersistOrderStatus } from "@/lib/domain/orders";
 import { saveUndoOperation } from "@/lib/domain/undo";
 import { writeAuditLog } from "@/lib/domain/audit";
-
 type DbClient = PrismaClient | Prisma.TransactionClient;
 
-export async function serveDineInItem(
-  db: DbClient,
-  params: {
-    actorId: string;
-    orderItemId: string;
+export async function serveDineInItem(db: DbClient, params: { actorId: string; orderItemId: string; confirmUncalled?: boolean }) {
+  const initial = await db.orderItem.findUnique({ where: { id: params.orderItemId } });
+  assert(initial, 404, "ITEM_NOT_FOUND", "Item not found");
+  await db.$queryRaw`SELECT id FROM "Menu" WHERE id = ${initial.menuId} FOR UPDATE`;
+  await db.$queryRaw`SELECT id FROM "Order" WHERE id = ${initial.orderId} FOR UPDATE`;
+  const item = await db.orderItem.findUniqueOrThrow({ where: { id: params.orderItemId }, include: { order: true } });
+  assert(item.status === "QUEUED", 409, "ITEM_CONFLICT", "Item state changed");
+  assert(item.order.confirmedAt && !["FAILED", "CANCELED", "COMPLETED"].includes(item.order.orderStatus), 409, "ORDER_FAILED", "Order unavailable");
+  const lastServed = await db.orderItem.findFirst({ where: { orderId: item.orderId, status: "SERVED" }, orderBy: { servedAt: "desc" } });
+  const lastCallAt = item.order.lastCalledAt ?? (await db.orderCall.findFirst({ where: { orderId: item.orderId }, orderBy: { id: "desc" } }))?.calledAt ?? null;
+  const elapsedCall = lastCallAt ? Date.now() - lastCallAt.getTime() : Infinity;
+  const elapsedServe = lastServed?.servedAt ? Date.now() - lastServed.servedAt.getTime() : Infinity;
+  if (elapsedCall >= 180000 && elapsedServe >= 30000 && !params.confirmUncalled) {
+    const reason = lastCallAt ? "最後に呼び出されてから" + Math.floor(elapsedCall / 60000) + "分が経過している" : "一度も呼び出しされていない";
+    throw new AppError(409, "SERVE_CONFIRM_REQUIRED", reason + "ようですが、本当にお客様に「" + item.itemNameSnapshot + "」を提供しましたか？");
   }
-) {
-  const item = await db.orderItem.findUnique({
-    where: { id: params.orderItemId },
-    include: {
-      order: {
-        select: {
-          id: true,
-          orderNo: true,
-          fulfillmentType: true,
-          orderStatus: true,
-          lastMutationVersion: true
-        }
-      }
-    }
-  });
-
-  assert(item, 404, "ITEM_NOT_FOUND", "Item not found");
-  assert(item.order.fulfillmentType === "DINE_IN", 400, "NOT_DINE_IN", "Item is not dine-in");
-  assert(item.status === "READY", 409, "ITEM_NOT_READY", "Only ready item can be served");
-  assert(
-    item.order.orderStatus !== "FAILED" && item.order.orderStatus !== "CANCELED",
-    409,
-    "ORDER_FAILED",
-    "Order failed"
-  );
-
-  const changed = await db.orderItem.updateMany({
-    where: {
-      id: params.orderItemId,
-      status: "READY"
-    },
-    data: {
-      status: "SERVED",
-      servedAt: now(),
-      servedByActorId: params.actorId
-    }
-  });
-
-  if (changed.count !== 1) {
-    throw new AppError(409, "ITEM_CONFLICT", "Item state changed before serving");
-  }
-
-  const updatedOrder = await recalcAndPersistOrderStatus(db, item.orderId, true);
-
-  await saveUndoOperation(db, {
-    actorId: params.actorId,
-    operationType: "ITEM_SERVED",
-    targetEntityType: "order_item",
-    targetEntityId: params.orderItemId,
-    orderId: item.orderId,
-    expectedOrderVersion: updatedOrder.lastMutationVersion,
-    payload: {
-      itemIds: [params.orderItemId],
-      orderIds: [item.orderId],
-      from: "READY",
-      to: "SERVED"
-    }
-  });
-
-  await writeAuditLog(db, {
-    actorId: params.actorId,
-    actorType: "WAITER",
-    actionType: "ITEM_SERVED",
-    entityType: "order_item",
-    entityId: params.orderItemId,
-    orderId: item.orderId,
-    afterJson: {
-      status: "SERVED",
-      orderStatus: updatedOrder.orderStatus,
-      orderVersion: updatedOrder.lastMutationVersion
-    },
-    result: "SUCCESS"
-  });
-
-  return updatedOrder;
-}
-
-export async function serveReadyItemsForOrder(
-  db: DbClient,
-  params: {
-    actorId: string;
-    orderId: string;
-  }
-) {
-  const order = await db.order.findUnique({
-    where: { id: params.orderId },
-    include: {
-      items: {
-        select: {
-          id: true,
-          status: true
-        }
-      }
-    }
-  });
-
-  assert(order, 404, "ORDER_NOT_FOUND", "Order not found");
-  assert(
-    order.orderStatus !== "FAILED" && order.orderStatus !== "CANCELED",
-    409,
-    "ORDER_FAILED",
-    "Order failed"
-  );
-  assert(order.items.length > 0, 409, "ORDER_EMPTY", "Order has no items");
-
-  const readyItemIds = order.items.filter((i) => i.status === "READY").map((i) => i.id);
-  assert(readyItemIds.length > 0, 409, "ORDER_NOT_READY", "No ready items to serve");
-
-  if (order.fulfillmentType === "TAKEOUT") {
-    const allReadyOrServed = order.items.every((i) => i.status === "READY" || i.status === "SERVED");
-    assert(allReadyOrServed, 409, "ORDER_NOT_READY", "All items must be ready before takeout serving");
-  }
-
-  for (const itemId of readyItemIds) {
-    const changed = await db.orderItem.updateMany({
-      where: {
-        id: itemId,
-        status: "READY"
-      },
-      data: {
-        status: "SERVED",
-        servedAt: now(),
-        servedByActorId: params.actorId
-      }
-    });
-
-    if (changed.count !== 1) {
-      throw new AppError(409, "ITEM_CONFLICT", "Some items changed before serving");
-    }
-  }
-
-  const updatedOrder = await recalcAndPersistOrderStatus(db, order.id, true);
-
-  await saveUndoOperation(db, {
-    actorId: params.actorId,
-    operationType: "TAKEOUT_ORDER_SERVED",
-    targetEntityType: "order",
-    targetEntityId: order.id,
-    orderId: order.id,
-    expectedOrderVersion: updatedOrder.lastMutationVersion,
-    payload: {
-      itemIds: readyItemIds,
-      orderIds: [order.id],
-      from: "READY",
-      to: "SERVED"
-    }
-  });
-
-  await writeAuditLog(db, {
-    actorId: params.actorId,
-    actorType: "WAITER",
-    actionType: order.fulfillmentType === "TAKEOUT" ? "TAKEOUT_SERVED" : "DINE_IN_BATCH_SERVED",
-    entityType: "order",
-    entityId: order.id,
-    orderId: order.id,
-    afterJson: {
-      servedItemCount: readyItemIds.length,
-      orderStatus: updatedOrder.orderStatus,
-      orderVersion: updatedOrder.lastMutationVersion
-    },
-    result: "SUCCESS"
-  });
-
-  return updatedOrder;
-}
-
-export async function serveTakeoutOrder(
-  db: DbClient,
-  params: {
-    actorId: string;
-    orderId: string;
-  }
-) {
-  const order = await db.order.findUnique({
-    where: { id: params.orderId },
-    select: {
-      fulfillmentType: true
-    }
-  });
-
-  assert(order, 404, "ORDER_NOT_FOUND", "Order not found");
-  assert(order.fulfillmentType === "TAKEOUT", 400, "NOT_TAKEOUT", "Order is not takeout");
-
-  return serveReadyItemsForOrder(db, params);
+  const consumed = await db.menuStock.updateMany({ where: { menuId: item.menuId, readyCount: { gt: 0 } }, data: { readyCount: { decrement: 1 } } });
+  assert(consumed.count === 1, 409, "STOCK_EMPTY", "提供可能な在庫がなくなりました");
+  const servedAt = new Date();
+  await db.orderItem.update({ where: { id: item.id }, data: { status: "SERVED", servedAt, servedByActorId: params.actorId } });
+  const updated = await recalcAndPersistOrderStatus(db, item.orderId, true);
+  await saveUndoOperation(db, { actorId: params.actorId, operationType: "ITEM_SERVED", targetEntityType: "order_item", targetEntityId: item.id, orderId: item.orderId, expectedOrderVersion: updated.lastMutationVersion, payload: { menuId: item.menuId, sharedStock: true, servedAt: servedAt.toISOString() } });
+  await writeAuditLog(db, { actorId: params.actorId, actorType: "WAITER", actionType: "ITEM_SERVED", entityType: "order_item", entityId: item.id, orderId: item.orderId, afterJson: { status: "SERVED", servedAt: servedAt.toISOString() }, result: "SUCCESS" });
+  return updated;
 }

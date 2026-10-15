@@ -16,6 +16,7 @@ export async function POST(req: NextRequest) {
       const updated = await serveDineInItem(tx, {
         actorId: actor.actorId,
         orderItemId: body.orderItemId,
+        confirmUncalled: body.confirmUncalled,
       });
 
       await broadcastInvalidation(tx, CHANNEL_GROUPS.ORDER_FLOW, "orders", "counter_item_served");

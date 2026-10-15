@@ -1,19 +1,12 @@
 ﻿import { ActorType, Prisma, PrismaClient } from "@prisma/client";
 import { AppError, assert } from "@/lib/errors";
-import { deriveOrderStatus } from "@/lib/domain/order-status";
+import { recalcAndPersistOrderStatus } from "@/lib/domain/orders";
 import { now } from "@/lib/time";
 import { writeAuditLog } from "@/lib/domain/audit";
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
 
 export type UndoPayload = Record<string, unknown>;
-
-function asStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value.filter((row): row is string => typeof row === "string" && row.length > 0);
-}
 
 export async function saveUndoOperation(
   db: DbClient,
@@ -22,7 +15,7 @@ export async function saveUndoOperation(
     operationType: "ITEM_READY" | "ITEM_READY_BATCH" | "ITEM_SERVED" | "TAKEOUT_ORDER_SERVED";
     targetEntityType: string;
     targetEntityId: string;
-    orderId: string;
+    orderId: string | null;
     expectedOrderVersion: number;
     payload: UndoPayload;
   }
@@ -59,174 +52,36 @@ export async function saveUndoOperation(
 }
 
 export async function executeUndo(db: DbClient, params: { actorId: string; actorType: ActorType }) {
-  assert(
-    params.actorType === "KITCHEN" || params.actorType === "WAITER",
-    403,
-    "FORBIDDEN",
-    "Undo is allowed only for Kitchen and Counter"
-  );
-
-  const undo = await db.undoOperation.findFirst({
-    where: {
-      actorId: params.actorId,
-      actor: {
-        actorType: params.actorType
-      }
-    },
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }]
-  });
-
-  assert(undo, 404, "UNDO_NOT_FOUND", "No undo target available");
-
-  let targetItemIds: string[] = [];
-  let expectedCurrentStatus: "READY" | "SERVED";
-  let revertData: Prisma.OrderItemUpdateManyMutationInput;
-
-  if (undo.operationType === "ITEM_READY") {
-    assert(params.actorType === "KITCHEN", 403, "UNDO_FORBIDDEN", "Kitchen undo can only target kitchen actions");
-    targetItemIds = [undo.targetEntityId];
-    expectedCurrentStatus = "READY";
-    revertData = {
-      status: "QUEUED",
-      readyAt: null
-    };
-  } else if (undo.operationType === "ITEM_READY_BATCH") {
-    assert(params.actorType === "KITCHEN", 403, "UNDO_FORBIDDEN", "Kitchen undo can only target kitchen actions");
-    targetItemIds = asStringArray((undo.payload as Record<string, unknown>).itemIds);
-    expectedCurrentStatus = "READY";
-    revertData = {
-      status: "QUEUED",
-      readyAt: null
-    };
-  } else if (undo.operationType === "ITEM_SERVED") {
-    assert(params.actorType === "WAITER", 403, "UNDO_FORBIDDEN", "Counter undo can only target counter actions");
-    targetItemIds = [undo.targetEntityId];
-    expectedCurrentStatus = "SERVED";
-    revertData = {
-      status: "READY",
-      servedAt: null
-    };
-  } else if (undo.operationType === "TAKEOUT_ORDER_SERVED") {
-    assert(params.actorType === "WAITER", 403, "UNDO_FORBIDDEN", "Counter undo can only target counter actions");
-    targetItemIds = asStringArray((undo.payload as Record<string, unknown>).itemIds);
-    expectedCurrentStatus = "SERVED";
-    revertData = {
-      status: "READY",
-      servedAt: null
-    };
-  } else {
-    throw new AppError(400, "UNDO_UNSUPPORTED", `Unsupported undo operation: ${undo.operationType}`);
-  }
-
-  assert(targetItemIds.length > 0, 409, "UNDO_TARGET_MISSING", "Undo target item list is empty");
-
-  const targetItems = await db.orderItem.findMany({
-    where: {
-      id: {
-        in: targetItemIds
-      }
-    },
-    select: {
-      id: true,
-      status: true,
-      orderId: true
-    }
-  });
-
-  if (targetItems.length !== targetItemIds.length) {
-    throw new AppError(409, "UNDO_TARGET_CHANGED", "Undo target item was changed");
-  }
-
-  const orderIds = [...new Set(targetItems.map((item) => item.orderId))];
-
-  for (const itemId of targetItemIds) {
-    const changed = await db.orderItem.updateMany({
-      where: {
-        id: itemId,
-        status: expectedCurrentStatus
-      },
-      data: revertData
-    });
-
-    if (changed.count !== 1) {
-      throw new AppError(409, "UNDO_CONFLICT", "Undo failed because target item state changed");
-    }
-  }
-
-  const updatedOrders: Array<{ id: string; orderNo: number; orderStatus: string; orderVersion: number }> = [];
-
-  for (const orderId of orderIds) {
-    const order = await db.order.findUnique({
-      where: { id: orderId },
-      include: {
-        items: {
-          select: {
-            status: true
-          }
-        }
-      }
-    });
-
-    assert(order, 404, "ORDER_NOT_FOUND", "Order not found");
-
-    const nextStatus = deriveOrderStatus({
-      paymentStatus: order.paymentStatus,
-      fulfillmentType: order.fulfillmentType,
-      items: order.items,
-      canceledAt: order.canceledAt,
-      confirmedAt: order.confirmedAt
-    });
-
-    const updated = await db.order.update({
-      where: { id: order.id },
-      data: {
-        orderStatus: nextStatus,
-        lastMutationVersion: {
-          increment: 1
-        }
-      },
-      select: {
-        id: true,
-        orderNo: true,
-        orderStatus: true,
-        lastMutationVersion: true
-      }
-    });
-
-    updatedOrders.push({
-      id: updated.id,
-      orderNo: updated.orderNo,
-      orderStatus: updated.orderStatus,
-      orderVersion: updated.lastMutationVersion
-    });
-  }
-
+  assert(params.actorType === "KITCHEN" || params.actorType === "WAITER", 403, "FORBIDDEN", "Undo forbidden");
+  await db.$queryRaw`SELECT id FROM "Actor" WHERE id = ${params.actorId} FOR NO KEY UPDATE`;
+  const undo = await db.undoOperation.findFirst({ where: { actorId: params.actorId }, orderBy: [{ createdAt: "desc" }, { id: "desc" }] });
+  assert(undo, 404, "UNDO_NOT_FOUND", "Undo not found");
+  const payload = undo.payload as Record<string, unknown>;
+  const menuId = payload.menuId;
+  assert(typeof menuId === "string", 409, "UNDO_TARGET_CHANGED", "取り消し対象が旧仕様です");
+  await db.$queryRaw`SELECT id FROM "Menu" WHERE id = ${menuId} FOR UPDATE`;
+  let count = 1;
+  let orderId: string | null = null;
+  if (undo.operationType === "ITEM_READY_BATCH" && undo.targetEntityType === "menu_stock") {
+    assert(params.actorType === "KITCHEN", 403, "FORBIDDEN", "Undo forbidden");
+    count = Number(payload.quantity);
+    assert(Number.isSafeInteger(count) && count > 0 && typeof payload.jstDate === "string", 409, "UNDO_TARGET_CHANGED", "Undo invalid");
+    const stock = await db.menuStock.updateMany({ where: { menuId, readyCount: { gte: count } }, data: { readyCount: { decrement: count } } });
+    assert(stock.count === 1, 409, "UNDO_CONFLICT", "調理済み在庫が提供されたため取り消せません");
+    await db.menuDailyCount.update({ where: { menuId_jstDate: { menuId, jstDate: payload.jstDate } }, data: { cookedCount: { decrement: count } } });
+  } else if (undo.operationType === "ITEM_SERVED" && payload.sharedStock) {
+    assert(params.actorType === "WAITER", 403, "FORBIDDEN", "Undo forbidden");
+    assert(undo.orderId, 409, "UNDO_TARGET_CHANGED", "Undo order missing");
+    await db.$queryRaw`SELECT id FROM "Order" WHERE id = ${undo.orderId} FOR UPDATE`;
+    const order = await db.order.findUnique({ where: { id: undo.orderId } });
+    assert(order && !["FAILED", "CANCELED"].includes(order.orderStatus), 409, "UNDO_CONFLICT", "Undo conflict");
+    const changed = await db.orderItem.updateMany({ where: { id: undo.targetEntityId, status: "SERVED", servedByActorId: params.actorId, servedAt: typeof payload.servedAt === "string" ? new Date(payload.servedAt) : undefined }, data: { status: "QUEUED", readyAt: null, servedAt: null, servedByActorId: null } });
+    assert(changed.count === 1, 409, "UNDO_CONFLICT", "Undo conflict");
+    await db.menuStock.upsert({ where: { menuId }, create: { menuId, readyCount: 1 }, update: { readyCount: { increment: 1 } } });
+    await recalcAndPersistOrderStatus(db, undo.orderId, true);
+    orderId = undo.orderId;
+  } else { throw new AppError(409, "UNDO_UNSUPPORTED", "旧仕様の操作は取り消せません"); }
   await db.undoOperation.delete({ where: { id: undo.id } });
-
-  await writeAuditLog(db, {
-    actorId: params.actorId,
-    actorType: params.actorType,
-    actionType: "UNDO",
-    entityType: "undo_operation",
-    entityId: undo.id,
-    orderId: updatedOrders[0]?.id ?? undo.orderId,
-    beforeJson: {
-      operationType: undo.operationType,
-      targetEntityType: undo.targetEntityType,
-      targetEntityId: undo.targetEntityId,
-      targetItemCount: targetItemIds.length
-    },
-    afterJson: {
-      revertedItemCount: targetItemIds.length,
-      affectedOrderCount: updatedOrders.length,
-      orders: updatedOrders
-    },
-    result: "SUCCESS"
-  });
-
-  return {
-    operationType: undo.operationType,
-    revertedItemCount: targetItemIds.length,
-    affectedOrders: updatedOrders
-  };
+  await writeAuditLog(db, { actorId: params.actorId, actorType: params.actorType, actionType: "UNDO", entityType: "undo_operation", entityId: undo.id, orderId, afterJson: { revertedItemCount: count, menuId }, result: "SUCCESS" });
+  return { operationType: undo.operationType, revertedItemCount: count, affectedOrders: [] };
 }

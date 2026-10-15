@@ -106,3 +106,13 @@ The app now returns clearer DB-related error codes in API responses:
 
 - Placeholder SVG: `public/logo-placeholder.svg`
 - Replace with final brand logo later (`public/logo.svg`) when ready.
+
+## 2026-10-15 提供フローの変更
+
+調理完了はメニューごとの共有在庫として記録し、提供時にアイテム1個につき在庫を1個消費します。キッチンは注文数にかかわらず事前調理できます。本日の注文数と調理完了数は別に管理します。
+
+カウンターには共有在庫で一部でも提供できるすべてのオーダーを表示します。在庫は表示段階では予約しません。呼び出しは確認後の手動操作で、繰り返し実行できます。提供後の呼び出しはオーダーブックからも実行できます。
+
+リリース時には `20261015000100_shared_ready_stock` のマイグレーション適用が必要です。旧バージョンの操作を停止してから適用し、新バージョンへ切り替えてください。移行は既存の提供待ちアイテムを共有在庫へ移し、未提供アイテムに戻します。提供済みアイテムは保持します。旧仕様の取り消し履歴と自動呼び出し猶予設定は削除します。
+
+動作確認: `npx tsx --test scripts/shared-stock.test.ts`

@@ -36,6 +36,7 @@ type OrderRow = {
   orderNo: number;
   createdAt: string;
   confirmedAt: string | null;
+  lastCalledAt: string | null;
   completedAt: string | null;
   fulfillmentType: "DINE_IN" | "TAKEOUT";
   tableNo: number | null;
@@ -562,7 +563,7 @@ export default function OrderBookPage() {
                     <th>メニュー</th>
                     <th>注文済み</th>
                     <th>売上</th>
-                    <th>(うち調理待ち)</th>
+                    <th>(うち未提供)</th>
                     <th>上限</th>
                     <th>上限まで残り</th>
                   </tr>
@@ -719,6 +720,19 @@ export default function OrderBookPage() {
                 </div>
 
                 <div className="row wrap" style={{ marginTop: 10 }}>
+                  {session.actor.actorType === "WAITER" && order.confirmedAt && !["FAILED", "CANCELED"].includes(order.orderStatus) && (
+                    <button type="button" className="order-call-btn" aria-pressed={Boolean(order.lastCalledAt)} onClick={async () => {
+                      const cancel = Boolean(order.lastCalledAt);
+                      if (!window.confirm(`オーダー #${order.orderNo} ${cancel ? "の呼び出しを解除しますか？" : "を呼び出しますか？"}`)) return;
+                      try {
+                        await apiFetch("/api/counter/call", { method: "POST", body: JSON.stringify({ orderId: order.id, action: cancel ? "cancel" : "call", confirm: true, idempotencyKey: crypto.randomUUID() }) });
+                        notify({ level: "success", message: `オーダー #${order.orderNo} ${cancel ? "の呼び出しを解除しました" : "を呼び出しました"}` });
+                        await reload();
+                      } catch (e) {
+                        notify({ level: "error", message: e instanceof Error ? e.message : "呼び出しに失敗しました" });
+                      }
+                    }}>{order.lastCalledAt ? "呼び出し解除" : "呼び出す"}</button>
+                  )}
                   <button
                     type="button"
                     className="ghost-btn"
