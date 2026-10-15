@@ -33,10 +33,6 @@ export function deriveOrderStatus(params: {
     return "COMPLETED";
   }
 
-  if (params.fulfillmentType === "TAKEOUT") {
-    const allReadyOrServed = params.items.every((i) => i.status === "READY" || i.status === "SERVED");
-    return allReadyOrServed ? "AWAITING_SERVING" : "PREPARING";
-  }
 
   return "PREPARING";
 }

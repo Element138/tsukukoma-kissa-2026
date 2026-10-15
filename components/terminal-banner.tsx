@@ -1,5 +1,6 @@
 ﻿"use client";
 
+import Link from "next/link";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/client";
@@ -68,9 +69,14 @@ export function TerminalBanner(props: BannerProps) {
           <span className="status ok">{JP.statusOnline}</span>
         )}
       </div>
-      <button className="ghost-btn" type="button" onClick={doLogout}>
-        {JP.logout}
-      </button>
+      <div className="banner-actions">
+        {["POS", "KITCHEN", "WAITER", "ADMIN"].includes(props.actorType) && (
+          <Link href="/order-book" className="btn-link ghost-btn">オーダーブック</Link>
+        )}
+        <button className="ghost-btn" type="button" onClick={doLogout}>
+          {JP.logout}
+        </button>
+      </div>
     </header>
   );
 }

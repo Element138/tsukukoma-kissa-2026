@@ -63,7 +63,8 @@ export const itemReadySchema = z.object({
 export const kitchenMenuReadySchema = z.object({
   menuId: z.string().uuid(),
   quantity: z.number().int().min(1).max(999),
-  idempotencyKey: z.string().min(8).max(160)
+  idempotencyKey: z.string().min(8).max(160),
+  confirmOverCap: z.boolean().optional()
 });
 
 export const kitchenMenuCapUpdateSchema = z.object({
@@ -73,7 +74,8 @@ export const kitchenMenuCapUpdateSchema = z.object({
 
 export const serveItemSchema = z.object({
   orderItemId: z.string().uuid(),
-  expectedItemStatus: z.enum(["READY"])
+  expectedItemStatus: z.enum(["QUEUED", "READY"]).optional(),
+  confirmUncalled: z.boolean().optional()
 });
 
 export const serveOrderSchema = z.object({

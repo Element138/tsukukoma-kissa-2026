@@ -1,8 +1,7 @@
 ﻿"use client";
 
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
-import { apiFetch } from "@/lib/client";
+import { ApiError, apiFetch } from "@/lib/client";
 import { useSession } from "@/components/use-session";
 import { TerminalBanner } from "@/components/terminal-banner";
 import { DashboardShell } from "@/components/dashboard-shell";
@@ -15,7 +14,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import { Check, Minus, Plus } from "lucide-react";
+import { Minus, Plus } from "lucide-react";
 
 type KitchenMenuRow = {
   menuId: string;
@@ -23,6 +22,8 @@ type KitchenMenuRow = {
   availability: "AVAILABLE" | "INCREASED_WAIT" | "PAUSED" | "SOLD_OUT";
   hasActiveKitchenCoverage: boolean;
   queuedCount: number;
+  surplusCount: number;
+  todayCookedCount: number;
   oldestQueuedSeconds: number;
   oldestElapsed: string;
   queuedOrders: Array<{
@@ -59,23 +60,6 @@ function newMutationKey() {
   } catch {
     return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   }
-}
-
-function formatMss(totalSeconds: number) {
-  const sec = Math.max(0, Math.floor(totalSeconds));
-  const mm = Math.floor(sec / 60);
-  const ss = sec % 60;
-  return `${mm}:${String(ss).padStart(2, "0")}`;
-}
-
-function queueTone(seconds: number) {
-  if (seconds >= 600) {
-    return "danger";
-  }
-  if (seconds >= 240) {
-    return "warn";
-  }
-  return "safe";
 }
 
 const AVAILABILITY_OPTIONS: Array<
@@ -120,8 +104,7 @@ export default function KitchenPage() {
   const [capDraft, setCapDraft] = useState<number>(1);
   const [capUnlimited, setCapUnlimited] = useState<boolean>(true);
 
-  const [tickNow, setTickNow] = useState(Date.now());
-  const [queueFetchedAt, setQueueFetchedAt] = useState(Date.now());
+  const readyInFlightRef = useRef(false);
 
   const reloadInFlightRef = useRef(false);
   const queuedReloadModeRef = useRef<"all" | "menus" | null>(null);
@@ -147,13 +130,12 @@ export default function KitchenPage() {
             setReadyQuantityByMenuId((prev) => {
               const next: Record<string, number> = {};
               for (const menu of payload.menus) {
-                const max = Math.max(1, menu.queuedCount);
+                const max = 999;
                 const current = prev[menu.menuId] ?? 1;
                 next[menu.menuId] = Math.max(1, Math.min(max, current));
               }
               return next;
             });
-            setQueueFetchedAt(Date.now());
           },
         ),
       );
@@ -196,10 +178,6 @@ export default function KitchenPage() {
     void reload("all");
   }, [session]);
 
-  useEffect(() => {
-    const timer = setInterval(() => setTickNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, []);
 
   useRealtimeSubscription({
     enabled: Boolean(session),
@@ -221,59 +199,27 @@ export default function KitchenPage() {
   const orderedMenus = useMemo(() => menus, [menus]);
 
   const submitReady = async (menuId: string, quantity: number) => {
+    if (readyInFlightRef.current) return;
+    readyInFlightRef.current = true;
     setBusy(true);
-    setReadyQuantityByMenuId((prev) => ({
-      ...prev,
-      [menuId]: 1,
-    }));
+    const idempotencyKey = newMutationKey();
+    const submit = (confirmOverCap: boolean) => apiFetch<{ markedReadyCount: number }>("/api/kitchen/menus/ready", {
+      method: "POST", body: JSON.stringify({ menuId, quantity, idempotencyKey, confirmOverCap }),
+    });
     try {
-      const result = await apiFetch<{
-        markedReadyCount: number;
-        affectedOrderCount: number;
-      }>("/api/kitchen/menus/ready", {
-        method: "POST",
-        body: JSON.stringify({
-          menuId,
-          quantity,
-          idempotencyKey: newMutationKey(),
-        }),
-      });
-
-      notify({
-        level: "success",
-        message: `${result.markedReadyCount} 個を調理済みにしました`,
-      });
-
+      let result;
+      try { result = await submit(false); }
+      catch (e) {
+        if (!(e instanceof ApiError) || e.code !== "COOKED_CAP_CONFIRM_REQUIRED") throw e;
+        if (!window.confirm("本日の調理完了数が上限を超えます。調理完了にしますか？")) return;
+        result = await submit(true);
+      }
+      setReadyQuantityByMenuId(prev => ({ ...prev, [menuId]: 1 }));
+      notify({ level: "success", message: `${result.markedReadyCount} 個を調理済みにしました` });
       await reload("menus");
     } catch (e) {
-      notify({
-        level: "error",
-        message:
-          e instanceof Error ? e.message : "調理済みへの更新に失敗しました",
-      });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const submitItemReady = async (itemId: string) => {
-    setBusy(true);
-    try {
-      await apiFetch(`/api/kitchen/items/${itemId}/ready`, {
-        method: "POST",
-        body: JSON.stringify({ expectedItemStatus: "QUEUED" }),
-      });
-      notify({ level: "success", message: "1 個を調理済みにしました" });
-      await reload("menus");
-    } catch (e) {
-      notify({
-        level: "error",
-        message:
-          e instanceof Error ? e.message : "調理済みへの更新に失敗しました",
-      });
-    } finally {
-      setBusy(false);
-    }
+      notify({ level: "error", message: e instanceof Error ? e.message : "調理済みへの更新に失敗しました" });
+    } finally { readyInFlightRef.current = false; setBusy(false); }
   };
 
   const undo = async () => {
@@ -420,7 +366,6 @@ export default function KitchenPage() {
     return <LoadingScreen />;
   }
 
-  const elapsedSinceFetchSec = Math.floor((tickNow - queueFetchedAt) / 1000);
 
   return (
     <>
@@ -455,9 +400,6 @@ export default function KitchenPage() {
                     }
                   />
                 </label>
-                <Link href="/order-book" className="btn-link ghost-btn">
-                  オーダーブック
-                </Link>
               </div>
             </div>
 
@@ -471,7 +413,7 @@ export default function KitchenPage() {
                 const readyQuantity = Math.max(
                   1,
                   Math.min(
-                    Math.max(1, menu.queuedCount),
+                    999,
                     readyQuantityByMenuId[menu.menuId] ?? 1,
                   ),
                 );
@@ -489,10 +431,10 @@ export default function KitchenPage() {
 
                     <div className="kitchen-menu-metrics">
                       <div className="kitchen-queued-headline">
-                        <span className="kitchen-queued-big">
-                          {menu.queuedCount}
+                        <span className={cn("kitchen-queued-big", menu.surplusCount > 0 && "muted")}>
+                          {menu.surplusCount > 0 ? menu.surplusCount : menu.queuedCount}
                         </span>
-                        <span>個調理待ち</span>
+                        <small className={menu.surplusCount > 0 ? "muted" : ""}>{menu.surplusCount > 0 ? "個余剰" : "個調理待ち"}</small>
                       </div>
                       <div className="kitchen-cap-inline">
                         <span className="kitchen-cap-summary">
@@ -630,7 +572,6 @@ export default function KitchenPage() {
                       aria-label={`${menu.menuName} の調理済み操作`}
                     >
                       <div className="ready-action-row">
-                        {menu.queuedCount > 1 ? (
                           <button
                             type="button"
                             className="ready-edge-control ready-edge-control-left"
@@ -645,32 +586,30 @@ export default function KitchenPage() {
                           >
                             <Minus aria-hidden="true" />
                           </button>
-                        ) : null}
                         <button
                           type="button"
                           className="ready-action-submit"
-                          disabled={busy || menu.queuedCount === 0}
+                          disabled={busy}
                           onClick={() =>
                             void submitReady(
                               menu.menuId,
-                              menu.queuedCount > 1 ? readyQuantity : 1,
+                              readyQuantity,
                             )
                           }
                         >
-                          {menu.queuedCount > 1 ? readyQuantity : 1}
+                          {readyQuantity}
                           個調理済みにする
                         </button>
-                        {menu.queuedCount > 1 ? (
                           <button
                             type="button"
                             className="ready-edge-control ready-edge-control-right"
                             aria-label="数量を増やす"
-                            disabled={busy || readyQuantity >= menu.queuedCount}
+                            disabled={busy || readyQuantity >= 999}
                             onClick={() =>
                               setReadyQuantityByMenuId((prev) => ({
                                 ...prev,
                                 [menu.menuId]: Math.min(
-                                  menu.queuedCount,
+                                  999,
                                   readyQuantity + 1,
                                 ),
                               }))
@@ -678,41 +617,10 @@ export default function KitchenPage() {
                           >
                             <Plus aria-hidden="true" />
                           </button>
-                        ) : null}
                       </div>
                     </div>
 
-                    <div className="kitchen-order-list">
-                      {menu.queuedOrders.map((order) => {
-                        const orderElapsed =
-                          order.queuedSeconds + elapsedSinceFetchSec;
-                        return (
-                          <div
-                            key={order.itemId}
-                            className={cn(
-                              "kitchen-order-row",
-                              `order-age-${queueTone(orderElapsed)}`,
-                            )}
-                          >
-                            <div>
-                              <strong>注文 #{order.orderNo}</strong>
-                              <span className="muted">
-                                {formatMss(orderElapsed)} 経過
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              className="kitchen-order-ready-btn"
-                              disabled={busy}
-                              onClick={() => void submitItemReady(order.itemId)}
-                            >
-                              <Check aria-hidden="true" />
-                              <span>調理済みにする</span>
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
+
                   </article>
                 );
               })}

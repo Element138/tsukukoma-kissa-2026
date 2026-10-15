@@ -17,7 +17,6 @@ import {
   AppsList20Regular,
   ArrowDown20Regular,
   ArrowUp20Regular,
-  Box20Regular,
   Delete20Regular,
   Edit20Regular,
   Key20Regular,
@@ -130,7 +129,6 @@ type MenuEdit = {
 };
 type MenuDisplaySettings = {
   pageDisplaySeconds: number;
-  counterReadyGraceMinutes: number;
   orderDisplayMarqueeText: string;
   orderDisplayMarqueeSpeedSeconds: number;
   orderCallVolume: number;
@@ -482,8 +480,7 @@ export default function AdminPage() {
   const [menuDisplaySettings, setMenuDisplaySettings] =
     useState<MenuDisplaySettings | null>(null);
   const [pageDisplaySecondsDraft, setPageDisplaySecondsDraft] = useState("18");
-  const [counterReadyGraceMinutesDraft, setCounterReadyGraceMinutesDraft] =
-    useState("3");
+
   const [orderDisplayMarqueeTextDraft, setOrderDisplayMarqueeTextDraft] =
     useState("");
   const [
@@ -653,20 +650,16 @@ export default function AdminPage() {
     });
 
     const draftSeconds = Number(pageDisplaySecondsDraft);
-    const draftGraceMinutes = Number(counterReadyGraceMinutesDraft);
     const draftMarqueeSpeed = Number(orderDisplayMarqueeSpeedSecondsDraft);
     const draftMarqueeText = orderDisplayMarqueeTextDraft.trim();
     const displaySettingDirty =
       menuDisplaySettings != null &&
       (pageDisplaySecondsDraft.trim() !==
         String(menuDisplaySettings.pageDisplaySeconds) ||
-        counterReadyGraceMinutesDraft.trim() !==
-          String(menuDisplaySettings.counterReadyGraceMinutes) ||
         draftMarqueeText !== menuDisplaySettings.orderDisplayMarqueeText ||
         orderDisplayMarqueeSpeedSecondsDraft.trim() !==
           String(menuDisplaySettings.orderDisplayMarqueeSpeedSeconds) ||
         !Number.isFinite(draftSeconds) ||
-        !Number.isFinite(draftGraceMinutes) ||
         !Number.isFinite(draftMarqueeSpeed));
 
     return categoryDirty || menuDirty || displaySettingDirty;
@@ -678,7 +671,6 @@ export default function AdminPage() {
     categoryNameDrafts,
     menuEdits,
     menuDisplaySettings,
-    counterReadyGraceMinutesDraft,
     orderCallVolumePercentDraft,
     orderDisplayMarqueeSpeedSecondsDraft,
     orderDisplayMarqueeTextDraft,
@@ -727,17 +719,6 @@ export default function AdminPage() {
           return prev;
         }
         return String(settings.settings.pageDisplaySeconds);
-      });
-      setCounterReadyGraceMinutesDraft((prev) => {
-        const previousServerValue =
-          menuDisplaySettings?.counterReadyGraceMinutes;
-        if (
-          previousServerValue != null &&
-          prev !== String(previousServerValue)
-        ) {
-          return prev;
-        }
-        return String(settings.settings.counterReadyGraceMinutes);
       });
       setOrderDisplayMarqueeTextDraft((prev) => {
         const previousServerValue =
@@ -1096,7 +1077,6 @@ export default function AdminPage() {
 
   const saveMenuDisplaySettings = async () => {
     let pageDisplaySeconds: number;
-    let counterReadyGraceMinutes: number;
     let orderDisplayMarqueeSpeedSeconds: number;
     let orderCallVolume: number;
     const orderDisplayMarqueeText = orderDisplayMarqueeTextDraft.trim();
@@ -1108,15 +1088,6 @@ export default function AdminPage() {
           integer: true,
           min: 6,
           max: 120,
-        },
-      );
-      counterReadyGraceMinutes = toPositiveFiniteNumber(
-        counterReadyGraceMinutesDraft,
-        "店内注文の呼び出し猶予",
-        {
-          integer: true,
-          min: 0,
-          max: 60,
         },
       );
       orderDisplayMarqueeSpeedSeconds = toPositiveFiniteNumber(
@@ -1149,7 +1120,6 @@ export default function AdminPage() {
           method: "PATCH",
           body: JSON.stringify({
             pageDisplaySeconds,
-            counterReadyGraceMinutes,
             orderDisplayMarqueeText,
             orderDisplayMarqueeSpeedSeconds,
             orderCallVolume,
@@ -1158,9 +1128,6 @@ export default function AdminPage() {
       );
       setMenuDisplaySettings(data.settings);
       setPageDisplaySecondsDraft(String(data.settings.pageDisplaySeconds));
-      setCounterReadyGraceMinutesDraft(
-        String(data.settings.counterReadyGraceMinutes),
-      );
       setOrderDisplayMarqueeTextDraft(
         data.settings.orderDisplayMarqueeText,
       );
@@ -1211,7 +1178,6 @@ export default function AdminPage() {
       parsedInput: ReturnType<typeof parseMenuInput>;
     }> = [];
     let nextDisplaySeconds: number | null = null;
-    let nextCounterReadyGraceMinutes: number | null = null;
     let nextOrderDisplayMarqueeText: string | null = null;
     let nextOrderDisplayMarqueeSpeedSeconds: number | null = null;
     let nextOrderCallVolume: number | null = null;
@@ -1289,7 +1255,6 @@ export default function AdminPage() {
       }
 
       const draftSeconds = Number(pageDisplaySecondsDraft);
-      const draftGraceMinutes = Number(counterReadyGraceMinutesDraft);
       const draftMarqueeSpeed = Number(orderDisplayMarqueeSpeedSecondsDraft);
       const draftCallVolumePercent = Number(orderCallVolumePercentDraft);
       const draftMarqueeText = orderDisplayMarqueeTextDraft.trim();
@@ -1297,15 +1262,12 @@ export default function AdminPage() {
         menuDisplaySettings != null &&
         (pageDisplaySecondsDraft.trim() !==
           String(menuDisplaySettings.pageDisplaySeconds) ||
-          counterReadyGraceMinutesDraft.trim() !==
-            String(menuDisplaySettings.counterReadyGraceMinutes) ||
           draftMarqueeText !== menuDisplaySettings.orderDisplayMarqueeText ||
           orderDisplayMarqueeSpeedSecondsDraft.trim() !==
             String(menuDisplaySettings.orderDisplayMarqueeSpeedSeconds) ||
           orderCallVolumePercentDraft.trim() !==
             String(Math.round(menuDisplaySettings.orderCallVolume * 100)) ||
           !Number.isFinite(draftSeconds) ||
-          !Number.isFinite(draftGraceMinutes) ||
           !Number.isFinite(draftMarqueeSpeed) ||
           !Number.isFinite(draftCallVolumePercent));
       nextDisplaySeconds = displaySettingDirty
@@ -1314,17 +1276,6 @@ export default function AdminPage() {
             min: 6,
             max: 120,
           })
-        : null;
-      nextCounterReadyGraceMinutes = displaySettingDirty
-        ? toPositiveFiniteNumber(
-            counterReadyGraceMinutesDraft,
-            "店内注文の呼び出し猶予",
-            {
-              integer: true,
-              min: 0,
-              max: 60,
-            },
-          )
         : null;
       nextOrderDisplayMarqueeText = displaySettingDirty
         ? draftMarqueeText
@@ -1355,7 +1306,6 @@ export default function AdminPage() {
         categoryUpdates.length === 0 &&
         menuUpdates.length === 0 &&
         nextDisplaySeconds == null &&
-        nextCounterReadyGraceMinutes == null &&
         nextOrderDisplayMarqueeText == null &&
         nextOrderDisplayMarqueeSpeedSeconds == null &&
         nextOrderCallVolume == null
@@ -1388,7 +1338,6 @@ export default function AdminPage() {
 
       if (
         nextDisplaySeconds != null &&
-        nextCounterReadyGraceMinutes != null &&
         nextOrderDisplayMarqueeText != null &&
         nextOrderDisplayMarqueeSpeedSeconds != null &&
         nextOrderCallVolume != null
@@ -1399,7 +1348,6 @@ export default function AdminPage() {
             method: "PATCH",
             body: JSON.stringify({
               pageDisplaySeconds: nextDisplaySeconds,
-              counterReadyGraceMinutes: nextCounterReadyGraceMinutes,
               orderDisplayMarqueeText: nextOrderDisplayMarqueeText,
               orderDisplayMarqueeSpeedSeconds:
                 nextOrderDisplayMarqueeSpeedSeconds,
@@ -1409,9 +1357,6 @@ export default function AdminPage() {
         );
         setMenuDisplaySettings(data.settings);
         setPageDisplaySecondsDraft(String(data.settings.pageDisplaySeconds));
-        setCounterReadyGraceMinutesDraft(
-          String(data.settings.counterReadyGraceMinutes),
-        );
         setOrderDisplayMarqueeTextDraft(
           data.settings.orderDisplayMarqueeText,
         );
@@ -1434,7 +1379,6 @@ export default function AdminPage() {
     categoryBadgeColorDrafts,
     categoryBadgeTextDrafts,
     categoryNameDrafts,
-    counterReadyGraceMinutesDraft,
     menuDisplaySettings,
     menuEdits,
     notifyError,
@@ -1565,12 +1509,6 @@ export default function AdminPage() {
         fancyHeader
         actions={
           <div className="flex items-center justify-end gap-2">
-            <Button asChild variant="outline" size="sm">
-              <Link href="/order-book">
-                <Box20Regular />
-                オーダーブック
-              </Link>
-            </Button>
             <Button asChild variant="outline" size="sm">
               <Link href="/audit">
                 <AppsList20Regular />
@@ -3139,9 +3077,9 @@ export default function AdminPage() {
           </Card>
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm">表示・提供タイミング</CardTitle>
+              <CardTitle className="text-sm">表示・呼び出し音量</CardTitle>
               <CardDescription>
-                メニュー表示、注文表示テロップ、店内注文の呼び出し猶予
+                メニュー表示、注文表示テロップ、呼び出し音量
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-wrap items-end gap-2">
@@ -3150,15 +3088,6 @@ export default function AdminPage() {
                 value={pageDisplaySecondsDraft}
                 onChange={(value) =>
                   setPageDisplaySecondsDraft(sanitizeIntegerInput(value))
-                }
-                className="max-w-xs"
-                inputMode="numeric"
-              />
-              <InputField
-                label="店内注文の呼び出し猶予 (分)"
-                value={counterReadyGraceMinutesDraft}
-                onChange={(value) =>
-                  setCounterReadyGraceMinutesDraft(sanitizeIntegerInput(value))
                 }
                 className="max-w-xs"
                 inputMode="numeric"
@@ -3198,8 +3127,6 @@ export default function AdminPage() {
                   menuDisplaySettings == null ||
                   (Number(pageDisplaySecondsDraft) ===
                     menuDisplaySettings.pageDisplaySeconds &&
-                    Number(counterReadyGraceMinutesDraft) ===
-                      menuDisplaySettings.counterReadyGraceMinutes &&
                     orderDisplayMarqueeTextDraft.trim() ===
                       menuDisplaySettings.orderDisplayMarqueeText &&
                     Number(orderDisplayMarqueeSpeedSecondsDraft) ===
@@ -3212,7 +3139,7 @@ export default function AdminPage() {
                 設定を保存
               </Button>
               <span className="text-xs text-muted-foreground">
-                表示 6〜120 秒 / 呼び出し猶予 0〜60 分 / テロップ 8〜90 秒 / 音量 0〜100%
+                表示 6〜120 秒 / テロップ 8〜90 秒 / 音量 0〜100%
               </span>
             </CardContent>
           </Card>

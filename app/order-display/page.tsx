@@ -19,6 +19,8 @@ type DisplayOrder = {
 };
 
 type OrderDisplayPayload = {
+  callCursor: number;
+  calls: Array<Pick<DisplayOrder, "id" | "orderNo" | "createdAt"> & { callCount: number }>;
   readyOrders: DisplayOrder[];
   unreadyOrders: DisplayOrder[];
 };
@@ -223,13 +225,10 @@ export default function OrderDisplayPage() {
   const readyAnimationsRef = useRef<Animation[]>([]);
   const reloadInFlightRef = useRef(false);
   const queuedReloadRef = useRef(false);
-  const didBootstrapRef = useRef(false);
-  const previousReadyIdsRef = useRef<Set<string>>(new Set());
-  const previousUnreadyIdsRef = useRef<Set<string>>(new Set());
+  const callCursorRef = useRef<number | null>(null);
   const callQueueRef = useRef<QueuedCall[]>([]);
   const callInFlightRef = useRef(false);
   const lastCallEndedAtRef = useRef(0);
-  const orderCallCountsRef = useRef<Map<number, number>>(new Map());
 
   const processCallQueue = async () => {
     if (callInFlightRef.current) {
@@ -269,12 +268,11 @@ export default function OrderDisplayPage() {
     }
   };
 
-  const enqueueCalls = (orders: DisplayOrder[]) => {
+  const enqueueCalls = (orders: OrderDisplayPayload["calls"]) => {
     const now = Date.now();
-    for (const order of orders.sort((a, b) => a.orderNo - b.orderNo)) {
+    for (const order of orders) {
       warmOrderNumberAudio(order.orderNo);
-      const callCount = (orderCallCountsRef.current.get(order.orderNo) ?? 0) + 1;
-      orderCallCountsRef.current.set(order.orderNo, callCount);
+      const callCount = order.callCount;
       const followsPrevious =
         callInFlightRef.current ||
         callQueueRef.current.length > 0 ||
@@ -292,27 +290,8 @@ export default function OrderDisplayPage() {
   };
 
   const applyPayload = (payload: OrderDisplayPayload) => {
-    const nextReadyIds = new Set(payload.readyOrders.map((order) => order.id));
-    const nextUnreadyIds = new Set(
-      payload.unreadyOrders.map((order) => order.id),
-    );
-    const previousReadyIds = previousReadyIdsRef.current;
-    const previousUnreadyIds = previousUnreadyIdsRef.current;
-
-    if (didBootstrapRef.current) {
-      const newlyReady = payload.readyOrders.filter(
-        (order) =>
-          !previousReadyIds.has(order.id) && previousUnreadyIds.has(order.id),
-      );
-
-      if (newlyReady.length > 0) {
-        enqueueCalls(newlyReady);
-      }
-    }
-
-    didBootstrapRef.current = true;
-    previousReadyIdsRef.current = nextReadyIds;
-    previousUnreadyIdsRef.current = nextUnreadyIds;
+    if (payload.calls.length > 0) enqueueCalls(payload.calls);
+    callCursorRef.current = payload.callCursor;
     setReadyOrders(payload.readyOrders);
     setUnreadyOrders(payload.unreadyOrders);
   };
@@ -326,7 +305,7 @@ export default function OrderDisplayPage() {
 
     try {
       const payload =
-        await apiFetch<OrderDisplayPayload>("/api/order-display");
+        await apiFetch<OrderDisplayPayload>(callCursorRef.current == null ? "/api/order-display" : `/api/order-display?afterCallId=${callCursorRef.current}`);
       applyPayload(payload);
     } catch (e) {
       notify({
