@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { tokyoDateKey } from "@/lib/time";
 import { prisma } from "@/lib/db";
 import { getMenuCapStates } from "@/lib/domain/menu-cap";
 import { fail, ok } from "@/lib/response";
@@ -50,7 +51,6 @@ export async function GET(req: NextRequest) {
     const [queuedItems, activeCoverageAssignments, capStateMap] = await Promise.all([
       prisma.orderItem.findMany({
         where: {
-          kitchenId,
           menuId: { in: menuIds },
           status: "QUEUED",
           order: {
@@ -137,6 +137,10 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    const stocks = await prisma.menuStock.findMany({ where: { menuId: { in: menuIds } } });
+    const cookedCounts = await prisma.menuDailyCount.findMany({ where: { menuId: { in: menuIds }, jstDate: tokyoDateKey() } });
+    const stockMap = new Map(stocks.map(s => [s.menuId, s.readyCount]));
+    const cookedMap = new Map(cookedCounts.map(s => [s.menuId, s.cookedCount]));
     const coveredMenuSet = new Set(activeCoverageAssignments.map((row) => row.menuId));
 
     const menus = assignments
@@ -157,7 +161,9 @@ export async function GET(req: NextRequest) {
           menuName: assignment.menu.name,
           availability: isCapReached ? "SOLD_OUT" : assignment.menu.availability,
           hasActiveKitchenCoverage: coveredMenuSet.has(assignment.menuId),
-          queuedCount: queue.queuedCount,
+          queuedCount: Math.max(0, queue.queuedCount - (stockMap.get(assignment.menuId) ?? 0)),
+          surplusCount: Math.max(0, (stockMap.get(assignment.menuId) ?? 0) - queue.queuedCount),
+          todayCookedCount: cookedMap.get(assignment.menuId) ?? 0,
           oldestQueuedSeconds,
           oldestElapsed: queue.oldestConfirmedAt ? elapsedMss(queue.oldestConfirmedAt) : "0:00",
           queuedOrders: queue.orders.map((order) => ({

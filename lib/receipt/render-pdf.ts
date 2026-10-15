@@ -239,7 +239,7 @@ export async function renderReceiptPdf(params: {
     commands.push({ kind: "badge", top: cursor, text: "店内", width: headerWidth, height: badgeSize * 1.8, inverted: false, size: badgeSize, align: "right" });
   }
   commands.push({ kind: "text", text: "筑駒75期喫茶", top: cursor + logoHeight - bodySize * 3.2, x: headerX, size: bodySize * 1.12, fontWeight: "bold" });
-  commands.push({ kind: "text", text: "ひすい", top: cursor + logoHeight - bodySize * 1.65, x: headerX, size: bodySize * 1.25, fontWeight: "bold" });
+  commands.push({ kind: "text", text: "かわせみ", top: cursor + logoHeight - bodySize * 1.65, x: headerX, size: bodySize * 1.25, fontWeight: "bold" });
   cursor += logoHeight + mmToPoints(4);
   if (data.tableNo != null) {
     addRow("テーブル", String(data.tableNo));

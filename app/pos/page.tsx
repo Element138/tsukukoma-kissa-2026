@@ -1,7 +1,6 @@
 ﻿"use client";
 
 import { Fragment, ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { apiFetch, fmtJpy } from "@/lib/client";
 import { useSession } from "@/components/use-session";
 import { TerminalBanner } from "@/components/terminal-banner";
@@ -1072,9 +1071,6 @@ export default function PosPage() {
             )}
 
             <div className="row wrap" style={{ marginTop: 12 }}>
-              <Link href="/order-book" className="btn-link ghost-btn">
-                オーダーブック
-              </Link>
             </div>
           </Card>
         </div>

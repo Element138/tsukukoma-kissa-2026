@@ -61,7 +61,6 @@ async function main() {
     create: {
       id: 1,
       menuDisplayPageSeconds: 18,
-      counterReadyGraceMinutes: 3,
       orderDisplayMarqueeText: "",
       orderDisplayMarqueeSpeedSeconds: 24,
     },

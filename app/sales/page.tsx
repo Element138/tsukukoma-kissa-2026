@@ -1091,9 +1091,6 @@ function SalesPageContent() {
         className="sales-shell"
         actions={
           <div className="row wrap">
-            <Link href="/order-book" className="btn-link ghost-btn">
-              オーダーブック
-            </Link>
             <button
               type="button"
               className="ghost-btn"
