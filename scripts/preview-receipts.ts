@@ -1,6 +1,7 @@
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { renderReceiptPdf } from "../lib/receipt/render-pdf";
 import { renderAdobeReceiptPdf } from "../lib/receipt/render-adobe-pdf";
+import { closeReceiptBrowser } from "../lib/receipt/receipt-browser";
 
 async function main() {
   const dineIn = process.argv.includes("--dine-in");
@@ -32,4 +33,4 @@ async function main() {
     await writeFile(`${outputDir}/receipt-${adobeOnly ? "adobe-" : forceFallback ? "fallback-" : ""}${dineIn ? "dine-in-" : ""}${size}.pdf`, pdf);
   }
 }
-void main();
+void main().finally(closeReceiptBrowser);

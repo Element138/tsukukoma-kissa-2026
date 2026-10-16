@@ -123,4 +123,8 @@ Adobe FontsのWeb用キット`jzl2tov`をブラウザーで読み込んでから
 
 キット・フォントの読み込み失敗、タイムアウト、ブラウザー起動・PDF出力の失敗時は、従来のPDFKitと同梱Noto Sans JPによる生成へ戻ります。Adobe版の描画待ちは20秒、ブラウザー起動待ちは10秒までとし、外部配信の不調で白紙のレシートを返さない構成です。
 
+サーバー用Chromiumに対応するPlaywrightを固定し、デフォルトのブラウザーコンテキストとページを再利用します。同じワーカー内のPDF生成は直列化し、同時発行が互いのブラウザーを終了させないようにします。正常なAdobe版PDFは同じ内容・用紙サイズについて最大15分・32件まで再利用し、Notoへのフォールバックはキャッシュしません。
+
+余白は小が左右各7 mm・上下各8.5 mm、大が左右各5.75 mm・上下各9 mmです。連続・同時発行の実ブラウザー検証は`npx tsx scripts/repeated-receipts.ts`で実行できます。
+
 `npx tsx scripts/preview-receipts.ts --adobe-only`でAdobe版、`--fallback`で読み込み障害を模擬したNoto版を小・大の両サイズで生成できます。自動テストは`npx tsx --test scripts/receipt-rendering.test.ts`で実行します。ローカルのブラウザー実行ファイルは`RECEIPT_CHROMIUM_EXECUTABLE`で指定でき、Windowsではインストール済みChromeまたはEdgeも利用します。
