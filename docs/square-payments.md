@@ -49,13 +49,15 @@ If local browser storage is cleared, server-side pending Square attempts still s
 
 ## Administrator reconciliation
 
-Open `/admin/square-payments` from the administrator panel. All unresolved Square orders are listed with their POS, amount and last error.
+The administrator panel displays a reconciliation banner only while an undismissed payment incident exists. It refreshes through realtime events and every 60 seconds while visible. The reconciliation page at `/admin/square-payments` lists all unresolved Square orders with their POS, amount and last error, plus incidents for already-closed orders.
 
-- **入金をサーバーで照合**: enter Square's **order ID / transaction_id**, not its payment_id or receipt number, and a meaningful reconciliation note (10+ characters). Explicitly attest that the receipt/transaction belongs to this KISSa order. The server still verifies amount, location, completed online status, currency, time and no refund/tip. This documented staff attestation can resolve a missing KISSa note marker; it cannot bypass payment verification.
-- **未決済を確認して注文を終了**: only after checking the original Square app for unfinished payments and the Square transaction history for charges. Requires administrator rights, explicit attestation and a recorded reason. A known Square transaction ID prevents this operation. This closes the KISSa order; it does not cancel/refund anything at Square.
+- **支払い状況を再確認**: supply a meaningful reconciliation note (10+ characters) and explicitly attest that the original terminal and history were checked. If no transaction is recorded, the server searches Square payments at the attempt's location since one minute before launch for the KISSa order marker. If automatic matching is inconclusive, expand **Square注文IDを指定する** and enter Square's **order ID / transaction_id**, not its payment_id or receipt number. The server still verifies amount, location, completed online status, currency, time and no refund/tip. Staff attestation can resolve a missing KISSa marker on a specified transaction; it cannot bypass payment verification.
+- **未決済を確認して注文を終了**: first stop any unfinished checkout on the original Square device and inspect transaction history. The server checks Square before closing an attempt that was launched. If it finds a completed payment, it runs the same paid-order verification and kitchen confirmation as rechecking, and tells staff that payment was found. A pending payment, API outage, incomplete search, or ambiguous same-amount transaction blocks closure. An attempt never launched through KISSa can be closed without a Square request. Legacy orders missing their attempt record require individual investigation rather than this operation. Closing releases the order's menu-cap reservations; it does not cancel/refund anything at Square.
 - Never close an uncertain payment just to unlock a terminal. Use the other POS while reconciling. For completed/duplicate/late payments, review incidents in the order book and handle any necessary refunds through Square following the payment method's rules.
 
 If a Square ID was attached by a malformed/forged callback and fails verification, or several actual payments claim the same order marker, the system intentionally holds/raises an incident. Investigate the actual Square records before making any administrative data repair; there is no unrestricted 'mark paid' switch.
+
+Square's payment list is eventually consistent, so absence alone cannot prove that no payment exists. Closure still requires staff to stop the original checkout and attest to checking the terminal/history. An empty search within 30 seconds of launch is rejected. A later verified payment raises an incident even if its transaction ID was already known when the order was closed. Searches are bounded to 500 payments and 10 additional same-amount order reads; reaching either limit blocks closure and asks for a specific Square order ID.
 
 ## Load limits
 
@@ -69,6 +71,8 @@ The planning volume is at most 1,500 cashless payments and two POS devices over 
 
 Migration: `20261016000100_square_payment_attempt`. It adds the attempt table, unique order/state/transaction bindings and the missing-result incident enum. Back up the database before deployment. Inspect existing unresolved orders before switching versions; legacy attempts without the new state cannot be automatically trusted and must be reconciled by the administrator.
 
+Migration `20261016000200_release_failed_order_caps` adds per-order menu-cap reservations and reconstructs daily order counts, excluding failed/canceled orders and respecting recorded manual count resets. Existing cooked counts and stock stay intact. Failed/canceled pending orders subsequently release their original day's reservations exactly once, including across midnight; uncertain payments continue reserving capacity. A manual daily count reset retires preceding reservations so a later failure cannot subtract from newer orders. Stop order entry and manual count resets during migration and deployment cutover so the old app cannot write orders without reservation records. The migration locks the source tables during reconstruction and has not been applied by local verification.
+
 Production's Vercel build now runs `npm run vercel-build`: generate Prisma client, `prisma migrate deploy`, required postdeploy guards, then Next build. Any migration/guard failure stops deployment. There is no destructive reset fallback and no automatic reseeding. Preview/development builds do not migrate the database; use isolated preview data.
 
 If the database was previously managed by `db push`, migration history may not match its schema. Inspect and baseline the history explicitly after backup. Do not reset data or mark unverified migrations as applied to bypass an error. Existing accounts/settings must not be reseeded over event operations.
@@ -78,7 +82,7 @@ If the database was previously managed by `db push`, migration history may not m
 Automated checks:
 
 ```
-npx tsx --test scripts/square-payment.test.ts scripts/square-webhook.test.ts scripts/square-reconciliation.test.ts
+npx tsx --test scripts/square-payment.test.ts scripts/square-webhook.test.ts scripts/square-reconciliation.test.ts scripts/square-unpaid.test.ts scripts/menu-cap-release.test.ts scripts/shared-stock.test.ts
 npx tsc --noEmit --incremental false
 npm run build
 ```

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/client";
 import { ACTOR_TYPE_LABEL, labelOf } from "@/lib/labels";
 import { useToast } from "@/components/toast";
@@ -26,6 +26,7 @@ const JP = {
 
 export function TerminalBanner(props: BannerProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const { notify, dismiss } = useToast();
 
   const doLogout = async () => {
@@ -70,7 +71,7 @@ export function TerminalBanner(props: BannerProps) {
         )}
       </div>
       <div className="banner-actions">
-        {["POS", "KITCHEN", "WAITER", "ADMIN"].includes(props.actorType) && (
+        {pathname !== "/order-book" && ["POS", "KITCHEN", "WAITER", "ADMIN"].includes(props.actorType) && (
           <Link href="/order-book" className="btn-link ghost-btn">オーダーブック</Link>
         )}
         <button className="ghost-btn" type="button" onClick={doLogout}>

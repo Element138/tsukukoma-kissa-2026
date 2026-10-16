@@ -1012,7 +1012,7 @@ export default function PosPage() {
                 </div>
                 <div>
                   {awaitingDeadlineLabel
-                    ? `確認待ちの目安: ${awaitingDeadlineLabel}（時間が過ぎても失敗にはしません）`
+                    ? `確認待ちの目安: ${awaitingDeadlineLabel}`
                     : "結果未確認です。Squareの取引履歴と照合してください"}
                 </div>
                 <p>決済開始後はSquareアプリに手動で戻り、元の決済を完了してください。再決済・現金での取り直しは行わないでください。</p>
