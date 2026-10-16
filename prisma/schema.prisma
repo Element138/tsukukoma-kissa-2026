@@ -80,6 +80,7 @@ enum PaymentSkipReasonType {
 
 enum PaymentIncidentType {
   LATE_SUCCESS_AFTER_FAILED
+  SQUARE_RESULT_MISSING
 }
 
 model Actor {
@@ -221,11 +222,30 @@ model Order {
   items                  OrderItem[]
   auditLogs              AuditLog[]
   paymentIncidents       PaymentIncident[]
+  squareAttempt          SquarePaymentAttempt?
 
   @@index([createdAt])
   @@index([orderStatus, createdAt])
   @@index([paymentStatus, paymentAwaitDeadlineAt])
   @@index([createdByActorId])
+}
+
+model SquarePaymentAttempt {
+  id String @id @default(cuid())
+  orderId String @unique
+  order Order @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  stateToken String @unique
+  appId String
+  locationId String
+  callbackUrl String
+  createdAt DateTime @default(now())
+  launchedAt DateTime?
+  callbackJson Json?
+  transactionId String? @unique
+  resolvedAt DateTime?
+  lastError String?
+  verifyAttempts Int @default(0)
+  verifyAfter DateTime?
 }
 
 model MenuStock {
