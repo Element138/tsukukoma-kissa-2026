@@ -161,6 +161,7 @@ model Menu {
   orderItems      OrderItem[]
   dailyCounts     MenuDailyCount[]
   stock           MenuStock?
+  capReservations OrderMenuCapReservation[]
 
   @@index([categoryId])
   @@index([availability, isActive])
@@ -223,11 +224,24 @@ model Order {
   auditLogs              AuditLog[]
   paymentIncidents       PaymentIncident[]
   squareAttempt          SquarePaymentAttempt?
+  capReservations        OrderMenuCapReservation[]
 
   @@index([createdAt])
   @@index([orderStatus, createdAt])
   @@index([paymentStatus, paymentAwaitDeadlineAt])
   @@index([createdByActorId])
+}
+
+model OrderMenuCapReservation {
+  orderId String
+  menuId String
+  jstDate String @db.VarChar(10)
+  quantity Int
+  releasedAt DateTime?
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menu Menu @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  @@id([orderId, menuId])
+  @@index([menuId, jstDate, releasedAt])
 }
 
 model SquarePaymentAttempt {

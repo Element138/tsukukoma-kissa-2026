@@ -31,7 +31,7 @@ export async function reconcileSquarePayment(db: PrismaClient, orderId: string, 
     return await db.$transaction(async tx => {
       await tx.$queryRaw`SELECT id FROM "Order" WHERE id = ${orderId} FOR UPDATE`;
       const attempt = await tx.squarePaymentAttempt.findUniqueOrThrow({ where: { orderId }, include: { order: true } });
-      if (attempt.resolvedAt) return { verified: attempt.order.paymentStatus === "PAID", alreadyProcessed: true };
+      if (attempt.resolvedAt && attempt.order.paymentStatus !== "FAILED") return { verified: attempt.order.paymentStatus === "PAID", alreadyProcessed: true };
       assert(attempt.transactionId === claim.transactionId, 409, "SQUARE_CONFLICT", "決済照合中に取引IDが変更されました");
       const order = attempt.order;
       if (order.paymentStatus === "FAILED" || order.canceledAt) {
@@ -81,8 +81,18 @@ export async function recordSquareTransaction(db: PrismaClient, orderId: string,
       await broadcastInvalidation(tx, CHANNEL_GROUPS.ORDER_FLOW, "orders", "square_transaction_conflict");
       return false;
     }
+    // A previously terminal payment can still be reported completed later. Do not
+    // suppress that notification merely because the same ID was already known.
+    let reopen = !attempt.transactionId;
+    if (attempt.resolvedAt && attempt.transactionId === transactionId) {
+      const order = await tx.order.findUniqueOrThrow({ where: { id: orderId } });
+      if (order.paymentStatus === "FAILED") {
+        const reported = await tx.paymentIncident.findFirst({ where: { orderId, incidentType: "LATE_SUCCESS_AFTER_FAILED" } });
+        reopen = !reported;
+      }
+    }
     await tx.squarePaymentAttempt.update({ where: { id: attempt.id }, data: {
-      transactionId, ...(!attempt.transactionId ? { resolvedAt: null } : {}),
+      transactionId, ...(reopen ? { resolvedAt: null, verifyAfter: null, verifyAttempts: 0 } : {}),
     } });
     return true;
   });

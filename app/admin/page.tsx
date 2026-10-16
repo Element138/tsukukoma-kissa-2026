@@ -31,6 +31,7 @@ import { useSession } from "@/components/use-session";
 import { TerminalBanner } from "@/components/terminal-banner";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { LoadingScreen } from "@/components/loading-screen";
+import { SquareIncidentBanner } from "@/components/square-incident-banner";
 import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
 import { ACTOR_TYPE_LABEL, AVAILABILITY_LABEL, labelOf } from "@/lib/labels";
 import { useToast } from "@/components/toast";
@@ -1509,7 +1510,6 @@ export default function AdminPage() {
         fancyHeader
         actions={
           <div className="flex items-center justify-end gap-2">
-            <Button asChild variant="outline" size="sm"><Link href="/admin/square-payments">Square決済の照合</Link></Button>
             <Button asChild variant="outline" size="sm">
               <Link href="/audit">
                 <AppsList20Regular />
@@ -1519,6 +1519,7 @@ export default function AdminPage() {
           </div>
         }
       >
+        <SquareIncidentBanner />
         <TooltipProvider delayDuration={120}>
           <div className="grid gap-3 xl:grid-cols-[1.08fr_0.92fr]">
             <Card>

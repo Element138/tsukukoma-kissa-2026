@@ -77,18 +77,17 @@ export async function reserveMenuDailyCountsForOrder(
     menuNameById: Map<string, string>;
     dailyOrderCapById: Map<string, number | null>;
     quantitiesByMenuId: Map<string, number>;
+    jstDate?: string;
   },
 ) {
-  const jstDate = tokyoDateKey();
+  const jstDate = params.jstDate ?? tokyoDateKey();
+  const reservations: Array<{ menuId: string; jstDate: string; quantity: number }> = [];
 
-  for (const [menuId, quantity] of params.quantitiesByMenuId) {
+  for (const [menuId, quantity] of [...params.quantitiesByMenuId].sort(([a], [b]) => a.localeCompare(b))) {
     if (quantity <= 0) {
       continue;
     }
     const cap = params.dailyOrderCapById.get(menuId) ?? null;
-    if (cap == null) {
-      continue;
-    }
 
     await db.menuDailyCount.upsert({
       where: {
@@ -110,7 +109,7 @@ export async function reserveMenuDailyCountsForOrder(
       SET "count" = "count" + ${quantity}
       WHERE "menuId" = ${menuId}
         AND "jstDate" = ${jstDate}
-        AND "count" + ${quantity} <= ${cap}
+        AND (${cap}::integer IS NULL OR "count" + ${quantity} <= ${cap})
       RETURNING "count"
     `;
 
@@ -122,6 +121,24 @@ export async function reserveMenuDailyCountsForOrder(
         `${menuName} は本日の上限に達したため注文できません`,
       );
     }
+    reservations.push({ menuId, jstDate, quantity });
+  }
+  return reservations;
+}
+
+export async function releaseMenuDailyCountsForOrder(db: DbClient, orderId: string) {
+  const reservations = await db.orderMenuCapReservation.findMany({
+    where: { orderId, releasedAt: null }, orderBy: { menuId: "asc" },
+  });
+  for (const reservation of reservations) {
+    // Same lock order as reset: daily counter first, reservation second.
+    await db.$queryRaw`SELECT "menuId" FROM "MenuDailyCount" WHERE "menuId" = ${reservation.menuId} AND "jstDate" = ${reservation.jstDate} FOR UPDATE`;
+    const claimed = await db.orderMenuCapReservation.updateMany({
+      where: { orderId, menuId: reservation.menuId, releasedAt: null }, data: { releasedAt: new Date() },
+    });
+    if (!claimed.count) continue;
+    await db.$executeRaw`UPDATE "MenuDailyCount" SET "count" = GREATEST(0, "count" - ${reservation.quantity}), "updatedAt" = CURRENT_TIMESTAMP
+      WHERE "menuId" = ${reservation.menuId} AND "jstDate" = ${reservation.jstDate}`;
   }
 }
 
@@ -150,5 +167,9 @@ export async function resetTodayMenuCount(
     },
   });
 
+  // Orders placed before an explicit count reset must not subtract from the new count later.
+  await db.orderMenuCapReservation.updateMany({
+    where: { menuId, jstDate, releasedAt: null }, data: { releasedAt: new Date() },
+  });
   return count.count;
 }
