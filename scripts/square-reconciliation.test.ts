@@ -108,3 +108,16 @@ test("conflicting transaction IDs are retained as an alert and cannot overwrite 
   const f=fixture();assert.equal(await recordSquareTransaction(f.db,"order1","other-transaction"),false);
   assert.equal(f.attempt.transactionId,"transaction1");assert.equal(f.incidents.length,1);
 });
+
+test("a late success for the same known ID after unpaid closure is still investigated once", async()=>{
+  const f=fixture();f.order.paymentStatus="FAILED";f.order.orderStatus="FAILED";f.attempt.resolvedAt=new Date();f.attempt.verifyAttempts=3;
+  await usingApi(f,async()=>{
+    await recordSquareTransaction(f.db,"order1","transaction1");
+    assert.equal(f.attempt.resolvedAt,null);
+    const result=await reconcileSquarePayment(f.db,"order1");
+    assert.equal("lateSuccess" in result && result.lateSuccess,true);
+    assert.equal(f.order.paymentStatus,"FAILED");assert.equal(f.incidents.length,1);
+    await recordSquareTransaction(f.db,"order1","transaction1");
+    await reconcileSquarePayment(f.db,"order1");assert.equal(f.reads,2);
+  });
+});

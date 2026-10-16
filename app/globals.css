@@ -3250,6 +3250,20 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   gap: 12px;
 }
 
+.square-review-shell .dashboard-hero {
+  padding: 0;
+}
+
+@media (max-width: 760px) {
+  .square-review-shell .dashboard-hero > div {
+    flex-direction: column;
+  }
+
+  .square-review-shell .dashboard-hero > div > div:first-child {
+    width: 100%;
+  }
+}
+
 .admin-columns {
   display: grid;
   grid-template-columns: 1.05fr 0.95fr;
