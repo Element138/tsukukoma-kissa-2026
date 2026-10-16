@@ -1,5 +1,7 @@
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { renderReceiptPdf } from "../lib/receipt/render-pdf";
+import { renderAdobeReceiptPdf } from "../lib/receipt/render-adobe-pdf";
+import { closeReceiptBrowser } from "../lib/receipt/receipt-browser";
 
 async function main() {
   const dineIn = process.argv.includes("--dine-in");
@@ -12,7 +14,7 @@ async function main() {
   ]);
   await mkdir(outputDir, { recursive: true });
   for (const size of ["small", "large"] as const) {
-    const pdf = await renderReceiptPdf({
+    const params = {
       size, regularFontBytes, boldFontBytes, logoBytes, orderNumberFontBytes,
       data: {
         orderNo: 202, transactionAt: new Date("2026-10-08T13:04:33Z"),
@@ -24,8 +26,11 @@ async function main() {
           { name: "紅茶", unitPriceJpy: 300, quantity: 1 },
         ],
       },
-    });
-    await writeFile(`${outputDir}/receipt-${dineIn ? "dine-in-" : ""}${size}.pdf`, pdf);
+    };
+    const adobeOnly = process.argv.includes("--adobe-only");
+    const forceFallback = process.argv.includes("--fallback");
+    const pdf = adobeOnly ? await renderAdobeReceiptPdf(params) : await renderReceiptPdf(params, forceFallback ? async () => { throw new Error("Simulated Adobe Fonts outage"); } : undefined);
+    await writeFile(`${outputDir}/receipt-${adobeOnly ? "adobe-" : forceFallback ? "fallback-" : ""}${dineIn ? "dine-in-" : ""}${size}.pdf`, pdf);
   }
 }
-void main();
+void main().finally(closeReceiptBrowser);

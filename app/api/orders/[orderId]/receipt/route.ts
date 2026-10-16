@@ -11,6 +11,7 @@ import { requireSession } from "@/lib/server/auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 const querySchema = z.object({
   size: z.enum(["large", "small"]).default("large"),
@@ -111,6 +112,7 @@ export async function GET(
 
     const [orderNumberFontBytes, logoBytes, regularFontBytes, boldFontBytes] = await fontBytesPromise;
     const pdfBytes = await renderReceiptPdf({
+      renderOrigin: req.nextUrl.origin,
       size: query.size,
       regularFontBytes,
       boldFontBytes,
