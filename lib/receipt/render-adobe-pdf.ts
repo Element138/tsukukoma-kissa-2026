@@ -20,7 +20,7 @@ export async function renderAdobeReceiptPdf(params: ReceiptRenderParams) {
       await document.fonts.ready;
       const adobeReady = (window as unknown as { receiptFonts: string }).receiptFonts === "active";
       const hasAdobeFace = Array.from(document.fonts).some(face => face.family.replace(/["']/g, "") === "dnp-shuei-gothic-kin-std" && face.status === "loaded");
-      const weights = [400, 500, 600];
+      const weights = [500, 600];
       const text = document.querySelector("main")?.textContent ?? "";
       return adobeReady && hasAdobeFace && text.includes("ご注文番号") && weights.every(weight => document.fonts.check(`${weight} 12px "dnp-shuei-gothic-kin-std"`, text));
     });

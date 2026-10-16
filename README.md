@@ -119,7 +119,7 @@ The app now returns clearer DB-related error codes in API responses:
 
 ## レシートの書体
 
-Adobe FontsのWeb用キット`jzl2tov`をブラウザーで読み込んでからPDFを生成します。DNP秀英角ゴシック金を本文400、メニュー名500、見出し・合計・注文番号600で使います。Adobeのフォントファイルをリポジトリに保存しません。
+Adobe FontsのWeb用キット`jzl2tov`をブラウザーで読み込んでからPDFを生成します。DNP秀英角ゴシック金はL（400）を使用せず、本文をM（500）、メニュー名・見出し・合計・注文番号をB（600）で使います。Noto Sans JPへのフォールバックはRegularとBoldのみを使い、Lightは使用しません。Adobeのフォントファイルをリポジトリに保存しません。
 
 キット・フォントの読み込み失敗、タイムアウト、ブラウザー起動・PDF出力の失敗時は、従来のPDFKitと同梱Noto Sans JPによる生成へ戻ります。Adobe版の描画待ちは20秒、ブラウザー起動待ちは10秒までとし、外部配信の不調で白紙のレシートを返さない構成です。
 
