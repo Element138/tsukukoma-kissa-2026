@@ -334,22 +334,6 @@ export default function OrderBookPage() {
     setReceiptPrintTarget({ id: order.id, orderNo: order.orderNo });
   };
 
-  const dismissIncident = async (incidentId: string) => {
-    try {
-      await apiFetch(`/api/order-book/incidents/${incidentId}/dismiss`, {
-        method: "POST",
-      });
-      setIncidents((prev) => prev.filter((row) => row.id !== incidentId));
-      notify({ level: "success", message: "異常通知を確認済みにしました" });
-    } catch (e) {
-      notify({
-        level: "error",
-        message:
-          e instanceof Error ? e.message : "異常通知の更新に失敗しました",
-      });
-    }
-  };
-
   const rows = useMemo(() => {
     return orders.map((order) => {
       const createdMs = new Date(order.createdAt).getTime();
@@ -633,13 +617,6 @@ export default function OrderBookPage() {
                         担当POS: {incident.responsiblePosActorId} /{" "}
                         {new Date(incident.createdAt).toLocaleString("ja-JP")}
                       </span>
-                      <button
-                        type="button"
-                        className="ghost-btn"
-                        onClick={() => void dismissIncident(incident.id)}
-                      >
-                        確認済みにする
-                      </button>
                     </div>
                   </div>
                 ))}

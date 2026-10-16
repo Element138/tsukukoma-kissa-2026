@@ -15,7 +15,7 @@ await context.route("**/api/**", async route => {
   else if (url.pathname === "/api/admin/menus") data = { menus: [], categories: [] };
   else if (url.pathname === "/api/admin/actors") data = { actors: [] };
   else if (url.pathname === "/api/admin/categories") data = { categories: [] };
-  else if (url.pathname === "/api/order-book") data = {orders:[],menuCounts:[],incidents:[],menuTotals:{ordered:0,queued:0,totalSoldPriceJpy:0}};
+  else if (url.pathname === "/api/order-book") data = {orders:[],menuCounts:[],incidents:[{id:"incident1",orderId:"order1",orderNo:7,responsiblePosActorId:"pos1",messageJa:"決済結果の照合が必要です",createdAt:"2026-10-16T01:05:30Z"}],menuTotals:{ordered:0,queued:0,totalSoldPriceJpy:0}};
   else if (url.pathname === "/api/admin/menu-display-settings") data = { settings: {pageDisplaySeconds:20,orderDisplayMarqueeText:"",orderDisplayMarqueeSpeedSeconds:24,orderCallVolume:0.8} };
   else if (url.pathname === "/api/admin/square-payments") {
     if (req.method() === "POST") { const body=req.postDataJSON(); posts.push(body); data = { verified: true, paymentFound: body.action === "NO_CHARGE" }; }
@@ -42,6 +42,12 @@ try {
   await page.goto("http://localhost:3100/order-book",{waitUntil:"domcontentloaded",timeout:60000});
   await page.getByRole("heading",{name:"オーダーブック",exact:true}).waitFor({state:"attached"});
   assert.equal(await page.getByRole("banner").getByRole("link",{name:"オーダーブック",exact:true}).count(),0);
+  await page.getByText("決済結果の照合が必要です",{exact:true}).waitFor();
+  assert.equal(await page.getByRole("button",{name:"確認済みにする",exact:true}).count(),0);
+  // APIRequestContext bypasses the page mocks and checks the real retired endpoint.
+  const dismissed = await context.request.post("http://localhost:3100/api/order-book/incidents/incident1/dismiss");
+  assert.equal(dismissed.status(),410);
+  assert.equal((await dismissed.json()).error.code,"PAYMENT_INCIDENT_DISMISSAL_REMOVED");
   await page.goto("http://localhost:3100/admin",{waitUntil:"domcontentloaded",timeout:60000});
   await page.getByRole("heading",{name:"管理者パネル",exact:true}).waitFor({state:"attached"});
   assert.equal(await page.getByRole("button",{name:"Square決済の照合",exact:true}).count(),0);
