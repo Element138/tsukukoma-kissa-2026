@@ -46,6 +46,9 @@ export async function POST(req: NextRequest) {
     }
 
     const data = await prisma.$transaction(async (tx) => {
+      const unresolved = await tx.order.count({ where: { paymentMethod: "SQUARE", paymentStatus: "AWAITING" } });
+      if (unresolved) throw new AppError(409, "SQUARE_RECONCILIATION_REQUIRED", "Squareの未確認決済を照合してから注文データを削除してください");
+      await tx.squarePaymentAttempt.deleteMany({});
       await tx.menuStock.deleteMany({});
       await tx.undoOperation.deleteMany({});
       const deletedItems = await tx.orderItem.deleteMany({});

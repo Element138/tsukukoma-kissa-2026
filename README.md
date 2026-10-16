@@ -37,7 +37,11 @@ Set these in Vercel Project Settings -> Environment Variables:
 - `SUPABASE_JWT_SECRET`
 - `SQUARE_APP_ID`
 - `SQUARE_CALLBACK_URL`
-- `SQUARE_CALLBACK_SIGNING_KEY`
+- `SQUARE_ENABLED` (production opt-in: `true`)
+- `SQUARE_LOCATION_ID`
+- `SQUARE_ACCESS_TOKEN` (server-only production token)
+- `SQUARE_WEBHOOK_URL`
+- `SQUARE_WEBHOOK_SIGNING_KEY`
 - `CRON_SECRET` (optional, recommended)
 
 ## Realtime transport (ops channels)
@@ -48,17 +52,10 @@ Set these in Vercel Project Settings -> Environment Variables:
 
 ## Vercel deployment bootstrap
 
-Current build mode is destructive for DB (by request): each deploy applies `prisma db push --accept-data-loss`, reapplies postdeploy SQL guards, then seeds.
+Production builds run Prisma migrations and postdeploy SQL guards before building. Any failure stops deployment; automatic database resets and automatic reseeding are disabled.
+Preview/development builds generate the client and build without changing the database. Use isolated databases for previews. Existing databases previously managed with db push may need migration-history baselining; resolve that explicitly after backup, never reset the database to make deployment pass.
 
-
-
-This repo now includes:
-
-- Prisma migration files in `prisma/migrations`
-- `vercel-build` script: runs db push + postdeploy SQL + seed + build
-- `vercel.json` build command: `npm run vercel-build`
-
-So every deploy can prepare DB schema and seed base actors safely.
+See [Square cashless setup and recovery](docs/square-payments.md) for production configuration, webhook registration, online-only policy, and physical-device acceptance checks.
 
 ## Scripts
 

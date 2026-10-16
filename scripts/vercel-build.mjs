@@ -45,6 +45,13 @@ function normalizeBuildDbUrl(raw) {
   }
 }
 
+// Preview URLs must not modify a shared production database.
+if (process.env.VERCEL_ENV && process.env.VERCEL_ENV !== "production") {
+  run(NPX, ["prisma", "generate"], process.env);
+  run(NPX, ["next", "build"], process.env);
+  process.exit(0);
+}
+
 const directUrl = process.env.DIRECT_URL;
 const databaseUrl = process.env.DATABASE_URL;
 
@@ -66,21 +73,9 @@ const env = {
   DIRECT_URL: buildDbUrl
 };
 
-console.log("[vercel-build] Schema sync mode: prisma db push --accept-data-loss (destructive changes allowed).");
+console.log("[vercel-build] Applying migrations without resetting data.");
 run(NPX, ["prisma", "generate"], env);
-let pushStatus = run(NPX, ["prisma", "db", "push", "--accept-data-loss", "--skip-generate"], env, { allowFailure: true });
-if (pushStatus !== 0) {
-  console.warn("[vercel-build] prisma db push failed. Retrying with --force-reset (all DB data will be dropped).");
-  pushStatus = run(
-    NPX,
-    ["prisma", "db", "push", "--force-reset", "--accept-data-loss", "--skip-generate"],
-    env,
-    { allowFailure: true }
-  );
-}
-if (pushStatus !== 0) {
-  process.exit(pushStatus);
-}
+run(NPX, ["prisma", "migrate", "deploy"], env);
 
 const postDeployStatus = run(
   NPX,
@@ -89,8 +84,9 @@ const postDeployStatus = run(
   { allowFailure: true }
 );
 if (postDeployStatus !== 0) {
-  console.warn("[vercel-build] postdeploy.sql failed (continuing). Please review deployment logs.");
+  console.error("[vercel-build] postdeploy.sql failed; deployment stopped.");
+  process.exit(postDeployStatus);
 }
 
-run(NPX, ["tsx", "prisma/seed.ts"], env);
+// Seed initial accounts explicitly; deployments must not reset operational settings.
 run(NPX, ["next", "build"], process.env);
