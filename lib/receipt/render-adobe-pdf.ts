@@ -1,29 +1,12 @@
-import { existsSync } from "node:fs";
-import { chromium as playwright } from "playwright-core";
 import { AppError } from "@/lib/errors";
 import { RECEIPT_PAPER } from "@/lib/receipt/paper";
 import { receiptHtml, type ReceiptRenderParams } from "@/lib/receipt/receipt-html";
-
-async function launchReceiptBrowser() {
-  if (process.platform === "linux") {
-    const { default: chromium } = await import("@sparticuz/chromium");
-    return playwright.launch({ args: chromium.args, executablePath: await chromium.executablePath(), headless: true, timeout: 10000 });
-  }
-  const executablePath = [
-    process.env.RECEIPT_CHROMIUM_EXECUTABLE,
-    "C:/Program Files/Google/Chrome/Application/chrome.exe",
-    "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
-  ].find(p => p && existsSync(p));
-  if (!executablePath) throw new Error("Receipt Chromium is unavailable");
-  return playwright.launch({ executablePath, headless: true, timeout: 10000 });
-}
+import { withReceiptPage } from "@/lib/receipt/receipt-browser";
 
 export async function renderAdobeReceiptPdf(params: ReceiptRenderParams) {
-  const browser = await launchReceiptBrowser();
-  // Includes font downloads, font readiness and PDF export, even if a CDN hangs.
-  const deadline = setTimeout(() => { void browser.close().catch(() => {}); }, 20000);
-  try {
-    const page = await browser.newPage({ viewport: { width: 800, height: 1200 } });
+  const startedAt = Date.now();
+  const render = () => withReceiptPage(async page => {
+    await page.unrouteAll({ behavior: "ignoreErrors" });
     page.setDefaultTimeout(12000);
     await page.emulateMedia({ media: "print" });
     // Give the web kit the requesting website's origin, without sending receipt
@@ -51,8 +34,15 @@ export async function renderAdobeReceiptPdf(params: ReceiptRenderParams) {
     });
     if (pdf.length < 1000 || pdf.subarray(0, 5).toString() !== "%PDF-") throw new Error("Receipt PDF is empty");
     return pdf;
-  } finally {
-    clearTimeout(deadline);
-    await browser.close().catch(() => {});
+  });
+  try {
+    return await render();
+  } catch (error) {
+    // A stale browser after a serverless freeze can fail immediately. Recreate
+    // it once, within the existing request budget, before using Noto fallback.
+    if (Date.now() - startedAt < 10000 && error instanceof Error && /target.*closed|browser.*closed|crash/i.test(error.message)) {
+      return render();
+    }
+    throw error;
   }
 }

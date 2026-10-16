@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { renderReceiptPdf } from "../lib/receipt/render-pdf";
+import { createReceiptPdfRenderer, renderReceiptPdf } from "../lib/receipt/render-pdf";
 import { receiptHtml, type ReceiptRenderParams } from "../lib/receipt/receipt-html";
 
 async function receipt(size: "small" | "large"): Promise<ReceiptRenderParams> {
@@ -33,4 +33,35 @@ test("receipt text is escaped before Adobe's web kit executes", async () => {
   assert.ok(html.includes("&lt;script&gt; &amp; コーヒー"));
   assert.ok(!html.includes("<script> & コーヒー"));
   assert.ok(html.includes("jzl2tov"));
+});
+
+test("reopening an unchanged Adobe receipt uses the completed PDF during a later outage", async () => {
+  let attempts = 0;
+  const adobe = Buffer.from("completed Adobe receipt");
+  const render = createReceiptPdfRenderer(async () => {
+    attempts++;
+    if (attempts > 1) throw new Error("CDN became unavailable");
+    return adobe;
+  });
+  const params = await receipt("small");
+  assert.equal(await render(params), adobe);
+  assert.equal(await render(params), adobe);
+  assert.equal(attempts, 1);
+});
+
+test("fallback is not cached and simultaneous reopenings share one successful render", async () => {
+  let attempts = 0;
+  const adobe = Buffer.from("Adobe");
+  const noto = Buffer.from("Noto");
+  const render = createReceiptPdfRenderer(async () => {
+    attempts++;
+    if (attempts === 1) throw new Error("Temporary font outage");
+    return adobe;
+  }, async () => noto);
+  const params = await receipt("large");
+  assert.equal(await render(params), noto);
+  assert.deepEqual(await Promise.all([render(params), render(params)]), [adobe, adobe]);
+  assert.equal(attempts, 2);
+  assert.equal(await render({ ...params, data: { ...params.data, orderNo: 999 } }), adobe);
+  assert.equal(attempts, 3);
 });
