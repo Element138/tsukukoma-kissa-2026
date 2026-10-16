@@ -27,12 +27,13 @@ export function receiptHtml(params: ReceiptRenderParams) {
   return `<!doctype html><html lang="ja"><head><meta charset="utf-8">
 <title>KISSa receipt #${escapeHtml(data.orderNo)}</title>
 <style>
-@font-face { font-family: ReceiptNoto; font-style: normal; font-weight: 400; src: url(data:font/otf;base64,${Buffer.from(params.regularFontBytes).toString("base64")}) format("opentype"); }
-@font-face { font-family: ReceiptNoto; font-style: normal; font-weight: 500 600; src: url(data:font/otf;base64,${Buffer.from(params.boldFontBytes).toString("base64")}) format("opentype"); }
+/* Adobe 400 is L: receipts use only M (500) and B (600). Noto uses Regular/Bold. */
+@font-face { font-family: ReceiptNoto; font-style: normal; font-weight: 500; src: url(data:font/otf;base64,${Buffer.from(params.regularFontBytes).toString("base64")}) format("opentype"); }
+@font-face { font-family: ReceiptNoto; font-style: normal; font-weight: 600; src: url(data:font/otf;base64,${Buffer.from(params.boldFontBytes).toString("base64")}) format("opentype"); }
 @page { margin: 0; }
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; width: ${paper.paperWidthMm}mm; color: #000; background: #fff; }
-body { font-family: "dnp-shuei-gothic-kin-std", ReceiptNoto, sans-serif; font-weight: 400; font-synthesis: none; font-size: ${paper.bodyFontPt}pt; line-height: 1.42; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { font-family: "dnp-shuei-gothic-kin-std", ReceiptNoto, sans-serif; font-weight: 500; font-synthesis: none; font-size: ${paper.bodyFontPt}pt; line-height: 1.42; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 main { width: ${paper.paperWidthMm}mm; padding: ${paper.verticalMarginMm}mm ${paper.horizontalMarginMm}mm; }
 header { display: grid; grid-template-columns: ${size === "small" ? 15 : 19}mm minmax(0,1fr); gap: 3mm; margin-bottom: 4mm; }
 .logo { width: 100%; display: block; }
@@ -47,7 +48,7 @@ hr { margin: 1.6mm 0; border: 0; border-top: .23mm solid #000; }
 h1, h2, p { margin: 0; font-size: inherit; }
 h2 { font-weight: 600; margin-bottom: .8mm; }
 .item { margin-bottom: 1.25mm; }
-.item-name { font-size: ${paper.itemFontPt}pt; font-weight: 500; overflow-wrap: anywhere; line-break: strict; text-wrap: balance; }
+.item-name { font-size: ${paper.itemFontPt}pt; font-weight: 600; overflow-wrap: anywhere; line-break: strict; text-wrap: balance; }
 .total { font-weight: 600; font-size: ${size === "small" ? 11 : 13}pt; }
 .order-number { margin-top: 6mm; text-align: center; font-weight: 600; }
 .number-badge { margin: 1mm auto 0; width: 78%; padding: 3.5mm 0; background: #000; color: #fff; font-size: ${numberSize}pt; line-height: 1; }
