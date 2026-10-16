@@ -1509,6 +1509,7 @@ export default function AdminPage() {
         fancyHeader
         actions={
           <div className="flex items-center justify-end gap-2">
+            <Button asChild variant="outline" size="sm"><Link href="/admin/square-payments">Square決済の照合</Link></Button>
             <Button asChild variant="outline" size="sm">
               <Link href="/audit">
                 <AppsList20Regular />

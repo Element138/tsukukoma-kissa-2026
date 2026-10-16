@@ -8,7 +8,9 @@ import { orderCreateSchema } from "@/lib/validation";
 import { parseJson } from "@/lib/server/http";
 import { createOrderAtPaymentStart } from "@/lib/domain/orders";
 import { runPaymentWatchdog } from "@/lib/domain/payment-watchdog";
-import { createSquareAppSwitchRequest } from "@/lib/domain/square";
+import { squareConfig } from "@/lib/domain/square";
+import { randomBytes } from "node:crypto";
+import { assert } from "@/lib/errors";
 import {
   broadcastInvalidation,
   CHANNEL_GROUPS,
@@ -93,6 +95,7 @@ export async function POST(req: NextRequest) {
   try {
     const actor = await requireSession(req, { actorTypes: ["POS"] });
     const body = await parseJson(req, orderCreateSchema);
+    const squareSettings = body.paymentMethod === "SQUARE" ? squareConfig(req.nextUrl.origin) : null;
 
     const result = await prisma.$transaction(async (tx) => {
       await runPaymentWatchdog(tx);
@@ -102,6 +105,12 @@ export async function POST(req: NextRequest) {
         actorType: actor.actorType,
         payload: body,
       });
+      if (squareSettings && !created.duplicated) {
+        assert(created.order.totalPriceJpy > 0, 400, "SQUARE_AMOUNT", "Square決済金額は1円以上が必要です");
+        await tx.squarePaymentAttempt.create({ data: {
+          orderId: created.order.id, stateToken: randomBytes(32).toString("hex"), ...squareSettings,
+        } });
+      }
 
       if (!created.duplicated) {
         const kitchenChannels = created.order.items
@@ -120,22 +129,7 @@ export async function POST(req: NextRequest) {
       return created;
     });
 
-    let square = null;
-    if (
-      result.order.paymentMethod === "SQUARE" &&
-      result.order.paymentStatus === "AWAITING"
-    ) {
-      const callbackUrl =
-        process.env.SQUARE_CALLBACK_URL ||
-        "https://example.com/api/square/callback";
-      square = createSquareAppSwitchRequest({
-        orderId: result.order.id,
-        orderNo: result.order.orderNo,
-        amountJpy: result.order.totalPriceJpy,
-        callbackUrl,
-        note: `筑駒文化祭喫茶 注文#${result.order.orderNo}`,
-      });
-    }
+    const square = squareSettings ? { launchAvailable: !result.duplicated } : null;
 
     return ok({
       duplicated: result.duplicated,
