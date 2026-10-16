@@ -10,8 +10,8 @@ import { AppError, assert } from "@/lib/errors";
 import { aggregateOrderPrice, deriveOrderStatus } from "@/lib/domain/order-status";
 import { assignUnassignedItemsForOrder } from "@/lib/domain/kitchen-assignment";
 import { writeAuditLog } from "@/lib/domain/audit";
-import { reserveMenuDailyCountsForOrder } from "@/lib/domain/menu-cap";
-import { now, secondsFromNow } from "@/lib/time";
+import { reserveMenuDailyCountsForOrder, releaseMenuDailyCountsForOrder } from "@/lib/domain/menu-cap";
+import { now, secondsFromNow, tokyoDateKey } from "@/lib/time";
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
 const SQUARE_AWAIT_TIMEOUT_SECONDS = 330;
@@ -204,17 +204,18 @@ export async function createOrderAtPaymentStart(
     quantitiesByMenuId.set(item.menuId, (quantitiesByMenuId.get(item.menuId) ?? 0) + item.quantity);
   }
 
-  await reserveMenuDailyCountsForOrder(db, {
+  const createdAt = now();
+  const capReservations = await reserveMenuDailyCountsForOrder(db, {
     menuNameById,
     dailyOrderCapById,
     quantitiesByMenuId,
+    jstDate: tokyoDateKey(createdAt),
   });
 
   const expanded = expandItems(menuMap, params.payload.items);
   assert(expanded.length > 0, 400, "EMPTY_ITEMS", "Order must contain at least one item");
 
   const totalPriceJpy = aggregateOrderPrice(expanded);
-  const createdAt = now();
 
   const initialEvents: OrderEvent[] = [
     {
@@ -254,6 +255,7 @@ export async function createOrderAtPaymentStart(
       paymentSkipReasonType: params.payload.paymentSkipReasonType ?? null,
       paymentSkipReasonText: params.payload.paymentSkipReasonText ?? null,
       totalPriceJpy,
+      capReservations: { create: capReservations },
       paymentAwaitDeadlineAt:
         params.payload.paymentMethod === "SQUARE"
           ? secondsFromNow(SQUARE_AWAIT_TIMEOUT_SECONDS)
@@ -322,6 +324,7 @@ export async function confirmOrderPayment(
     reasonText?: string;
   }
 ) {
+  await db.$queryRaw`SELECT id FROM "Order" WHERE id = ${params.orderId} FOR UPDATE`;
   const orderBefore = await db.order.findUnique({
     where: { id: params.orderId },
     include: {
@@ -353,6 +356,7 @@ export async function confirmOrderPayment(
       }
     });
 
+    await releaseMenuDailyCountsForOrder(db, params.orderId);
     await appendOrderEvent(db, params.orderId, {
       type: "PAYMENT_FAILED",
       at: failedAt.toISOString(),
@@ -468,6 +472,7 @@ export async function cancelPendingOrder(
     reasonText?: string;
   }
 ) {
+  await db.$queryRaw`SELECT id FROM "Order" WHERE id = ${params.orderId} FOR UPDATE`;
   const order = await db.order.findUnique({ where: { id: params.orderId } });
   assert(order, 404, "ORDER_NOT_FOUND", "Order not found");
   assert(order.confirmedAt === null, 409, "ALREADY_CONFIRMED", "Confirmed order cannot be canceled");
@@ -490,6 +495,7 @@ export async function cancelPendingOrder(
       items: true
     }
   });
+  await releaseMenuDailyCountsForOrder(db, params.orderId);
 
   await db.orderItem.updateMany({
     where: {
