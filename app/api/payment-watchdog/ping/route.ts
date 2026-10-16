@@ -4,7 +4,6 @@ import { fail, ok } from "@/lib/response";
 import { requireSession } from "@/lib/server/auth";
 import { triggerPaymentWatchdogBestEffort } from "@/lib/server/payment-watchdog-trigger";
 import { findOpenSquareAwaitingOrderForPos } from "@/lib/domain/orders";
-import { createSquareAppSwitchRequest } from "@/lib/domain/square";
 
 async function handle(req: NextRequest) {
   try {
@@ -12,13 +11,12 @@ async function handle(req: NextRequest) {
     triggerPaymentWatchdogBestEffort();
 
     const trackOrderId = req.nextUrl.searchParams.get("trackOrderId");
+    const recoveryKey = req.nextUrl.searchParams.get("idempotencyKey");
     const awaiting = await findOpenSquareAwaitingOrderForPos(
       prisma,
       actor.actorId,
     );
-    const callbackUrl =
-      process.env.SQUARE_CALLBACK_URL ||
-      "https://example.com/api/square/callback";
+    const attempt = awaiting ? await prisma.squarePaymentAttempt.findUnique({ where: { orderId: awaiting.id } }) : null;
 
     const awaitingOrder = awaiting
       ? {
@@ -26,20 +24,17 @@ async function handle(req: NextRequest) {
           orderNo: awaiting.orderNo,
           createdAt: awaiting.createdAt,
           paymentAwaitDeadlineAt: awaiting.paymentAwaitDeadlineAt,
-          reopenDeepLink: createSquareAppSwitchRequest({
-            orderId: awaiting.id,
-            orderNo: awaiting.orderNo,
-            amountJpy: awaiting.totalPriceJpy,
-            callbackUrl,
-            note: `筑駒文化祭喫茶 注文#${awaiting.orderNo}`,
-          }).deepLink,
+          launchAvailable: Boolean(attempt && !attempt.launchedAt && !attempt.resolvedAt),
+          lastError: attempt?.lastError ?? null,
+          verificationPending: Boolean(attempt?.transactionId && !attempt.resolvedAt && attempt.verifyAttempts < 3 &&
+            (!attempt.verifyAfter || attempt.verifyAfter <= new Date())),
         }
       : null;
 
-    const trackedOrder = trackOrderId
+    const trackedOrder = trackOrderId || recoveryKey
       ? await prisma.order.findFirst({
           where: {
-            id: trackOrderId,
+            ...(trackOrderId ? { id: trackOrderId } : { idempotencyKey: recoveryKey! }),
             createdByActorId: actor.actorId,
           },
           select: {
@@ -47,6 +42,7 @@ async function handle(req: NextRequest) {
             orderNo: true,
             paymentStatus: true,
             orderStatus: true,
+            paymentMethod: true,
           },
         })
       : null;
