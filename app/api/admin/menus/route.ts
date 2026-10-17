@@ -42,6 +42,7 @@ function isPosAvailabilityOnlyPatch(
 ) {
   const editableKeys: Array<keyof typeof body> = [
     "name",
+    "shortName",
     "priceJpy",
     "workloadSeconds",
     "displayOrder",
@@ -94,7 +95,7 @@ export async function GET(req: NextRequest) {
       trace("db.read.start");
       const [menus, categories, enabledAssignments] = await Promise.all([
         prisma.menu.findMany({
-          orderBy: [{ displayOrder: "asc" }, { name: "asc" }],
+          orderBy: [{ displayOrder: "asc" }, { name: "asc" }, { id: "asc" }],
         }),
         prisma.menuCategory.findMany({
           where: { isActive: true },
@@ -188,6 +189,7 @@ export async function POST(req: NextRequest) {
         const created = await tx.menu.create({
           data: {
             name: body.name,
+            shortName: body.shortName ?? null,
             priceJpy: body.priceJpy,
             availability: body.availability,
             workloadSeconds: body.workloadSeconds,
@@ -415,6 +417,7 @@ export async function PATCH(req: NextRequest) {
           where: { id: body.id },
           data: {
             name: body.name,
+            shortName: body.shortName,
             priceJpy: body.priceJpy,
             availability: body.isActive === false ? "PAUSED" : body.availability,
             workloadSeconds: body.workloadSeconds,
