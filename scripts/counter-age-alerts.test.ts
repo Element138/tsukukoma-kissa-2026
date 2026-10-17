@@ -27,7 +27,7 @@ test("simultaneous events are ordered deterministically and each has its own ton
   const due=dueCounterAlerts([order("b",2,25),order("a",1,10),order("c",3,40)],now,{});
   assert.deepEqual(due.map(a=>a.orderNo),[1,2,3]);
   assert.deepEqual(due.map(a=>counterAlertSources(a)[0]),[1,2,3].map(i=>`/audio/counter-alerts/tone-${i}.mp3`));
-  assert.equal(counterAlertSources(due[0])[2],"/audio/counter-alerts/elapsed-10.mp3");
+  assert.equal(counterAlertSources(due[0])[2],"/audio/counter-alerts/elapsed-from-order-10.mp3");
 });
 test("cached order numbers are reused; larger numbers use the existing TTS route", () => {
   assert.deepEqual(counterOrderNumberSources(177),["/audio/order-call/numbers/v2/number-177.mp3"]);

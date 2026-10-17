@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -333,7 +333,7 @@ export default function OrderBookPage() {
   };
   const manualClose = async (order: OrderRow) => {
     if (closingRef.current) return;
-    if (!window.confirm(`注文 #${order.orderNo} を手動完了しますか？\n調理済み数にかかわらず、残りの商品をすべて提供済みにし、呼び出しを解除します。備考に manual closure を追記し、操作を監査ログに記録します。決済記録は変更しません。`)) return;
+    if (!window.confirm(`注文 #${order.orderNo} の残りの商品をすべて提供済みにしますか？（手動完了として記録されます）`)) return;
     closingRef.current=true;setClosing(true);
     try {
       await apiFetch(`/api/orders/${order.id}/manual-close`,{method:"POST",body:JSON.stringify({expectedVersion:order.lastMutationVersion,confirm:true})});

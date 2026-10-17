@@ -4,7 +4,7 @@ import { CounterAudioPlayer } from "@/lib/client/counter-audio";
 import { counterAlertSources, counterOrderNumberSources, dueCounterAlerts, type AlertHistory, type AlertOrder, type CounterAgeAlert } from "@/lib/counter-age-alerts";
 import { ORDER_AGE_MINUTES } from "@/lib/order-age";
 
-const BASE_SOURCES = ORDER_AGE_MINUTES.flatMap((minutes, i) => [`/audio/counter-alerts/tone-${i + 1}.mp3`, `/audio/counter-alerts/elapsed-${minutes}.mp3`]);
+const BASE_SOURCES = ORDER_AGE_MINUTES.flatMap((minutes, i) => [`/audio/counter-alerts/tone-${i + 1}.mp3`, `/audio/counter-alerts/elapsed-from-order-${minutes}.mp3`]);
 
 export function useCounterAgeAudio(orders: AlertOrder[], actorId: string | undefined, now: number, loadedAt: number) {
   const [enabled, setEnabled] = useState(false);

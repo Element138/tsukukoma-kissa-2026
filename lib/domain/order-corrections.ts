@@ -3,6 +3,7 @@ import { z } from "zod";
 import { assert } from "@/lib/errors";
 import { appendOrderEvent } from "@/lib/domain/orders";
 import { writeAuditLog } from "@/lib/domain/audit";
+import { resetExpiredReadyStock } from "@/lib/domain/daily-ready-stock";
 
 export const orderCorrectionSchema = z.object({
   orderId: z.string().min(1),
@@ -20,14 +21,15 @@ export async function correctOrder(db: Db, actor: { actorId: string; actorType: 
   const menuIds = [...new Set(initial.map(item=>item.menuId))].sort();
   if (input.manualClose) for (const menuId of menuIds) await db.$queryRaw`SELECT id FROM "Menu" WHERE id = ${menuId} FOR UPDATE`;
   await db.$queryRaw`SELECT id FROM "Order" WHERE id = ${input.orderId} FOR UPDATE`;
+  if (input.manualClose) await resetExpiredReadyStock(db, menuIds);
   const order = await db.order.findUnique({where:{id:input.orderId},include:{items:true}});
   assert(order,404,"ORDER_NOT_FOUND","注文が見つかりません");
   assert(order.lastMutationVersion === input.expectedVersion,409,"ORDER_CHANGED","注文が更新されています。再読み込みして変更内容を確認してください");
   assert(!input.manualClose || order.items.every(item=>menuIds.includes(item.menuId)),409,"ORDER_CHANGED","商品が変更されています。再読み込みしてください");
   const at = new Date();
   let specialNote = input.specialNote;
-  if (input.manualClose && !specialNote.split(/\r?\n/).includes("manual closure")) specialNote = [specialNote,"manual closure"].filter(Boolean).join("\n");
-  assert(specialNote.length<=500,400,"NOTE_TOO_LONG","備考と manual closure を合わせて500文字以内にしてください");
+  if (input.manualClose && !specialNote.split(/\r?\n/).includes("手動完了")) specialNote = [specialNote,"手動完了"].filter(Boolean).join("\n");
+  assert(specialNote.length<=500,400,"NOTE_TOO_LONG","備考と 手動完了 を合わせて500文字以内にしてください");
   const stockChanges: Array<{menuId:string;before:number;after:number}> = [];
   const remaining = order.items.filter(item=>item.status!=="SERVED" && item.status!=="CANCELED");
   if (input.manualClose) {

@@ -12,7 +12,9 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { useCounterAgeAudio } from "@/components/use-counter-age-audio";
+import { useMidnightRefresh } from "@/components/use-midnight-refresh";
 import { orderAgeTone } from "@/lib/order-age";
+import { tokyoDateKey } from "@/lib/time";
 import { partialServingMessage, type CounterServingPlan } from "@/lib/domain/counter-availability";
 
 type CounterOrder = {
@@ -44,13 +46,19 @@ export default function CounterPage() {
   const reload = async () => {
     if (reloadInFlight.current) { reloadQueued.current = true; return; }
     reloadInFlight.current = true;
+    const requestDay=tokyoDateKey();
     try {
       const data = await apiFetch<{ orders: CounterOrder[]; stock: Stock[] }>("/api/counter/targets");
+      if(requestDay!==tokyoDateKey()){reloadQueued.current=true;return;}
       setOrders(data.orders); setStock(data.stock); setLoadedAt(Date.now());
     } catch (e) { notify({ level: "error", message: e instanceof Error ? e.message : "更新に失敗しました" }); }
     finally { reloadInFlight.current = false; if (reloadQueued.current) { reloadQueued.current = false; void reload(); } }
   };
   useEffect(() => { if (session) void reload(); }, [session]);
+  useMidnightRefresh(Boolean(session),dayChanged=>{
+    if(dayChanged){setOrders([]);setLoadedAt(0);setStock(current=>current.map(row=>({...row,count:0})));}
+    void reload();
+  });
   useEffect(() => {
     const footer = footerRef.current;
     if (!footer) return;

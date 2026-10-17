@@ -23,11 +23,11 @@ function fixture() {
   };
   return {db,order,stock,audits,originalServedAt,get writes(){return writes;}};
 }
-test("manual closure serves only remaining items, clears call, preserves payments, consumes available stock without negatives, and audits",async()=>{
+test("手動完了 serves only remaining items, clears call, preserves payments, consumes available stock without negatives, and audits",async()=>{
   const f=fixture();await correctOrder(f.db,admin,input);
   assert.equal(f.order.orderStatus,"COMPLETED");assert.equal(f.order.paymentStatus,"PAID");assert.equal(f.order.lastCalledAt,null);
   assert.ok(f.order.items.every((i:any)=>i.status==="SERVED"));assert.equal(f.order.items[0].servedAt.getTime(),f.originalServedAt.getTime());
-  assert.equal(f.stock.readyCount,0);assert.equal(f.order.specialNote,"existing note\nmanual closure");assert.equal(f.audits[0].actionType,"MANUAL_CLOSURE");
+  assert.equal(f.stock.readyCount,0);assert.equal(f.order.specialNote,"existing note\n手動完了");assert.equal(f.audits[0].actionType,"MANUAL_CLOSURE");
   assert.equal(f.order.lastMutationVersion,5);assert.equal(f.order.events[0].type,"MANUAL_CLOSURE");
 });
 test("all operational staff can manually close; displays cannot; waiter cannot alter statistics",async()=>{
@@ -41,11 +41,11 @@ test("stale versions and unresolved/failed/completed orders cannot be manually c
     const f=fixture();Object.assign(f.order,patch);await assert.rejects(correctOrder(f.db,admin,input),{code:"ORDER_LOCKED"});assert.equal(f.writes,0);
   }
 });
-test("completed order note/exclusion remain editable; existing manual closure note isn't duplicated",async()=>{
+test("completed order note/exclusion remain editable; existing 手動完了 note isn't duplicated",async()=>{
   const f=fixture();f.order.orderStatus="COMPLETED";
   await correctOrder(f.db,admin,{...input,manualClose:false,specialNote:"amended",excludeFromWaitStats:true});
   assert.equal(f.order.specialNote,"amended");assert.equal(f.order.excludeFromWaitStats,true);assert.equal(f.stock.readyCount,1);
-  const g=fixture();await correctOrder(g.db,admin,{...input,specialNote:"manual closure"});assert.equal(g.order.specialNote,"manual closure");
+  const g=fixture();await correctOrder(g.db,admin,{...input,specialNote:"手動完了"});assert.equal(g.order.specialNote,"手動完了");
 });
 test("order-book note editing accepts completed and failed orders",async()=>{
   for(const status of ["COMPLETED","FAILED"]){const f=fixture();f.order.orderStatus=status;await markOrderSpecialNote(f.db,{...admin,orderId:"o",specialNote:"later note"});assert.equal(f.order.specialNote,"later note");assert.equal(f.order.orderStatus,status);}
@@ -64,7 +64,7 @@ test("staff closure endpoint preserves server notes/exclusion, audits actor, and
     assert.equal((await manualClosePOST(req({expectedVersion:4,confirm:true,specialNote:"overwrite"}),context)).status,400);
     assert.equal((await manualClosePOST(req({expectedVersion:3,confirm:true}),context)).status,409);assert.equal(f.writes,0);
     const response=await manualClosePOST(req({expectedVersion:4,confirm:true}),context);assert.equal(response.status,200);
-    assert.equal(f.order.specialNote,"existing note\nmanual closure");assert.equal(f.order.excludeFromWaitStats,true);assert.equal(f.audits[0].actorId,"counter");assert.equal(f.audits[0].actorType,"WAITER");
+    assert.equal(f.order.specialNote,"existing note\n手動完了");assert.equal(f.order.excludeFromWaitStats,true);assert.equal(f.audits[0].actorId,"counter");assert.equal(f.audits[0].actorType,"WAITER");
     assert.equal((await manualClosePOST(req({expectedVersion:4,confirm:true}),context)).status,409);assert.equal(f.audits.length,1);
     role="ORDER_DISPLAY";assert.equal((await manualClosePOST(req({expectedVersion:5,confirm:true}),context)).status,403);
   }finally{db.session.findUnique=originalSession;db.$transaction=originalTransaction;}
