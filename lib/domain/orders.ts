@@ -89,6 +89,7 @@ export async function recalcAndPersistOrderStatus(db: DbClient, orderId: string,
     where: { id: orderId },
     data: {
       orderStatus: nextStatus,
+      ...(nextStatus === "COMPLETED" ? { lastCalledAt: null } : {}),
       ...(incrementVersion
         ? {
             lastMutationVersion: {

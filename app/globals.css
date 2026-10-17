@@ -2208,6 +2208,12 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   border-color: #dd9494;
 }
 
+.order-age-critical,
+.counter-tile.critical {
+  background: #f5edff;
+  border-color: #b084d4;
+}
+
 .counter-tile-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -2230,6 +2236,19 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   background: #f0fdf8;
   border-color: #8bceb7;
 }
+
+.counter-serve-all {
+  width: 100%;
+  margin-top: 8px;
+  border: 1px solid #15803d;
+  border-radius: 10px;
+  padding: 10px 14px;
+  background: #15803d;
+  color: #fff;
+  font-weight: 700;
+}
+.counter-serve-all:hover { background: #166534; }
+.counter-serve-all:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .counter-tile.warn {
   background: #fff8ec;

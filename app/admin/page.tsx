@@ -470,7 +470,7 @@ export default function AdminPage() {
     SpecifiedAllergenKey[]
   >([]);
   const [newMenuAllergenDisplayEnabled, setNewMenuAllergenDisplayEnabled] =
-    useState(true);
+    useState(false);
   const [newMenuCustomBadgeText, setNewMenuCustomBadgeText] = useState("");
   const [newMenuCustomBadgeColor, setNewMenuCustomBadgeColor] =
     useState("#d97706");
@@ -2397,7 +2397,7 @@ export default function AdminPage() {
                               setNewMenuPrice("500");
                               setNewMenuCoverImageDataUrl("");
                               setNewMenuAllergens([]);
-                              setNewMenuAllergenDisplayEnabled(true);
+                              setNewMenuAllergenDisplayEnabled(false);
                               setNewMenuCustomBadgeText("");
                               setNewMenuCustomBadgeColor("#d97706");
                               setNewMenuDailyOrderCap("");

@@ -11,8 +11,12 @@ export async function GET(
   context: { params: Promise<{ part: string; orderNo: string }> },
 ) {
   try {
-    await requireSession(req, { actorTypes: ["ORDER_DISPLAY", "ADMIN"] });
+    // Counter speech reuse (WAITER access explicitly approved by the owner).
+    const actor = await requireSession(req, { actorTypes: ["ORDER_DISPLAY", "WAITER", "ADMIN"] });
     const { part, orderNo: rawOrderNo } = await context.params;
+    if (actor.actorType === "WAITER" && part !== "number") {
+      throw new AppError(403, "FORBIDDEN", "カウンター用の注文番号音声のみ利用できます");
+    }
     if (part === "extreme-long-wait") {
       return NextResponse.redirect(new URL("/audio/order-call/extreme-long-wait-apology.mp3", req.url));
     }
