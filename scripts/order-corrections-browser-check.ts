@@ -6,7 +6,7 @@ async function main(){
   const browser=await chromium.launch({executablePath:"C:/Program Files/Google/Chrome/Application/chrome.exe",headless:true});
   const context=await browser.newContext({viewport:{width:1440,height:1000}});
   const at="2026-10-17T02:00:00.000Z";
-  let order:any={id:"test",orderNo:255,createdAt:at,confirmedAt:at,canceledAt:null,fulfillmentType:"DINE_IN",tableNo:null,partySize:1,ageGroupCounts:{},specialNote:"manual closure",excludeFromWaitStats:false,lastMutationVersion:2,paymentStatus:"PAID",paymentMethod:"CASH",orderStatus:"COMPLETED",totalPriceJpy:500,events:[],eventActors:{},createdBy:{id:"pos",label:"POS"},items:[],auditLogs:[],paymentIncidents:[]};
+  let order:any={id:"test",orderNo:255,createdAt:at,confirmedAt:at,canceledAt:null,fulfillmentType:"DINE_IN",tableNo:null,partySize:1,ageGroupCounts:{},specialNote:"手動完了",excludeFromWaitStats:false,lastMutationVersion:2,paymentStatus:"PAID",paymentMethod:"CASH",orderStatus:"COMPLETED",totalPriceJpy:500,events:[],eventActors:{},createdBy:{id:"pos",label:"POS"},items:[],auditLogs:[],paymentIncidents:[]};
   const saved:any[]=[];const hours:string[]=[];const errors:string[]=[];
   let role="ADMIN";
   await context.route("**/api/**",async route=>{
@@ -24,7 +24,7 @@ async function main(){
     }
     else if(url.pathname==="/api/order-book")data={orders:[order],menuCounts:[],menuTotals:{ordered:1,queued:1,totalSoldPriceJpy:500},incidents:[]};
     else if(url.pathname==="/api/orders/test/manual-close"){
-      saved.push(route.request().postDataJSON());order={...order,orderStatus:"COMPLETED",specialNote:"manual closure",lastMutationVersion:order.lastMutationVersion+1,items:order.items.map((item:any)=>({...item,status:"SERVED"}))};data={order};
+      saved.push(route.request().postDataJSON());order={...order,orderStatus:"COMPLETED",specialNote:"手動完了",lastMutationVersion:order.lastMutationVersion+1,items:order.items.map((item:any)=>({...item,status:"SERVED"}))};data={order};
     }
     else if(url.pathname==="/api/admin/actors")data={actors:[]};
     else if(url.pathname==="/api/admin/menus")data={menus:[],categories:[]};
@@ -59,8 +59,8 @@ async function main(){
       await page.goto("http://localhost:3102/order-book",{waitUntil:"domcontentloaded",timeout:60000});
       const before: number=saved.length;
       page.once("dialog",dialog=>dialog.dismiss());await page.getByRole("button",{name:"手動完了",exact:true}).click();assert.equal(saved.length,before);
-      page.once("dialog",dialog=>{assert.match(dialog.message(),/監査ログ/);void dialog.accept();});await page.getByRole("button",{name:"手動完了",exact:true}).click();
-      await page.getByText("備考: manual closure",{exact:true}).waitFor();
+      page.once("dialog",dialog=>{assert.match(dialog.message(),/手動完了として記録/);void dialog.accept();});await page.getByRole("button",{name:"手動完了",exact:true}).click();
+      await page.getByText("備考: 手動完了",{exact:true}).waitFor();
       assert.equal(saved.length,before+1);assert.deepEqual(saved.at(-1),{expectedVersion:4,confirm:true});
       assert.equal(await page.getByRole("button",{name:"手動完了",exact:true}).count(),0);
     }

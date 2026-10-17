@@ -1,7 +1,8 @@
 ﻿import { ActorType, Prisma, PrismaClient } from "@prisma/client";
 import { AppError, assert } from "@/lib/errors";
 import { recalcAndPersistOrderStatus } from "@/lib/domain/orders";
-import { now } from "@/lib/time";
+import { now, tokyoDateKey } from "@/lib/time";
+import { resetExpiredReadyStock } from "@/lib/domain/daily-ready-stock";
 import { writeAuditLog } from "@/lib/domain/audit";
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
@@ -56,6 +57,7 @@ export async function executeUndo(db: DbClient, params: { actorId: string; actor
   await db.$queryRaw`SELECT id FROM "Actor" WHERE id = ${params.actorId} FOR NO KEY UPDATE`;
   const undo = await db.undoOperation.findFirst({ where: { actorId: params.actorId }, orderBy: [{ createdAt: "desc" }, { id: "desc" }] });
   assert(undo, 404, "UNDO_NOT_FOUND", "Undo not found");
+  assert(tokyoDateKey(undo.createdAt) === tokyoDateKey(), 409, "UNDO_EXPIRED", "前日以前の操作は取り消せません");
   const payload = undo.payload as Record<string, unknown>;
   const menuId = payload.menuId;
   assert(typeof menuId === "string", 409, "UNDO_TARGET_CHANGED", "取り消し対象が旧仕様です");
@@ -68,6 +70,8 @@ export async function executeUndo(db: DbClient, params: { actorId: string; actor
     assert(menuIds.every(id=>id >= menuId),409,"UNDO_TARGET_CHANGED","取り消し対象が不正です");
     for (const id of menuIds) if (id !== menuId) await db.$queryRaw`SELECT id FROM "Menu" WHERE id = ${id} FOR UPDATE`;
     await db.$queryRaw`SELECT id FROM "Order" WHERE id = ${undo.orderId} FOR UPDATE`;
+    assert(tokyoDateKey(undo.createdAt) === tokyoDateKey(), 409, "UNDO_EXPIRED", "前日以前の操作は取り消せません");
+    await resetExpiredReadyStock(db, menuIds);
     const order = await db.order.findUnique({ where:{id:undo.orderId} });
     assert(order && !["FAILED","CANCELED"].includes(order.orderStatus) && order.lastMutationVersion === undo.expectedOrderVersion,409,"UNDO_CONFLICT","注文の状態が変わったため取り消せません");
     const quantities = new Map<string,number>();
@@ -85,6 +89,8 @@ export async function executeUndo(db: DbClient, params: { actorId: string; actor
   let count = 1;
   let orderId: string | null = null;
   if (undo.operationType === "ITEM_READY_BATCH" && undo.targetEntityType === "menu_stock") {
+    assert(tokyoDateKey(undo.createdAt) === tokyoDateKey(), 409, "UNDO_EXPIRED", "前日以前の操作は取り消せません");
+    await resetExpiredReadyStock(db, [menuId]);
     assert(params.actorType === "KITCHEN", 403, "FORBIDDEN", "Undo forbidden");
     count = Number(payload.quantity);
     assert(Number.isSafeInteger(count) && count > 0 && typeof payload.jstDate === "string", 409, "UNDO_TARGET_CHANGED", "Undo invalid");
@@ -95,6 +101,8 @@ export async function executeUndo(db: DbClient, params: { actorId: string; actor
     assert(params.actorType === "WAITER", 403, "FORBIDDEN", "Undo forbidden");
     assert(undo.orderId, 409, "UNDO_TARGET_CHANGED", "Undo order missing");
     await db.$queryRaw`SELECT id FROM "Order" WHERE id = ${undo.orderId} FOR UPDATE`;
+    assert(tokyoDateKey(undo.createdAt) === tokyoDateKey(), 409, "UNDO_EXPIRED", "前日以前の操作は取り消せません");
+    await resetExpiredReadyStock(db, [menuId]);
     const order = await db.order.findUnique({ where: { id: undo.orderId } });
     assert(order && !["FAILED", "CANCELED"].includes(order.orderStatus), 409, "UNDO_CONFLICT", "Undo conflict");
     const changed = await db.orderItem.updateMany({ where: { id: undo.targetEntityId, status: "SERVED", servedByActorId: params.actorId, servedAt: typeof payload.servedAt === "string" ? new Date(payload.servedAt) : undefined }, data: { status: "QUEUED", readyAt: null, servedAt: null, servedByActorId: null } });

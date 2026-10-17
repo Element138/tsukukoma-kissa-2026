@@ -78,7 +78,7 @@ async function main() {
     await gate.waitFor({state:"hidden"});
     await page.evaluate(()=>{(window as any).clock+=1000;});
     await page.waitForFunction(()=>(window as any).played.length===9);
-    const expected=[11,22,33].flatMap((n,i)=>[`/audio/counter-alerts/tone-${i+1}.mp3`,`/audio/order-call/numbers/v2/number-${n}.mp3`,`/audio/counter-alerts/elapsed-${[10,25,40][i]}.mp3`]);
+    const expected=[11,22,33].flatMap((n,i)=>[`/audio/counter-alerts/tone-${i+1}.mp3`,`/audio/order-call/numbers/v2/number-${n}.mp3`,`/audio/counter-alerts/elapsed-from-order-${[10,25,40][i]}.mp3`]);
     assert.deepEqual(await page.evaluate(()=>(window as any).played),expected);
     assert.equal(await page.evaluate(()=>(window as any).overlap),false);
     await page.waitForFunction(()=>Object.keys(JSON.parse(localStorage.getItem("kissa.counter-age-audio.v1:counter-test")??"{}")).length===3);
@@ -125,7 +125,7 @@ async function main() {
     const realPage=await realContext.newPage();await realPage.goto("http://localhost:3102/audio-check");
     const durations=await realPage.evaluate(async()=>Promise.all([
       ...[1,2,3].map(i=>`/audio/counter-alerts/tone-${i}.mp3`),
-      ...[10,25,40].map(n=>`/audio/counter-alerts/elapsed-${n}.mp3`),
+      ...[10,25,40].map(n=>`/audio/counter-alerts/elapsed-from-order-${n}.mp3`),
       "/audio/order-call/numbers/v2/number-177.mp3",
     ].map(src=>new Promise<number>((resolve,reject)=>{
       const audio=new Audio(src);const timer=setTimeout(()=>reject(Error(`metadata timeout ${src}`)),10000);

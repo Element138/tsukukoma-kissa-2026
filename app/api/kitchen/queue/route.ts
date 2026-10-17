@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { resetExpiredReadyStock } from "@/lib/domain/daily-ready-stock";
 import { tokyoDateKey } from "@/lib/time";
 import { prisma } from "@/lib/db";
 import { getMenuCapStates } from "@/lib/domain/menu-cap";
@@ -137,6 +138,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    await resetExpiredReadyStock(prisma, menuIds);
     const stocks = await prisma.menuStock.findMany({ where: { menuId: { in: menuIds } } });
     const cookedCounts = await prisma.menuDailyCount.findMany({ where: { menuId: { in: menuIds }, jstDate: tokyoDateKey() } });
     const stockMap = new Map(stocks.map(s => [s.menuId, s.readyCount]));

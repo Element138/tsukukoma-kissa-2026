@@ -5,6 +5,7 @@ import { saveUndoOperation } from "@/lib/domain/undo";
 import { writeAuditLog } from "@/lib/domain/audit";
 import { reassignQueuedItemsFromKitchen, updateMenusAvailabilityByKitchenCoverage } from "@/lib/domain/kitchen-assignment";
 import { getMenuCapStates } from "@/lib/domain/menu-cap";
+import { resetExpiredReadyStock } from "@/lib/domain/daily-ready-stock";
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
 
@@ -14,6 +15,7 @@ export async function markKitchenMenuItemsReady(
 ) {
   // A per-menu lock serializes production, serving, undo and duplicate requests.
   await db.$queryRaw`SELECT id FROM "Menu" WHERE id = ${params.menuId} FOR UPDATE`;
+  await resetExpiredReadyStock(db, [params.menuId]);
   const assignment = await db.menuKitchenAssignment.findUnique({ where: { menuId_kitchenId: { menuId: params.menuId, kitchenId: params.kitchenId } } });
   assert(assignment?.enabled, 403, "FORBIDDEN", "担当メニューのみ調理完了にできます");
   const duplicate = await db.auditLog.findFirst({ where: { actorId: params.actorId, actionType: "ITEM_READY_BATCH", correlationId: params.idempotencyKey, result: "SUCCESS" } });

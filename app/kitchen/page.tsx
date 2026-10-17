@@ -7,6 +7,8 @@ import { TerminalBanner } from "@/components/terminal-banner";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { LoadingScreen } from "@/components/loading-screen";
 import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
+import { useMidnightRefresh } from "@/components/use-midnight-refresh";
+import { tokyoDateKey } from "@/lib/time";
 import { useWakeLock } from "@/components/use-wake-lock";
 import { ACTOR_TYPE_LABEL, AVAILABILITY_LABEL, labelOf } from "@/lib/labels";
 import { useToast } from "@/components/toast";
@@ -120,12 +122,14 @@ export default function KitchenPage() {
       return;
     }
     reloadInFlightRef.current = true;
+    const requestDay=tokyoDateKey();
 
     try {
       const tasks: Promise<void>[] = [];
       tasks.push(
         apiFetch<{ menus: KitchenMenuRow[] }>("/api/kitchen/queue").then(
           (payload) => {
+            if(requestDay!==tokyoDateKey()){queuedReloadModeRef.current??="menus";return;}
             setMenus(payload.menus);
             setReadyQuantityByMenuId((prev) => {
               const next: Record<string, number> = {};
@@ -179,6 +183,10 @@ export default function KitchenPage() {
   }, [session]);
 
 
+  useMidnightRefresh(Boolean(session),dayChanged=>{
+    if(dayChanged)setMenus(current=>current.map(menu=>({...menu,queuedCount:menu.queuedOrders.length,surplusCount:0})));
+    void reload("menus");
+  });
   useRealtimeSubscription({
     enabled: Boolean(session),
     channels: session

@@ -14,7 +14,7 @@ export function dueCounterAlerts(orders: readonly AlertOrder[], now: number, his
 
 export function counterAlertSources(alert: CounterAgeAlert) {
   const stage = ORDER_AGE_MINUTES.indexOf(alert.minutes) + 1;
-  return [`/audio/counter-alerts/tone-${stage}.mp3`, ...counterOrderNumberSources(alert.orderNo), `/audio/counter-alerts/elapsed-${alert.minutes}.mp3`];
+  return [`/audio/counter-alerts/tone-${stage}.mp3`, ...counterOrderNumberSources(alert.orderNo), `/audio/counter-alerts/elapsed-from-order-${alert.minutes}.mp3`];
 }
 
 export function counterOrderNumberSources(orderNo: number): string[] {

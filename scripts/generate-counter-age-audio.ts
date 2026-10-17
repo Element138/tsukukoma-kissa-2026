@@ -8,7 +8,7 @@ async function main() {
   loadEnvConfig(process.cwd());
   const directory = resolve("public/audio/counter-alerts");
   await mkdir(directory, { recursive: true });
-  const prompts = ORDER_AGE_MINUTES.map(minutes => ({ file: `elapsed-${minutes}`, text: `${minutes}分経過。` }));
+  const prompts = ORDER_AGE_MINUTES.map(minutes => ({ file: `elapsed-from-order-${minutes}`, text: `注文から${minutes}分経過。` }));
   for (const prompt of prompts) {
     const destination = resolve(directory, `${prompt.file}.mp3`);
     try { if ((await readFile(destination)).length > 0) continue; } catch (error) {
