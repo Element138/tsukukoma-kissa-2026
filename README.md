@@ -114,6 +114,10 @@ The app now returns clearer DB-related error codes in API responses:
 
 動作確認: `npx tsx --test scripts/shared-stock.test.ts`
 
+カウンター下部は常時「提供待ち / 調理済」を表示します。分子は確定済みの有効なオーダーに残る未提供アイテム数、分母は共有在庫数です。調理済みが0個でも、通常のメニューは0/0個でも表示します。削除済みメニューも未提供アイテムか在庫が残る間は表示します。管理画面で任意の「略称」を設定でき、下部表示だけに使います。空欄なら正式なメニュー名を使います。
+
+略称用の任意カラムは`20261017000100_menu_short_name`で追加します。既存データは保持します。数量集計・略称の確認: `npx tsx --test scripts/counter-footer.test.ts scripts/shared-stock.test.ts`
+
 ## レシートの書体
 
 Adobe FontsのWeb用キット`jzl2tov`をブラウザーで読み込んでからPDFを生成します。DNP秀英角ゴシック金はL（400）を使用せず、本文をM（500）、メニュー名・見出し・合計・注文番号をB（600）で使います。Noto Sans JPへのフォールバックはRegularとBoldのみを使い、Lightは使用しません。Adobeのフォントファイルをリポジトリに保存しません。

@@ -94,6 +94,7 @@ type Category = {
 type Menu = {
   id: string;
   name: string;
+  shortName: string | null;
   priceJpy: number;
   availability: "AVAILABLE" | "INCREASED_WAIT" | "PAUSED" | "SOLD_OUT";
   workloadSeconds: number;
@@ -116,6 +117,7 @@ type Menu = {
 };
 type MenuEdit = {
   name: string;
+  shortName: string;
   priceJpy: string;
   categoryId: string;
   kitchenId: string;
@@ -337,6 +339,7 @@ function toPositiveFiniteNumber(
 function toMenuEdit(menu: Menu): MenuEdit {
   return {
     name: menu.name,
+    shortName: menu.shortName ?? "",
     priceJpy: String(menu.priceJpy),
     categoryId: menu.categoryId,
     kitchenId: menu.assignedKitchenId ?? "",
@@ -461,6 +464,7 @@ export default function AdminPage() {
   >({});
 
   const [newMenuName, setNewMenuName] = useState("");
+  const [newMenuShortName, setNewMenuShortName] = useState("");
   const [newMenuPrice, setNewMenuPrice] = useState("500");
   const [newMenuCategoryId, setNewMenuCategoryId] = useState("");
   const [newMenuKitchenId, setNewMenuKitchenId] = useState("");
@@ -636,6 +640,7 @@ export default function AdminPage() {
           : (menu.lowStockBadgeThreshold ?? 0);
       return (
         edit.name !== menu.name ||
+        edit.shortName.trim() !== (menu.shortName ?? "") ||
         Number(edit.priceJpy) !== menu.priceJpy ||
         edit.categoryId !== menu.categoryId ||
         edit.kitchenId !== (menu.assignedKitchenId ?? "") ||
@@ -1000,6 +1005,7 @@ export default function AdminPage() {
 
   const parseMenuInput = (params: {
     name: string;
+    shortName: string;
     priceJpy: string;
     categoryId: string;
     kitchenId: string;
@@ -1018,6 +1024,10 @@ export default function AdminPage() {
     }
     if (trimmedName.length > 120) {
       throw new Error("メニュー名は 120 文字以内で入力してください");
+    }
+    const shortName = params.shortName.trim();
+    if (shortName.length > 120) {
+      throw new Error("略称は 120 文字以内で入力してください");
     }
 
     const priceJpy = toPositiveFiniteNumber(params.priceJpy, "価格 (円)", {
@@ -1062,6 +1072,7 @@ export default function AdminPage() {
 
     return {
       name: trimmedName,
+      shortName: shortName || null,
       priceJpy,
       categoryId: params.categoryId,
       kitchenId: params.kitchenId,
@@ -1220,6 +1231,7 @@ export default function AdminPage() {
             : (menu.lowStockBadgeThreshold ?? 0);
         const isDirty =
           edit.name !== menu.name ||
+          edit.shortName.trim() !== (menu.shortName ?? "") ||
           Number(edit.priceJpy) !== menu.priceJpy ||
           edit.categoryId !== menu.categoryId ||
           edit.kitchenId !== (menu.assignedKitchenId ?? "") ||
@@ -1240,6 +1252,7 @@ export default function AdminPage() {
           menuId: menu.id,
           parsedInput: parseMenuInput({
             name: edit.name,
+            shortName: edit.shortName,
             priceJpy: edit.priceJpy,
             categoryId: edit.categoryId,
             kitchenId: edit.kitchenId,
@@ -2125,6 +2138,12 @@ export default function AdminPage() {
                           onChange={setNewMenuName}
                         />
                         <InputField
+                          label="略称（任意・カウンター下部用）"
+                          value={newMenuShortName}
+                          onChange={setNewMenuShortName}
+                          placeholder="空欄ならメニュー名を表示"
+                        />
+                        <InputField
                           label="価格 (円)"
                           value={newMenuPrice}
                           onChange={(value) =>
@@ -2342,6 +2361,7 @@ export default function AdminPage() {
                             try {
                               parsedInput = parseMenuInput({
                                 name: newMenuName,
+                                shortName: newMenuShortName,
                                 priceJpy: newMenuPrice,
                                 categoryId: newMenuCategoryId,
                                 kitchenId: newMenuKitchenId,
@@ -2394,6 +2414,7 @@ export default function AdminPage() {
 
                             if (saved) {
                               setNewMenuName("");
+                              setNewMenuShortName("");
                               setNewMenuPrice("500");
                               setNewMenuCoverImageDataUrl("");
                               setNewMenuAllergens([]);
@@ -2591,6 +2612,15 @@ export default function AdminPage() {
                                           [menu.id]: { ...edit, name: v },
                                         }))
                                       }
+                                    />
+                                    <InputField
+                                      label="略称（任意・カウンター下部用）"
+                                      value={edit.shortName}
+                                      placeholder="空欄ならメニュー名を表示"
+                                      onChange={(v) => setMenuEdits((p) => ({
+                                        ...p,
+                                        [menu.id]: { ...edit, shortName: v },
+                                      }))}
                                     />
                                     <InputField
                                       label="価格 (円)"
@@ -2939,6 +2969,7 @@ export default function AdminPage() {
                                           try {
                                             parsedInput = parseMenuInput({
                                               name: edit.name,
+                                              shortName: edit.shortName,
                                               priceJpy: edit.priceJpy,
                                               categoryId: edit.categoryId,
                                               kitchenId: edit.kitchenId,
@@ -2983,6 +3014,7 @@ export default function AdminPage() {
                                               [menu.id]: {
                                                 ...prev[menu.id],
                                                 name: parsedInput.name,
+                                                shortName: parsedInput.shortName ?? "",
                                                 priceJpy: String(
                                                   parsedInput.priceJpy,
                                                 ),
