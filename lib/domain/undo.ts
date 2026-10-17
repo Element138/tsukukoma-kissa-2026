@@ -59,6 +59,8 @@ export async function executeUndo(db: DbClient, params: { actorId: string; actor
   assert(undo, 404, "UNDO_NOT_FOUND", "Undo not found");
   assert(tokyoDateKey(undo.createdAt) === tokyoDateKey(), 409, "UNDO_EXPIRED", "前日以前の操作は取り消せません");
   const payload = undo.payload as Record<string, unknown>;
+  const sourceAt = typeof payload.servedAt === "string" ? new Date(payload.servedAt) : undo.createdAt;
+  assert(!Number.isNaN(sourceAt?.getTime()) && tokyoDateKey(sourceAt) === tokyoDateKey() && (typeof payload.jstDate !== "string" || payload.jstDate === tokyoDateKey()), 409, "UNDO_EXPIRED", "前日以前の操作は取り消せません");
   const menuId = payload.menuId;
   assert(typeof menuId === "string", 409, "UNDO_TARGET_CHANGED", "取り消し対象が旧仕様です");
   await db.$queryRaw`SELECT id FROM "Menu" WHERE id = ${menuId} FOR UPDATE`;

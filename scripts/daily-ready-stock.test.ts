@@ -33,6 +33,10 @@ test("previous-day undo cannot restore expired prepared stock",async()=>{
   const db:any={$queryRaw:async()=>[],undoOperation:{findFirst:async()=>({createdAt:new Date(Date.now()-2*86400000),payload:{menuId:"a"},operationType:"ITEM_SERVED"})},menuStock:{upsert:async()=>{stockWrites++;}}};
   await assert.rejects(executeUndo(db,{actorId:"w",actorType:"WAITER"}),{code:"UNDO_EXPIRED"});assert.equal(stockWrites,0);
 });
+test("an undo saved after midnight cannot resurrect an item served before midnight",async()=>{
+  const db:any={$queryRaw:async()=>[],undoOperation:{findFirst:async()=>({createdAt:new Date(),payload:{menuId:"a",servedAt:new Date(Date.now()-86400000).toISOString()},operationType:"ITEM_SERVED"})}};
+  await assert.rejects(executeUndo(db,{actorId:"w",actorType:"WAITER"}),{code:"UNDO_EXPIRED"});
+});
 test("kitchen endpoint clears yesterday's surplus and shows zero or actual remaining demand",async()=>{
   const db=prisma as any,restore:Array<()=>void>=[];
   const replace=(object:any,key:string,value:any)=>{const original=object[key];restore.push(()=>object[key]=original);object[key]=value;};
