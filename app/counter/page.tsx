@@ -23,13 +23,15 @@ type CounterOrder = {
   unreadyItemGroups: Array<{ name: string; count: number }>;
   servingPlan: CounterServingPlan[];
 };
-type Stock = { menuId: string; name: string; count: number };
+type Stock = { menuId: string; name: string; waitingCount: number; count: number };
 export default function CounterPage() {
   const { loading, session } = useSession(["WAITER"]);
   const { notify } = useToast();
   useWakeLock(Boolean(session));
   const [orders, setOrders] = useState<CounterOrder[]>([]);
   const [stock, setStock] = useState<Stock[]>([]);
+  const footerRef = useRef<HTMLDivElement>(null);
+  const [footerHeight, setFooterHeight] = useState(110);
   const [tickNow, setTickNow] = useState(Date.now());
   const [busy, setBusy] = useState(false);
   const [loadedAt, setLoadedAt] = useState(0);
@@ -47,6 +49,13 @@ export default function CounterPage() {
     finally { reloadInFlight.current = false; if (reloadQueued.current) { reloadQueued.current = false; void reload(); } }
   };
   useEffect(() => { if (session) void reload(); }, [session]);
+  useEffect(() => {
+    const footer = footerRef.current;
+    if (!footer) return;
+    const observer = new ResizeObserver(() => setFooterHeight(footer.getBoundingClientRect().height));
+    observer.observe(footer);
+    return () => observer.disconnect();
+  }, [session]);
   useEffect(() => { const timer = setInterval(() => setTickNow(Date.now()), 1000); return () => clearInterval(timer); }, []);
   useEffect(() => {
     const refresh = () => { if (session && document.visibilityState === "visible") void reload(); };
@@ -108,7 +117,7 @@ export default function CounterPage() {
   return <>
     <TerminalBanner actorId={session.actor.actorId} actorType={session.actor.actorType} actorLabel={session.actor.label} offlineActors={session.offlineActors} />
     <DashboardShell title="カウンター" hideHeader>
-      <Card className="card counter-panel">
+      <Card className="card counter-panel" style={{ marginBottom: footerHeight + 24 }}>
         <div className="row between wrap" style={{ marginBottom: 10 }}><h2 className="section-title text-base font-semibold">カウンタービュー</h2><button type="button" className="ghost-btn" disabled={busy} onClick={undo}>取り消し</button></div>
         <div className="row between wrap" style={{ marginBottom: 10, gap: 8 }}>
           <div className="muted text-sm">10分: 黄 · 25分: 赤 · 40分: 紫{ageAudio.speaking && <span role="status" className="ml-2">{ageAudio.speaking}</span>}</div>
@@ -146,8 +155,8 @@ export default function CounterPage() {
         </section>)}
       </Card>
     </DashboardShell>
-    <div className={`counter-stock-bar ${stock.length > 0 ? "is-visible" : ""}`} aria-hidden={stock.length === 0}>
-      <strong>提供可能</strong>{stock.map(s => <span key={s.menuId}>{s.name} <b>{s.count}</b> 個</span>)}
+    <div ref={footerRef} className="counter-stock-bar is-visible" aria-label="メニュー別の提供待ち数と調理済み数">
+      <strong>提供待ち / 調理済:</strong>{stock.map(s => <span key={s.menuId}>{s.name} <b>{s.waitingCount}/{s.count}</b>個</span>)}
     </div>
   </>;
 }

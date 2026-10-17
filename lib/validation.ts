@@ -152,6 +152,7 @@ const badgeColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 
 export const menuCreateSchema = z.object({
   name: z.string().min(1).max(120),
+  shortName: z.string().trim().max(120).transform(value => value || null).nullable().optional(),
   priceJpy: z.number().int().min(0).max(100000),
   availability: z.enum(["AVAILABLE", "INCREASED_WAIT", "PAUSED", "SOLD_OUT"]),
   workloadSeconds: z.number().finite().min(0.1).max(7200),
@@ -172,6 +173,7 @@ export const menuCreateSchema = z.object({
 export const menuUpdateSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1).max(120).optional(),
+  shortName: z.string().trim().max(120).transform(value => value || null).nullable().optional(),
   priceJpy: z.number().int().min(0).max(100000).optional(),
   availability: z.enum(["AVAILABLE", "INCREASED_WAIT", "PAUSED", "SOLD_OUT"]).optional(),
   workloadSeconds: z.number().finite().min(0.1).max(7200).optional(),

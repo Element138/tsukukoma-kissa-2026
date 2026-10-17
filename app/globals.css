@@ -3633,4 +3633,5 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
 .counter-panel { margin-bottom: 110px; }
 .counter-stock-bar { position: fixed; bottom: 0; left: 0; right: 0; z-index: 45; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; padding: 18px 24px max(18px, env(safe-area-inset-bottom)); border-top: 1px solid #b5c9bb; background: rgba(248, 253, 249, .97); box-shadow: 0 -4px 24px #163c2220; transform: translateY(110%); visibility: hidden; transition: transform .25s ease, visibility .25s; }
 .counter-stock-bar.is-visible { transform: translateY(0); visibility: visible; }
+.counter-stock-bar { max-height: 35vh; overflow-y: auto; }
 @media (prefers-reduced-motion: reduce) { .counter-stock-bar { transition: none; } }

@@ -139,6 +139,7 @@ model MenuCategory {
 model Menu {
   id              String                  @id @default(uuid())
   name            String                  @db.VarChar(120)
+  shortName       String?                 @db.VarChar(120)
   priceJpy        Int
   availability    Availability            @default(AVAILABLE)
   workloadSeconds Float
