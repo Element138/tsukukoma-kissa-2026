@@ -77,11 +77,11 @@ async function main() {
     await page.getByRole("button",{name:"音声通知を有効にする",exact:true}).click();
     await gate.waitFor({state:"hidden"});
     await page.evaluate(()=>{(window as any).clock+=1000;});
-    await page.waitForFunction(()=>(window as any).played.length===9);
-    const expected=[11,22,33].flatMap((n,i)=>[`/audio/counter-alerts/tone-${i+1}.mp3`,`/audio/order-call/numbers/v2/number-${n}.mp3`,`/audio/counter-alerts/elapsed-from-order-${[10,25,40][i]}.mp3`]);
+    await page.waitForFunction(()=>(window as any).played.length===6);
+    const expected=[22,33].flatMap((n,i)=>[`/audio/counter-alerts/tone-${i+2}.mp3`,`/audio/order-call/numbers/v2/number-${n}.mp3`,`/audio/counter-alerts/elapsed-from-order-${[25,40][i]}.mp3`]);
     assert.deepEqual(await page.evaluate(()=>(window as any).played),expected);
     assert.equal(await page.evaluate(()=>(window as any).overlap),false);
-    await page.waitForFunction(()=>Object.keys(JSON.parse(localStorage.getItem("kissa.counter-age-audio.v1:counter-test")??"{}")).length===3);
+    await page.waitForFunction(()=>Object.keys(JSON.parse(localStorage.getItem("kissa.counter-age-audio.v1:counter-test")??"{}")).length===2);
     assert.equal(await page.locator(".counter-tile.critical").count(),1);
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
     await mkdir("tmp/counter-alerts",{recursive:true});
@@ -106,7 +106,7 @@ async function main() {
     page.once("dialog",d=>d.accept());await page.getByRole("button",{name:"全て提供",exact:true}).click();
     await page.waitForFunction(()=>document.querySelectorAll(".counter-tile").length===0);
     assert.equal(bulkPosts[0].confirmPartial,true);assert.deepEqual(bulkPosts[0].expectedItemIds,["a1","a2","b1"]);
-    orders.splice(0,orders.length,{...makeOrder("removed",44,600),servingPlan:[{menuId:"a",name:"トースト",waitingCount:1,servableCount:1}]});
+    orders.splice(0,orders.length,{...makeOrder("removed",44,1500),servingPlan:[{menuId:"a",name:"トースト",waitingCount:1,servableCount:1}]});
     await page.reload();await page.locator(".counter-tile").first().waitFor();
     assert.equal(await page.getByRole("button",{name:"全て提供",exact:true}).count(),0);
     await page.evaluate(()=>{(window as any).audioDuration=5000;});
@@ -114,7 +114,7 @@ async function main() {
     await page.waitForFunction(()=>(window as any).played.length===1);
     await page.getByRole("button",{name:"提供",exact:true}).click();
     await page.waitForFunction(()=>document.querySelectorAll(".counter-tile").length===0);
-    assert.deepEqual(await page.evaluate(()=>(window as any).played),["/audio/counter-alerts/tone-1.mp3"]);
+    assert.deepEqual(await page.evaluate(()=>(window as any).played),["/audio/counter-alerts/tone-2.mp3"]);
     role="ADMIN";await page.goto("http://localhost:3102/admin",{waitUntil:"domcontentloaded",timeout:60000});
     await page.getByRole("button",{name:"新規メニューを追加",exact:true}).click();
     const label=page.getByText("メニュー表示にアレルゲン情報を表示",{exact:true});await label.waitFor();
@@ -124,8 +124,8 @@ async function main() {
     await realContext.route("http://localhost:3102/audio-check",route=>route.fulfill({contentType:"text/html",body:"<html><body>Audio decoder check</body></html>"}));
     const realPage=await realContext.newPage();await realPage.goto("http://localhost:3102/audio-check");
     const durations=await realPage.evaluate(async()=>Promise.all([
-      ...[1,2,3].map(i=>`/audio/counter-alerts/tone-${i}.mp3`),
-      ...[10,25,40].map(n=>`/audio/counter-alerts/elapsed-from-order-${n}.mp3`),
+      ...[2,3].map(i=>`/audio/counter-alerts/tone-${i}.mp3`),
+      ...[25,40].map(n=>`/audio/counter-alerts/elapsed-from-order-${n}.mp3`),
       "/audio/order-call/numbers/v2/number-177.mp3",
     ].map(src=>new Promise<number>((resolve,reject)=>{
       const audio=new Audio(src);const timer=setTimeout(()=>reject(Error(`metadata timeout ${src}`)),10000);

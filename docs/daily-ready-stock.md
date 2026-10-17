@@ -8,7 +8,7 @@ Stock mutation paths retain their existing menu/order locks. Expiry for serving/
 
 Migration `20261017100000_daily_ready_stock` adds a timestamp with the current time as default. It was applied without changing current ready counts, which remain available until the next JST midnight. The API then enforces day expiry regardless of whether any terminal was running at midnight.
 
-Counter speech now uses cached **注文から10／25／40分経過。** clips under new `elapsed-from-order-*.mp3` URLs. Order-number clips are reused. `scripts/counter-258-playback-check.ts` verifies the real media player completes all three tone → number 258 → elapsed speech sequences in the counter view using an isolated mocked order. It does not alter the real order. `scripts/counter-audio-samples.ts 258` creates playable samples from the exact source sequence.
+Counter speech now uses cached **注文から25／40分経過。** clips under new `elapsed-from-order-*.mp3` URLs. Order-number clips are reused. `scripts/counter-258-playback-check.ts` verifies the real media player completes both 25/40-minute tone → number 258 → elapsed speech sequences, while 10 minutes remains silent in the counter view using an isolated mocked order. It does not alter the real order. `scripts/counter-audio-samples.ts 258` creates playable samples from the exact source sequence.
 
 Manual closure keeps its audited `MANUAL_CLOSURE` action but now appends **手動完了** to 備考. Its confirmation is shortened to the order number, remaining items being marked served, and manual completion being recorded. Existing historical notes are preserved.
 

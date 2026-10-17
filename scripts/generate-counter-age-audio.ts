@@ -1,14 +1,14 @@
 import { loadEnvConfig } from "@next/env";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { ORDER_AGE_MINUTES } from "../lib/order-age";
+import { COUNTER_ALERT_MINUTES } from "../lib/counter-age-alerts";
 import { synthesizeJapaneseSpeechMp3 } from "../lib/server/google-tts";
 
 async function main() {
   loadEnvConfig(process.cwd());
   const directory = resolve("public/audio/counter-alerts");
   await mkdir(directory, { recursive: true });
-  const prompts = ORDER_AGE_MINUTES.map(minutes => ({ file: `elapsed-from-order-${minutes}`, text: `注文から${minutes}分経過。` }));
+  const prompts = COUNTER_ALERT_MINUTES.map(minutes => ({ file: `elapsed-from-order-${minutes}`, text: `注文から${minutes}分経過。` }));
   for (const prompt of prompts) {
     const destination = resolve(directory, `${prompt.file}.mp3`);
     try { if ((await readFile(destination)).length > 0) continue; } catch (error) {
