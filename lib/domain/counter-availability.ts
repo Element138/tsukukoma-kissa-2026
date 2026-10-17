@@ -14,7 +14,7 @@ export function projectCounterStock(
     }
   }
   const ready = new Map(stocks.map(stock => [stock.menuId, stock.readyCount]));
-  return menus.filter(menu => menu.isActive || (waiting.get(menu.id) ?? 0) > 0 || (ready.get(menu.id) ?? 0) > 0)
+  return menus.filter(menu => (ready.get(menu.id) ?? 0) > 0)
     .map(menu => ({ menuId: menu.id, name: menu.shortName?.trim() || menu.name, waitingCount: waiting.get(menu.id) ?? 0, count: ready.get(menu.id) ?? 0 }));
 }
 
