@@ -1,0 +1,1 @@
+ALTER TABLE "Menu" ADD COLUMN "shortName" VARCHAR(120);

@@ -94,6 +94,7 @@ type Category = {
 type Menu = {
   id: string;
   name: string;
+  shortName: string | null;
   priceJpy: number;
   availability: "AVAILABLE" | "INCREASED_WAIT" | "PAUSED" | "SOLD_OUT";
   workloadSeconds: number;
@@ -116,6 +117,7 @@ type Menu = {
 };
 type MenuEdit = {
   name: string;
+  shortName: string;
   priceJpy: string;
   categoryId: string;
   kitchenId: string;
@@ -337,6 +339,7 @@ function toPositiveFiniteNumber(
 function toMenuEdit(menu: Menu): MenuEdit {
   return {
     name: menu.name,
+    shortName: menu.shortName ?? "",
     priceJpy: String(menu.priceJpy),
     categoryId: menu.categoryId,
     kitchenId: menu.assignedKitchenId ?? "",
@@ -461,6 +464,7 @@ export default function AdminPage() {
   >({});
 
   const [newMenuName, setNewMenuName] = useState("");
+  const [newMenuShortName, setNewMenuShortName] = useState("");
   const [newMenuPrice, setNewMenuPrice] = useState("500");
   const [newMenuCategoryId, setNewMenuCategoryId] = useState("");
   const [newMenuKitchenId, setNewMenuKitchenId] = useState("");
@@ -493,6 +497,8 @@ export default function AdminPage() {
   const [menuAvailabilityBusyId, setMenuAvailabilityBusyId] = useState<
     string | null
   >(null);
+  const [menuOrderBusy, setMenuOrderBusy] = useState(false);
+  const menuOrderInFlight = useRef(false);
   const [didBootstrap, setDidBootstrap] = useState(false);
 
   const reloadInFlightRef = useRef(false);
@@ -636,6 +642,7 @@ export default function AdminPage() {
           : (menu.lowStockBadgeThreshold ?? 0);
       return (
         edit.name !== menu.name ||
+        edit.shortName.trim() !== (menu.shortName ?? "") ||
         Number(edit.priceJpy) !== menu.priceJpy ||
         edit.categoryId !== menu.categoryId ||
         edit.kitchenId !== (menu.assignedKitchenId ?? "") ||
@@ -1000,6 +1007,7 @@ export default function AdminPage() {
 
   const parseMenuInput = (params: {
     name: string;
+    shortName: string;
     priceJpy: string;
     categoryId: string;
     kitchenId: string;
@@ -1018,6 +1026,10 @@ export default function AdminPage() {
     }
     if (trimmedName.length > 120) {
       throw new Error("メニュー名は 120 文字以内で入力してください");
+    }
+    const shortName = params.shortName.trim();
+    if (shortName.length > 120) {
+      throw new Error("略称は 120 文字以内で入力してください");
     }
 
     const priceJpy = toPositiveFiniteNumber(params.priceJpy, "価格 (円)", {
@@ -1062,6 +1074,7 @@ export default function AdminPage() {
 
     return {
       name: trimmedName,
+      shortName: shortName || null,
       priceJpy,
       categoryId: params.categoryId,
       kitchenId: params.kitchenId,
@@ -1220,6 +1233,7 @@ export default function AdminPage() {
             : (menu.lowStockBadgeThreshold ?? 0);
         const isDirty =
           edit.name !== menu.name ||
+          edit.shortName.trim() !== (menu.shortName ?? "") ||
           Number(edit.priceJpy) !== menu.priceJpy ||
           edit.categoryId !== menu.categoryId ||
           edit.kitchenId !== (menu.assignedKitchenId ?? "") ||
@@ -1240,6 +1254,7 @@ export default function AdminPage() {
           menuId: menu.id,
           parsedInput: parseMenuInput({
             name: edit.name,
+            shortName: edit.shortName,
             priceJpy: edit.priceJpy,
             categoryId: edit.categoryId,
             kitchenId: edit.kitchenId,
@@ -1427,25 +1442,23 @@ export default function AdminPage() {
   }, [clearByPrefix, didBootstrap, hasUnsavedChanges, notify]);
 
   const moveMenu = async (menu: Menu, direction: -1 | 1) => {
-    const siblingMenus = activeMenus.filter(
-      (row) => row.categoryId === menu.categoryId,
-    );
-    const index = siblingMenus.findIndex((row) => row.id === menu.id);
-    const target = siblingMenus[index + direction];
-    if (!target || menu.displayOrder == null || target.displayOrder == null) {
-      return;
+    if (menuOrderInFlight.current) return;
+    menuOrderInFlight.current = true;
+    setMenuOrderBusy(true);
+    try {
+      await runMutation({
+        action: async () => {
+          await apiFetch("/api/admin/menus/reorder", {
+            method: "POST", body: JSON.stringify({ menuId: menu.id, direction }),
+          });
+        },
+        successMessage: "メニュー順を更新しました",
+        errorMessage: "メニュー順の更新に失敗しました",
+      });
+    } finally {
+      menuOrderInFlight.current = false;
+      setMenuOrderBusy(false);
     }
-
-    await runMutation({
-      action: async () => {
-        await Promise.all([
-          patchMenu(menu.id, { displayOrder: target.displayOrder }),
-          patchMenu(target.id, { displayOrder: menu.displayOrder }),
-        ]);
-      },
-      successMessage: "メニュー順を更新しました",
-      errorMessage: "メニュー順の更新に失敗しました",
-    });
   };
 
   const uploadMenuCover = async (menu: Menu, file: File) => {
@@ -2125,6 +2138,12 @@ export default function AdminPage() {
                           onChange={setNewMenuName}
                         />
                         <InputField
+                          label="略称（任意・カウンター下部用）"
+                          value={newMenuShortName}
+                          onChange={setNewMenuShortName}
+                          placeholder="空欄ならメニュー名を表示"
+                        />
+                        <InputField
                           label="価格 (円)"
                           value={newMenuPrice}
                           onChange={(value) =>
@@ -2342,6 +2361,7 @@ export default function AdminPage() {
                             try {
                               parsedInput = parseMenuInput({
                                 name: newMenuName,
+                                shortName: newMenuShortName,
                                 priceJpy: newMenuPrice,
                                 categoryId: newMenuCategoryId,
                                 kitchenId: newMenuKitchenId,
@@ -2394,6 +2414,7 @@ export default function AdminPage() {
 
                             if (saved) {
                               setNewMenuName("");
+                              setNewMenuShortName("");
                               setNewMenuPrice("500");
                               setNewMenuCoverImageDataUrl("");
                               setNewMenuAllergens([]);
@@ -2591,6 +2612,15 @@ export default function AdminPage() {
                                           [menu.id]: { ...edit, name: v },
                                         }))
                                       }
+                                    />
+                                    <InputField
+                                      label="略称（任意・カウンター下部用）"
+                                      value={edit.shortName}
+                                      placeholder="空欄ならメニュー名を表示"
+                                      onChange={(v) => setMenuEdits((p) => ({
+                                        ...p,
+                                        [menu.id]: { ...edit, shortName: v },
+                                      }))}
                                     />
                                     <InputField
                                       label="価格 (円)"
@@ -2939,6 +2969,7 @@ export default function AdminPage() {
                                           try {
                                             parsedInput = parseMenuInput({
                                               name: edit.name,
+                                              shortName: edit.shortName,
                                               priceJpy: edit.priceJpy,
                                               categoryId: edit.categoryId,
                                               kitchenId: edit.kitchenId,
@@ -2983,6 +3014,7 @@ export default function AdminPage() {
                                               [menu.id]: {
                                                 ...prev[menu.id],
                                                 name: parsedInput.name,
+                                                shortName: parsedInput.shortName ?? "",
                                                 priceJpy: String(
                                                   parsedInput.priceJpy,
                                                 ),
@@ -3030,13 +3062,13 @@ export default function AdminPage() {
                                     <IconActionButton
                                       label="上へ"
                                       icon={<ArrowUp20Regular />}
-                                      disabled={isFirstInCategory}
+                                      disabled={menuOrderBusy || isFirstInCategory}
                                       onClick={() => void moveMenu(menu, -1)}
                                     />
                                     <IconActionButton
                                       label="下へ"
                                       icon={<ArrowDown20Regular />}
-                                      disabled={isLastInCategory}
+                                      disabled={menuOrderBusy || isLastInCategory}
                                       onClick={() => void moveMenu(menu, 1)}
                                     />
                                     <div className="ml-auto">
