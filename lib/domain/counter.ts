@@ -4,6 +4,7 @@ import { recalcAndPersistOrderStatus } from "@/lib/domain/orders";
 import { saveUndoOperation } from "@/lib/domain/undo";
 import { writeAuditLog } from "@/lib/domain/audit";
 import { counterServingPlan, partialServingMessage, projectCounterItems } from "@/lib/domain/counter-availability";
+import { resetExpiredReadyStock } from "@/lib/domain/daily-ready-stock";
 type DbClient = PrismaClient | Prisma.TransactionClient;
 
 export async function serveDineInItem(db: DbClient, params: { actorId: string; orderItemId: string; confirmUncalled?: boolean }, options: { saveUndo?: boolean; servedAt?: Date } = {}) {
@@ -11,6 +12,7 @@ export async function serveDineInItem(db: DbClient, params: { actorId: string; o
   assert(initial, 404, "ITEM_NOT_FOUND", "Item not found");
   await db.$queryRaw`SELECT id FROM "Menu" WHERE id = ${initial.menuId} FOR UPDATE`;
   await db.$queryRaw`SELECT id FROM "Order" WHERE id = ${initial.orderId} FOR UPDATE`;
+  await resetExpiredReadyStock(db, [initial.menuId]);
   const item = await db.orderItem.findUniqueOrThrow({ where: { id: params.orderItemId }, include: { order: true } });
   assert(item.status === "QUEUED", 409, "ITEM_CONFLICT", "Item state changed");
   assert(item.order.confirmedAt && !["FAILED", "CANCELED", "COMPLETED"].includes(item.order.orderStatus), 409, "ORDER_FAILED", "Order unavailable");
@@ -50,6 +52,7 @@ export async function serveCounterOrder(db: DbClient, params: BulkServeInput) {
   const menuIds = [...new Set(initial.map(item=>item.menuId))].sort();
   for (const menuId of menuIds) await db.$queryRaw`SELECT id FROM "Menu" WHERE id = ${menuId} FOR UPDATE`;
   await db.$queryRaw`SELECT id FROM "Order" WHERE id = ${params.orderId} FOR UPDATE`;
+  await resetExpiredReadyStock(db, menuIds);
   const order = await db.order.findUnique({ where: { id: params.orderId }, include: { items: { orderBy: { id: "asc" } } } });
   assert(order?.confirmedAt && !["FAILED", "CANCELED", "COMPLETED"].includes(order.orderStatus), 409, "ORDER_FAILED", "提供できないオーダーです");
   assert(order.items.filter(item=>item.status === "QUEUED").every(item=>menuIds.includes(item.menuId)), 409, "STOCK_CHANGED", "注文内容が変わりました。更新後にもう一度確認してください");

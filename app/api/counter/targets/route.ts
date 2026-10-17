@@ -3,11 +3,13 @@ import { projectCounterItems, projectCounterStock, counterServingPlan } from "@/
 import { prisma } from "@/lib/db";
 import { requireSession } from "@/lib/server/auth";
 import { fail, ok } from "@/lib/response";
+import { resetExpiredReadyStock } from "@/lib/domain/daily-ready-stock";
 
 export async function GET(req: NextRequest) {
   try {
     await requireSession(req, { actorTypes: ["WAITER", "ADMIN"] });
     const data = await prisma.$transaction(async tx => {
+      await resetExpiredReadyStock(tx);
       const stock = await tx.menuStock.findMany();
       const menus = await tx.menu.findMany({ select: { id: true, name: true, shortName: true, isActive: true }, orderBy: [{ displayOrder: "asc" }, { name: "asc" }, { id: "asc" }] });
       const orders = await tx.order.findMany({

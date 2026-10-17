@@ -267,6 +267,7 @@ model SquarePaymentAttempt {
 model MenuStock {
   menuId String @id
   readyCount Int @default(0)
+  stockResetAt DateTime @default(now())
   menu Menu @relation(fields: [menuId], references: [id], onDelete: Cascade)
 }
 
