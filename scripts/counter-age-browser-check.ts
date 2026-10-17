@@ -8,6 +8,7 @@ async function main() {
   let role="WAITER";
   const orders:any[]=[makeOrder("one",11,599),makeOrder("two",22,1499),makeOrder("three",33,2399)];
   const bulkPosts:any[]=[];
+  let failAudio = true;
   const browser=await chromium.launch({executablePath:"C:/Program Files/Google/Chrome/Application/chrome.exe",headless:true});
   const context=await browser.newContext({viewport:{width:390,height:844}});
   const errors:string[]=[];
@@ -50,7 +51,7 @@ async function main() {
     await route.fulfill({contentType:"application/json",body:JSON.stringify({ok:true,data})});
   });
   // Test sequencing/eligibility without sending speech requests or making sound.
-  await context.route("**/audio/**",route=>route.fulfill({contentType:"audio/mpeg",body:new URL(route.request().url()).pathname}));
+  await context.route("**/audio/**",route=>route.fulfill({status:failAudio ? 503 : 200,contentType:"audio/mpeg",body:new URL(route.request().url()).pathname}));
   const page=await context.newPage();page.on("pageerror",e=>errors.push(e.message));
   try{
     await page.goto("http://localhost:3102/counter",{waitUntil:"domcontentloaded",timeout:60000});
@@ -59,8 +60,22 @@ async function main() {
     assert.equal(await page.locator(".counter-tile.warn").count(),1);
     assert.equal(await page.locator(".counter-tile.danger").count(),1);
     assert.deepEqual(await page.evaluate(()=> (window as any).played),[]);
+    const gate = page.getByRole("dialog");
+    await gate.waitFor();
+    assert.equal(await gate.getByRole("button",{name:"Close",exact:true}).count(),0);
+    assert.equal(await page.getByText("10分: 黄 · 25分: 赤 · 40分: 紫",{exact:true}).count(),0);
+    assert.equal(await page.locator(".counter-panel button:enabled").count(),0);
+    await page.keyboard.press("Escape");
+    assert.equal(await gate.isVisible(),true);
+    await page.mouse.click(5,5);
+    assert.equal(await gate.isVisible(),true);
+    await page.screenshot({path:"tmp/counter-audio-gate.png",fullPage:true});
+    await gate.getByRole("button",{name:"音声通知を有効にする",exact:true}).click();
+    await gate.getByRole("alert").waitFor();
+    assert.equal(await page.locator(".counter-panel button:enabled").count(),0);
+    failAudio = false;
     await page.getByRole("button",{name:"音声通知を有効にする",exact:true}).click();
-    await page.getByRole("button",{name:"音声通知を停止",exact:true}).waitFor();
+    await gate.waitFor({state:"hidden"});
     await page.evaluate(()=>{(window as any).clock+=1000;});
     await page.waitForFunction(()=>(window as any).played.length===9);
     const expected=[11,22,33].flatMap((n,i)=>[`/audio/counter-alerts/tone-${i+1}.mp3`,`/audio/order-call/numbers/v2/number-${n}.mp3`,`/audio/counter-alerts/elapsed-${[10,25,40][i]}.mp3`]);
@@ -72,13 +87,15 @@ async function main() {
     await mkdir("tmp/counter-alerts",{recursive:true});
     await page.screenshot({path:"tmp/counter-alerts/counter-phone.png",fullPage:true});
     await page.reload();await page.getByRole("button",{name:"音声通知を有効にする",exact:true}).click();
-    await page.getByRole("button",{name:"音声通知を停止",exact:true}).waitFor();
+    await gate.waitFor({state:"hidden"});
     await page.evaluate(()=>{(window as any).clock+=1000;});
     // Give the next real UI tick time to check the persisted history.
     await page.waitForFunction(()=>document.querySelector(".counter-tile.critical"));
     assert.deepEqual(await page.evaluate(()=>(window as any).played),[]);
     orders.splice(0,orders.length,{...makeOrder("bulk",55,300),readyItems:[{id:"a1",name:"クロックムッシュ"},{id:"a2",name:"クロックムッシュ"},{id:"b1",name:"紅茶"}],unreadyItemGroups:[{name:"クロックムッシュ",count:1},{name:"紅茶",count:1},{name:"クロワッサン",count:1}],servingPlan:[{menuId:"a",name:"クロックムッシュ",waitingCount:3,servableCount:2},{menuId:"b",name:"紅茶",waitingCount:2,servableCount:1},{menuId:"c",name:"クロワッサン",waitingCount:1,servableCount:0}]});
-    await page.reload();await page.getByRole("button",{name:"全て提供",exact:true}).waitFor();
+    await page.reload();await page.getByRole("button",{name:"音声通知を有効にする",exact:true}).click();
+    await gate.waitFor({state:"hidden"});
+    await page.getByRole("button",{name:"全て提供",exact:true}).waitFor();
     const confirmation = page.waitForEvent("dialog");
     const canceledClick=page.getByRole("button",{name:"全て提供",exact:true}).click();
     const dialog=await confirmation;
@@ -116,7 +133,7 @@ async function main() {
       audio.onerror=()=>{clearTimeout(timer);reject(Error(`invalid audio ${src}`));};audio.preload="auto";audio.load();
     }))));
     assert.equal(durations.every(n=>Number.isFinite(n)&&n>0),true);await realContext.close();
-    console.log("PASS: 10/25/40 colors, serialized tone/number/minutes clips, no autoplay before enabling, persistent deduplication, and allergen display off by default; no browser errors.");
+    console.log("PASS: mandatory audio dialog blocks actions, Escape/outside taps and failed activation; retry unlocks counter; no threshold legend; serialized alerts, reload deduplication, bulk serving and allergen defaults pass; no browser errors.");
   }catch(e){console.error({alerts:await page.getByRole("alert").allTextContents(),errors,played:await page.evaluate(()=>(window as any).played)});throw e;}
   finally{await browser.close();}
 }
