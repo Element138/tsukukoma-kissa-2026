@@ -95,7 +95,7 @@ export async function GET(req: NextRequest) {
       trace("db.read.start");
       const [menus, categories, enabledAssignments] = await Promise.all([
         prisma.menu.findMany({
-          orderBy: [{ displayOrder: "asc" }, { name: "asc" }],
+          orderBy: [{ displayOrder: "asc" }, { name: "asc" }, { id: "asc" }],
         }),
         prisma.menuCategory.findMany({
           where: { isActive: true },

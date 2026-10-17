@@ -497,6 +497,8 @@ export default function AdminPage() {
   const [menuAvailabilityBusyId, setMenuAvailabilityBusyId] = useState<
     string | null
   >(null);
+  const [menuOrderBusy, setMenuOrderBusy] = useState(false);
+  const menuOrderInFlight = useRef(false);
   const [didBootstrap, setDidBootstrap] = useState(false);
 
   const reloadInFlightRef = useRef(false);
@@ -1440,25 +1442,23 @@ export default function AdminPage() {
   }, [clearByPrefix, didBootstrap, hasUnsavedChanges, notify]);
 
   const moveMenu = async (menu: Menu, direction: -1 | 1) => {
-    const siblingMenus = activeMenus.filter(
-      (row) => row.categoryId === menu.categoryId,
-    );
-    const index = siblingMenus.findIndex((row) => row.id === menu.id);
-    const target = siblingMenus[index + direction];
-    if (!target || menu.displayOrder == null || target.displayOrder == null) {
-      return;
+    if (menuOrderInFlight.current) return;
+    menuOrderInFlight.current = true;
+    setMenuOrderBusy(true);
+    try {
+      await runMutation({
+        action: async () => {
+          await apiFetch("/api/admin/menus/reorder", {
+            method: "POST", body: JSON.stringify({ menuId: menu.id, direction }),
+          });
+        },
+        successMessage: "メニュー順を更新しました",
+        errorMessage: "メニュー順の更新に失敗しました",
+      });
+    } finally {
+      menuOrderInFlight.current = false;
+      setMenuOrderBusy(false);
     }
-
-    await runMutation({
-      action: async () => {
-        await Promise.all([
-          patchMenu(menu.id, { displayOrder: target.displayOrder }),
-          patchMenu(target.id, { displayOrder: menu.displayOrder }),
-        ]);
-      },
-      successMessage: "メニュー順を更新しました",
-      errorMessage: "メニュー順の更新に失敗しました",
-    });
   };
 
   const uploadMenuCover = async (menu: Menu, file: File) => {
@@ -3062,13 +3062,13 @@ export default function AdminPage() {
                                     <IconActionButton
                                       label="上へ"
                                       icon={<ArrowUp20Regular />}
-                                      disabled={isFirstInCategory}
+                                      disabled={menuOrderBusy || isFirstInCategory}
                                       onClick={() => void moveMenu(menu, -1)}
                                     />
                                     <IconActionButton
                                       label="下へ"
                                       icon={<ArrowDown20Regular />}
-                                      disabled={isLastInCategory}
+                                      disabled={menuOrderBusy || isLastInCategory}
                                       onClick={() => void moveMenu(menu, 1)}
                                     />
                                     <div className="ml-auto">
