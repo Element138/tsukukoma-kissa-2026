@@ -18,6 +18,7 @@ import {
   labelOf,
 } from "@/lib/labels";
 import { routeByActorType } from "@/lib/routes";
+import { orderAgeTone } from "@/lib/order-age";
 import { useToast } from "@/components/toast";
 import { Input } from "@/components/ui/input";
 import { AGE_GROUPS, type AgeGroupCounts } from "@/lib/age-groups";
@@ -133,13 +134,7 @@ function orderAgeClass(
   if (paymentStatus === "AWAITING") {
     return "";
   }
-  if (elapsedSec >= 600) {
-    return "order-age-danger";
-  }
-  if (elapsedSec >= 240) {
-    return "order-age-warn";
-  }
-  return "order-age-safe";
+  return `order-age-${orderAgeTone(elapsedSec)}`;
 }
 
 function bundleItems(items: OrderRow["items"]): BundledItem[] {
@@ -723,10 +718,7 @@ export default function OrderBookPage() {
                   >
                     レシート再印刷
                   </button>
-                  {canEditNote &&
-                    order.orderStatus !== "COMPLETED" &&
-                    order.orderStatus !== "FAILED" &&
-                    order.orderStatus !== "CANCELED" && (
+                  {canEditNote && (
                       <button
                         type="button"
                         className="ghost-btn"

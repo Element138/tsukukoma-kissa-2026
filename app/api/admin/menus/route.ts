@@ -198,7 +198,7 @@ export async function POST(req: NextRequest) {
             showLeadTime: body.showLeadTime ?? true,
             coverImageDataUrl: body.coverImageDataUrl ?? null,
             allergensJson: body.allergensJson ?? [],
-            allergenDisplayEnabled: body.allergenDisplayEnabled ?? true,
+            allergenDisplayEnabled: body.allergenDisplayEnabled ?? false,
             customBadgeText: body.customBadgeText ?? null,
             customBadgeColor: body.customBadgeColor ?? null,
             dailyOrderCap: body.dailyOrderCap ?? null,

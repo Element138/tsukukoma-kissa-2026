@@ -4,8 +4,25 @@ import { requireSession } from "@/lib/server/auth";
 import { fail, ok } from "@/lib/response";
 import { AppError } from "@/lib/errors";
 import { parseAgeRangesToCounts } from "@/lib/age-groups";
+import { correctOrder, orderCorrectionSchema } from "@/lib/domain/order-corrections";
+import { parseJson } from "@/lib/server/http";
+import { broadcastInvalidation, CHANNEL_GROUPS } from "@/lib/server/realtime-broadcast";
 
 type RouteContext = { params: Promise<{ orderId: string }> };
+
+export async function PATCH(req: NextRequest, context: RouteContext) {
+  try {
+    const actor = await requireSession(req,{actorTypes:["POS","ADMIN"]});
+    const {orderId} = await context.params;
+    const body = await parseJson(req,orderCorrectionSchema.omit({orderId:true,manualClose:true}).strict());
+    const order = await prisma.$transaction(async tx=>{
+      const updated = await correctOrder(tx,actor,{...body,orderId,manualClose:false});
+      await broadcastInvalidation(tx,CHANNEL_GROUPS.ORDER_FLOW,"orders","order_statistics_updated");
+      return updated;
+    });
+    return ok({order});
+  } catch(error) {return fail(error);}
+}
 
 export async function GET(req: NextRequest, context: RouteContext) {
   try {

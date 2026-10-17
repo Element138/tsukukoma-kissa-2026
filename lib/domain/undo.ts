@@ -60,6 +60,28 @@ export async function executeUndo(db: DbClient, params: { actorId: string; actor
   const menuId = payload.menuId;
   assert(typeof menuId === "string", 409, "UNDO_TARGET_CHANGED", "取り消し対象が旧仕様です");
   await db.$queryRaw`SELECT id FROM "Menu" WHERE id = ${menuId} FOR UPDATE`;
+  if (undo.operationType === "ITEM_SERVED" && payload.batch === true && undo.targetEntityType === "order_items") {
+    assert(params.actorType === "WAITER" && undo.orderId && Array.isArray(payload.items) && payload.items.length > 1 && typeof payload.servedAt === "string", 409, "UNDO_TARGET_CHANGED", "まとめ提供の取り消し情報が不正です");
+    const entries = payload.items as Array<{id:string;menuId:string}>;
+    assert(entries.every(item=>typeof item.id === "string" && typeof item.menuId === "string") && new Set(entries.map(item=>item.id)).size === entries.length,409,"UNDO_TARGET_CHANGED","取り消し対象が不正です");
+    const menuIds = [...new Set(entries.map(item=>item.menuId))].sort();
+    assert(menuIds.every(id=>id >= menuId),409,"UNDO_TARGET_CHANGED","取り消し対象が不正です");
+    for (const id of menuIds) if (id !== menuId) await db.$queryRaw`SELECT id FROM "Menu" WHERE id = ${id} FOR UPDATE`;
+    await db.$queryRaw`SELECT id FROM "Order" WHERE id = ${undo.orderId} FOR UPDATE`;
+    const order = await db.order.findUnique({ where:{id:undo.orderId} });
+    assert(order && !["FAILED","CANCELED"].includes(order.orderStatus) && order.lastMutationVersion === undo.expectedOrderVersion,409,"UNDO_CONFLICT","注文の状態が変わったため取り消せません");
+    const quantities = new Map<string,number>();
+    for (const item of entries) {
+      const changed = await db.orderItem.updateMany({where:{id:item.id,orderId:undo.orderId,menuId:item.menuId,status:"SERVED",servedByActorId:params.actorId,servedAt:new Date(payload.servedAt)},data:{status:"QUEUED",readyAt:null,servedAt:null,servedByActorId:null}});
+      assert(changed.count === 1,409,"UNDO_CONFLICT","商品の状態が変わったため取り消せません");
+      quantities.set(item.menuId,(quantities.get(item.menuId)??0)+1);
+    }
+    for (const [id,quantity] of quantities) await db.menuStock.upsert({where:{menuId:id},create:{menuId:id,readyCount:quantity},update:{readyCount:{increment:quantity}}});
+    await recalcAndPersistOrderStatus(db,undo.orderId,true);
+    await db.undoOperation.delete({where:{id:undo.id}});
+    await writeAuditLog(db,{actorId:params.actorId,actorType:params.actorType,actionType:"UNDO",entityType:"undo_operation",entityId:undo.id,orderId:undo.orderId,afterJson:{revertedItemCount:entries.length},result:"SUCCESS"});
+    return {operationType:undo.operationType,revertedItemCount:entries.length,affectedOrders:[]};
+  }
   let count = 1;
   let orderId: string | null = null;
   if (undo.operationType === "ITEM_READY_BATCH" && undo.targetEntityType === "menu_stock") {

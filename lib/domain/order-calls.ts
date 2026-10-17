@@ -20,6 +20,7 @@ export async function updateOrderCall(db: Prisma.TransactionClient, params: {
     result: "SUCCESS",
   } });
   if (duplicate) return duplicate.afterJson;
+  assert(params.action === "cancel" || order.orderStatus !== "COMPLETED", 409, "ORDER_ALREADY_SERVED", "全て提供済みのオーダーは呼び出せません");
 
   // Keep the actual call history when clearing the active customer display.
   const call = params.action === "call"
