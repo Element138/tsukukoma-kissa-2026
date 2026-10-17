@@ -9,6 +9,11 @@ import { useRealtimeSubscription } from "@/components/use-realtime-subscription"
 import { useWakeLock } from "@/components/use-wake-lock";
 import { useToast } from "@/components/toast";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { useCounterAgeAudio } from "@/components/use-counter-age-audio";
+import { orderAgeTone } from "@/lib/order-age";
+import { partialServingMessage, type CounterServingPlan } from "@/lib/domain/counter-availability";
 
 type CounterOrder = {
   id: string; orderNo: number; createdAt: string;
@@ -18,6 +23,7 @@ type CounterOrder = {
   readyItems: Array<{ id: string; name: string }>;
   servedItemGroups: Array<{ name: string; count: number }>;
   unreadyItemGroups: Array<{ name: string; count: number }>;
+  servingPlan: CounterServingPlan[];
 };
 type Stock = { menuId: string; name: string; waitingCount: number; count: number };
 export default function CounterPage() {
@@ -30,6 +36,8 @@ export default function CounterPage() {
   const [footerHeight, setFooterHeight] = useState(110);
   const [tickNow, setTickNow] = useState(Date.now());
   const [busy, setBusy] = useState(false);
+  const [loadedAt, setLoadedAt] = useState(0);
+  const ageAudio = useCounterAgeAudio(orders, session?.actor.actorId, tickNow, loadedAt);
   const actionInFlight = useRef(false);
   const reloadInFlight = useRef(false);
   const reloadQueued = useRef(false);
@@ -38,7 +46,7 @@ export default function CounterPage() {
     reloadInFlight.current = true;
     try {
       const data = await apiFetch<{ orders: CounterOrder[]; stock: Stock[] }>("/api/counter/targets");
-      setOrders(data.orders); setStock(data.stock);
+      setOrders(data.orders); setStock(data.stock); setLoadedAt(Date.now());
     } catch (e) { notify({ level: "error", message: e instanceof Error ? e.message : "更新に失敗しました" }); }
     finally { reloadInFlight.current = false; if (reloadQueued.current) { reloadQueued.current = false; void reload(); } }
   };
@@ -51,9 +59,14 @@ export default function CounterPage() {
     return () => observer.disconnect();
   }, [session]);
   useEffect(() => { const timer = setInterval(() => setTickNow(Date.now()), 1000); return () => clearInterval(timer); }, []);
+  useEffect(() => {
+    const refresh = () => { if (session && document.visibilityState === "visible") void reload(); };
+    document.addEventListener("visibilitychange", refresh);
+    return () => document.removeEventListener("visibilitychange", refresh);
+  }, [session]);
   useRealtimeSubscription({ enabled: Boolean(session), channels: ["orders", "counter"], onEvent: () => { void reload(); }, onResync: () => { void reload(); }, fallbackIntervalMs: 15000 });
   const perform = async (action: () => Promise<void>) => {
-    if (actionInFlight.current) return;
+    if (actionInFlight.current || !ageAudio.enabled) return;
     actionInFlight.current = true; setBusy(true);
     try { await action(); await reload(); }
     catch (e) { notify({ level: "error", message: e instanceof Error ? e.message : "操作に失敗しました" }); await reload(); }
@@ -83,33 +96,65 @@ export default function CounterPage() {
     await apiFetch("/api/undo", { method: "POST", body: JSON.stringify({ confirm: true }) });
     notify({ level: "success", message: "提供を取り消しました" });
   }); };
+  const serveAll = (order: CounterOrder) => {
+    const shortage = partialServingMessage(order.servingPlan);
+    if (shortage && !window.confirm(shortage + "\nよろしいですか？")) return;
+    const idempotencyKey = crypto.randomUUID();
+    void perform(async()=>{
+      const submit = (confirmUncalled: boolean) => apiFetch<{servedItemCount:number}>("/api/counter/serve-order",{method:"POST",body:JSON.stringify({
+        orderId:order.id,idempotencyKey,expectedItemIds:order.readyItems.map(item=>item.id),
+        expectedPlan:order.servingPlan.map(({menuId,waitingCount,servableCount})=>({menuId,waitingCount,servableCount})),confirmPartial:Boolean(shortage),confirmUncalled,
+      })});
+      let result;
+      try { result = await submit(false); }
+      catch(e) {
+        if (!(e instanceof ApiError) || e.code !== "SERVE_CONFIRM_REQUIRED") throw e;
+        if (!window.confirm(e.message.replace(/（コード:[\s\S]*$/,""))) return;
+        result = await submit(true);
+      }
+      notify({level:"success",message:`注文 #${order.orderNo} の${result.servedItemCount}個を提供済みにしました`});
+    });
+  };
   if (loading || !session) return <LoadingScreen />;
+  const actionsDisabled = busy || !ageAudio.enabled;
   return <>
+    <Dialog open={!ageAudio.enabled}>
+      <DialogContent showCloseButton={false} className="w-[calc(100%-2rem)] max-w-sm" onEscapeKeyDown={event => event.preventDefault()} onInteractOutside={event => event.preventDefault()}>
+        <DialogTitle>カウンターを開始</DialogTitle>
+        <DialogDescription>音声通知を有効にしてください。メディア音量も確認してください。</DialogDescription>
+        {ageAudio.error && <p className="notice error" role="alert">{ageAudio.error}</p>}
+        <Button type="button" className="min-h-14 w-full text-base" disabled={ageAudio.starting} onClick={() => void ageAudio.enable()}>
+          {ageAudio.starting ? "音声を準備中…" : "音声通知を有効にする"}
+        </Button>
+      </DialogContent>
+    </Dialog>
     <TerminalBanner actorId={session.actor.actorId} actorType={session.actor.actorType} actorLabel={session.actor.label} offlineActors={session.offlineActors} />
     <DashboardShell title="カウンター" hideHeader>
       <Card className="card counter-panel" style={{ marginBottom: footerHeight + 24 }}>
-        <div className="row between wrap" style={{ marginBottom: 10 }}><h2 className="section-title text-base font-semibold">カウンタービュー</h2><button type="button" className="ghost-btn" disabled={busy} onClick={undo}>取り消し</button></div>
+        <div className="row between wrap" style={{ marginBottom: 10 }}><h2 className="section-title text-base font-semibold">カウンタービュー</h2><button type="button" className="ghost-btn" disabled={actionsDisabled} onClick={undo}>取り消し</button></div>
+        {ageAudio.speaking && <p role="status" className="muted text-sm mb-3">{ageAudio.speaking}</p>}
         {(["DINE_IN", "TAKEOUT"] as const).map(type => <section key={type}>
           <h3 style={{ margin: "14px 0 10px" }}>{type === "DINE_IN" ? "店内" : "持ち帰り"}</h3>
           <div className="counter-tile-grid">
             {!orders.some(o => o.fulfillmentType === type) && <div className="muted">提供可能なオーダーはありません</div>}
             {orders.filter(o => o.fulfillmentType === type).map(order => {
               const seconds = Math.max(0, Math.floor((tickNow - new Date(order.createdAt).getTime()) / 1000));
-              const tone = seconds >= 600 ? "danger" : seconds >= 240 ? "warn" : "safe";
+              const tone = orderAgeTone(seconds);
               return <article key={order.id} className={`counter-tile ${tone}`}>
                 <div className="counter-tile-head">
                   <div className="counter-major"><span className="counter-major-label">注文番号</span><span className="counter-major-value">{order.orderNo}</span></div>
-                  <button type="button" className="order-call-btn" aria-pressed={Boolean(order.lastCalledAt)} disabled={busy} onClick={() => call(order)}>{order.lastCalledAt ? "呼び出し解除" : "呼び出す"}</button>
+                  <button type="button" className="order-call-btn" aria-pressed={Boolean(order.lastCalledAt)} disabled={actionsDisabled} onClick={() => call(order)}>{order.lastCalledAt ? "呼び出し解除" : "呼び出す"}</button>
                 </div>
                 <div className="muted counter-tile-elapsed">注文から {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")}</div>
                 <div className="list counter-ready-list">
                   {order.readyItems.map(item => <div key={item.id} className="list-item row between wrap" style={{ padding: "8px 10px" }}>
-                    <span>{item.name}</span><button type="button" className="ghost-btn counter-serve-btn" disabled={busy} onClick={() => serve(item)}>提供</button>
+                    <span>{item.name}</span><button type="button" className="ghost-btn counter-serve-btn" disabled={actionsDisabled} onClick={() => serve(item)}>提供</button>
                   </div>)}
                   {order.servedItemGroups.map(group => <div key={`served-${group.name}`} className="list-item counter-item-muted" style={{ padding: "8px 10px" }}><span>{group.count > 1 ? `${group.count} × ` : ""}{group.name}</span><span className="badge served">提供済</span></div>)}
                   {order.unreadyItemGroups.map(group => <div key={`unready-${group.name}`} className="list-item counter-item-muted" style={{ padding: "8px 10px" }}><span>{group.count > 1 ? `${group.count} × ` : ""}{group.name}</span><span className="badge queued">調理中</span></div>)}
                 </div>
                 {order.specialNote && <div className="notice" style={{ marginTop: 8 }}>{order.specialNote}</div>}
+                {order.readyItems.length > 1 && order.servingPlan && <button type="button" className="counter-serve-all" disabled={actionsDisabled} onClick={()=>serveAll(order)}>全て提供</button>}
               </article>;
             })}
           </div>

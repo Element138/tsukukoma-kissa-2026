@@ -7,6 +7,7 @@ import { useRealtimeSubscription } from "@/components/use-realtime-subscription"
 import { useSession } from "@/components/use-session";
 import { useWakeLock } from "@/components/use-wake-lock";
 import { useToast } from "@/components/toast";
+import { ORDER_AGE_MINUTES } from "@/lib/order-age";
 
 type DisplayOrder = {
   id: string;
@@ -48,8 +49,8 @@ type QueuedCall = {
   callCount: number;
 };
 
-const ORDER_AGE_LONG_WAIT_MS = 25 * 60 * 1000;
-const ORDER_AGE_EXTREME_LONG_WAIT_MS = 40 * 60 * 1000;
+const ORDER_AGE_LONG_WAIT_MS = ORDER_AGE_MINUTES[1] * 60 * 1000;
+const ORDER_AGE_EXTREME_LONG_WAIT_MS = ORDER_AGE_MINUTES[2] * 60 * 1000;
 const CALLOUT_MIN_VISIBLE_MS = 5200;
 const CALLOUT_FADE_OUT_MS = 450;
 const CALL_BURST_WINDOW_MS = 5000;
@@ -67,20 +68,27 @@ const CALL_ASSETS = {
   counter: "/audio/order-call/counter.mp3",
 };
 
-function wait(ms: number) {
-  return new Promise<void>((resolve) => window.setTimeout(resolve, ms));
-}
-
-function playAudioElement(audio: HTMLAudioElement) {
+function wait(ms: number, signal?: AbortSignal) {
   return new Promise<void>((resolve) => {
-    audio.currentTime = 0;
-    audio.onended = () => resolve();
-    audio.onerror = () => resolve();
-    void audio.play().catch(() => resolve());
+    const finish = () => { window.clearTimeout(timer); signal?.removeEventListener("abort",finish); resolve(); };
+    const timer = window.setTimeout(finish,ms);
+    if (signal?.aborted) finish(); else signal?.addEventListener("abort",finish,{once:true});
   });
 }
 
-function waitForAudioReady(audio: HTMLAudioElement) {
+function playAudioElement(audio: HTMLAudioElement, signal?: AbortSignal) {
+  return new Promise<void>((resolve) => {
+    const finish = () => { audio.pause(); audio.onended=null; audio.onerror=null; signal?.removeEventListener("abort",finish); resolve(); };
+    if (signal?.aborted) { finish(); return; }
+    audio.currentTime = 0;
+    audio.onended = finish;
+    audio.onerror = finish;
+    signal?.addEventListener("abort",finish,{once:true});
+    void audio.play().catch(finish);
+  });
+}
+
+function waitForAudioReady(audio: HTMLAudioElement, signal?: AbortSignal) {
   if (audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
     return Promise.resolve();
   }
@@ -90,6 +98,7 @@ function waitForAudioReady(audio: HTMLAudioElement) {
       audio.removeEventListener("canplaythrough", onReady);
       audio.removeEventListener("canplay", onReady);
       audio.removeEventListener("error", onReady);
+      signal?.removeEventListener("abort",onReady); window.clearTimeout(timeout);
     };
     const onReady = () => {
       cleanup();
@@ -98,6 +107,8 @@ function waitForAudioReady(audio: HTMLAudioElement) {
     audio.addEventListener("canplaythrough", onReady, { once: true });
     audio.addEventListener("canplay", onReady, { once: true });
     audio.addEventListener("error", onReady, { once: true });
+    const timeout = window.setTimeout(onReady,15000);
+    if (signal?.aborted) onReady(); else signal?.addEventListener("abort",onReady,{once:true});
   });
 }
 
@@ -125,7 +136,7 @@ function warmOrderNumberAudio(orderNo: number) {
   }
 }
 
-async function playOrderCallAudio(call: Callout, melodyVolume: number) {
+async function playOrderCallAudio(call: Callout, melodyVolume: number, signal?: AbortSignal) {
   const orderAgeMs = Date.now() - new Date(call.createdAt).getTime();
   const isLongWait = orderAgeMs >= ORDER_AGE_LONG_WAIT_MS;
   const isExtremeLongWait = orderAgeMs >= ORDER_AGE_EXTREME_LONG_WAIT_MS;
@@ -136,8 +147,8 @@ async function playOrderCallAudio(call: Callout, melodyVolume: number) {
     orderNumberAudioSrc(call.orderNo, "customer"),
   );
   const orderNumberAudioReady = Promise.all([
-    waitForAudioReady(numberAudio),
-    waitForAudioReady(customerAudio),
+    waitForAudioReady(numberAudio,signal),
+    waitForAudioReady(customerAudio,signal),
   ]);
 
   const introParts = [
@@ -162,8 +173,10 @@ async function playOrderCallAudio(call: Callout, melodyVolume: number) {
   ].filter(Boolean) as Array<string | HTMLAudioElement>;
 
   for (const part of introParts) {
+    if (signal?.aborted) return;
     await playAudioElement(
       typeof part === "string" ? preloadAudio(part) : part,
+      signal,
     );
   }
 
@@ -179,8 +192,10 @@ async function playOrderCallAudio(call: Callout, melodyVolume: number) {
   ].filter(Boolean) as Array<string | HTMLAudioElement>;
 
   for (const part of parts) {
+    if (signal?.aborted) return;
     await playAudioElement(
       typeof part === "string" ? preloadAudio(part) : part,
+      signal,
     );
   }
 }
@@ -229,6 +244,8 @@ export default function OrderDisplayPage() {
   const callQueueRef = useRef<QueuedCall[]>([]);
   const callInFlightRef = useRef(false);
   const lastCallEndedAtRef = useRef(0);
+  const activeCallRef = useRef<{orderId:string;controller:AbortController}|null>(null);
+  useEffect(()=>()=>{activeCallRef.current?.controller.abort();callQueueRef.current=[];},[]);
 
   const processCallQueue = async () => {
     if (callInFlightRef.current) {
@@ -241,6 +258,8 @@ export default function OrderDisplayPage() {
     }
 
     callInFlightRef.current = true;
+    const controller = new AbortController();
+    activeCallRef.current = {orderId:nextCall.id,controller};
     const activeCall: Callout = {
       key: Date.now(),
       orderNo: nextCall.orderNo,
@@ -251,17 +270,18 @@ export default function OrderDisplayPage() {
     setCallout(activeCall);
 
     const visibleStartedAt = Date.now();
-    await playOrderCallAudio(activeCall, settings.orderCallVolume);
-    await wait(Math.max(0, CALLOUT_MIN_VISIBLE_MS - (Date.now() - visibleStartedAt)));
+    await playOrderCallAudio(activeCall, settings.orderCallVolume,controller.signal);
+    await wait(Math.max(0, CALLOUT_MIN_VISIBLE_MS - (Date.now() - visibleStartedAt)),controller.signal);
     setCallout((current) =>
       current?.key === activeCall.key ? { ...current, exiting: true } : current,
     );
-    await wait(CALLOUT_FADE_OUT_MS);
+    await wait(CALLOUT_FADE_OUT_MS,controller.signal);
     setCallout((current) =>
       current?.key === activeCall.key ? null : current,
     );
     lastCallEndedAtRef.current = Date.now();
     callInFlightRef.current = false;
+    if (activeCallRef.current?.controller === controller) activeCallRef.current=null;
 
     if (callQueueRef.current.length > 0) {
       void processCallQueue();
@@ -290,7 +310,12 @@ export default function OrderDisplayPage() {
   };
 
   const applyPayload = (payload: OrderDisplayPayload) => {
-    if (payload.calls.length > 0) enqueueCalls(payload.calls);
+    const calledIds = new Set(payload.readyOrders.map(order=>order.id));
+    callQueueRef.current = callQueueRef.current.filter(call=>calledIds.has(call.id));
+    if (activeCallRef.current && !calledIds.has(activeCallRef.current.orderId)) {
+      activeCallRef.current.controller.abort(); setCallout(null);
+    }
+    if (payload.calls.length > 0) enqueueCalls(payload.calls.filter(call=>calledIds.has(call.id)));
     callCursorRef.current = payload.callCursor;
     setReadyOrders(payload.readyOrders);
     setUnreadyOrders(payload.unreadyOrders);

@@ -209,6 +209,7 @@ model Order {
   partySize              Int
   ageRangesJson          Json
   specialNote            String?
+  excludeFromWaitStats   Boolean               @default(false)
   paymentMethod          PaymentMethod
   paymentStatus          PaymentStatus
   events                 Json

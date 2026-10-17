@@ -1,0 +1,1 @@
+ALTER TABLE "Order" ADD COLUMN "excludeFromWaitStats" BOOLEAN NOT NULL DEFAULT false;

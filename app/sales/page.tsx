@@ -145,6 +145,8 @@ type OrderDetail = {
   partySize: number;
   ageGroupCounts: AgeGroupCounts;
   specialNote: string | null;
+  excludeFromWaitStats: boolean;
+  lastMutationVersion: number;
   paymentMethod: string;
   paymentStatus: string;
   paymentSkipReasonType: string | null;
@@ -327,16 +329,18 @@ function ChartAxes({
   const plotBottom = CHART.height - CHART.bottom;
   const plotRight = width - CHART.right;
   const yTicks = [0, yMax / 2, yMax];
+  const hours = chartHours(start, end);
+  const labelEvery = Math.max(1, Math.ceil((hours.length - 1) / Math.max(1, Math.floor((plotRight - CHART.left) / 65))));
   return (
     <g className="sales-chart-axes" aria-hidden="true">
-      {chartHours(start, end).map((hour) => {
+      {hours.map((hour, index) => {
         const x = xScaleForWidth(hour.at, start, end, width);
         return (
           <g key={hour.at}>
             <line x1={x} x2={x} y1={CHART.top} y2={plotBottom} />
-            <text x={x} y={CHART.height - 13} textAnchor="middle">
+            {index % labelEvery === 0 && <text x={x} y={CHART.height - 13} textAnchor="middle">
               {hour.label}
-            </text>
+            </text>}
           </g>
         );
       })}
@@ -621,6 +625,8 @@ const EVENT_LABEL: Record<string, string> = {
   PAYMENT_FAILED: "決済失敗",
   ORDER_CONFIRMED: "注文確定",
   ORDER_FAILED: "注文失敗",
+  MANUAL_CLOSURE: "管理者による手動完了",
+  ORDER_STATISTICS_UPDATED: "備考・集計設定更新",
   PAYMENT_SUCCESS_CALLBACK_AFTER_FAILED: "失敗後に決済成功通知",
 };
 
@@ -790,23 +796,51 @@ const OrderDrawer = memo(function OrderDrawer({
   order,
   loading,
   onClose,
+  canEdit,
+  onSaved,
+  onDirtyChange,
 }: {
   order: OrderDetail | null;
   loading: boolean;
   onClose: () => void;
+  canEdit: boolean;
+  onSaved: () => Promise<void>;
+  onDirtyChange: (dirty: boolean) => void;
 }) {
   const timeline = useMemo(() => (order ? buildTimeline(order) : []), [order]);
+  const { notify } = useToast();
+  const [note, setNote] = useState(order?.specialNote ?? "");
+  const [excluded, setExcluded] = useState(order?.excludeFromWaitStats ?? false);
+  const [saving, setSaving] = useState(false);
+  const dirty = Boolean(order && (note !== (order.specialNote ?? "") || excluded !== order.excludeFromWaitStats));
+  useEffect(()=>{onDirtyChange(dirty);return ()=>onDirtyChange(false);},[dirty,onDirtyChange]);
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => {event.preventDefault();event.returnValue="";};
+    window.addEventListener("beforeunload",warn);
+    return ()=>window.removeEventListener("beforeunload",warn);
+  },[dirty]);
+  const save = async () => {
+    if (!order || saving) return;
+    setSaving(true);
+    try {
+      await apiFetch(`/api/sales/orders/${order.id}`,{method:"PATCH",body:JSON.stringify({expectedVersion:order.lastMutationVersion,specialNote:note,excludeFromWaitStats:excluded})});
+      await onSaved();
+      notify({level:"success",message:"変更をすべて保存しました"});
+    } catch(error) {notify({level:"error",message:error instanceof Error?error.message:"保存に失敗しました"});}
+    finally {setSaving(false);}
+  };
   return (
     <aside className="sales-order-drawer" aria-label="注文詳細">
       <div className="sales-drawer-head">
         <div>
-          <span className="sales-kicker">ORDER INSPECTION</span>
           <h2>{order ? `注文 #${order.orderNo}` : "注文詳細"}</h2>
         </div>
         <button
           type="button"
           className="ghost-btn sales-icon-btn"
-          onClick={onClose}
+          disabled={saving}
+          onClick={() => {if (!dirty || window.confirm("未保存の変更を破棄しますか？")) onClose();}}
           aria-label="閉じる"
         >
           <X aria-hidden="true" />
@@ -869,12 +903,21 @@ const OrderDrawer = memo(function OrderDrawer({
                 <dd>{order.createdBy.label}</dd>
               </div>
             </dl>
-            {order.specialNote && (
+            {!canEdit && order.specialNote && (
               <div className="sales-note">
                 <StickyNote aria-hidden="true" />
                 {order.specialNote}
               </div>
             )}
+            {canEdit && <div className="grid gap-3 mt-3">
+              <label className="grid gap-1 font-semibold">備考
+                <textarea aria-label="備考" className="rounded-md border bg-background p-2 font-normal" maxLength={500} value={note} disabled={saving} onChange={event=>setNote(event.target.value)} />
+              </label>
+              <label className="sales-setting-toggle"><input type="checkbox" checked={excluded} disabled={saving} onChange={event=>setExcluded(event.target.checked)} />待ち時間統計から除外する</label>
+              <p className="muted text-xs">売上集計には含まれます。</p>
+              {dirty && <p className="text-sm" role="status">未保存の変更があります。</p>}
+              <button type="button" className="order-call-btn" disabled={!dirty || saving} onClick={()=>void save()}>{saving?"保存中…":"すべて保存"}</button>
+            </div>}
           </div>
 
           <section>
@@ -956,6 +999,8 @@ function SalesPageContent() {
   const [waitKey, setWaitKey] = useState("order:complete");
   const [detail, setDetail] = useState<OrderDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [businessHoursOnly, setBusinessHoursOnly] = useState(true);
+  const [detailDirty, setDetailDirty] = useState(false);
   const sessionActorId = session?.actor.actorId ?? null;
 
   useEffect(() => {
@@ -968,7 +1013,7 @@ function SalesPageContent() {
     setDataLoading(true);
     try {
       const next = await apiFetch<SalesData>(
-        `/api/sales?date=${encodeURIComponent(selectedDate)}`,
+        `/api/sales?date=${encodeURIComponent(selectedDate)}&businessHoursOnly=${businessHoursOnly}`,
       );
       setData(next);
     } catch (error) {
@@ -982,7 +1027,7 @@ function SalesPageContent() {
     } finally {
       setDataLoading(false);
     }
-  }, [notify, selectedDate, sessionActorId]);
+  }, [notify, selectedDate, sessionActorId, businessHoursOnly]);
 
   useEffect(() => {
     void reload();
@@ -1039,6 +1084,7 @@ function SalesPageContent() {
   }, [notify, selectedOrderId, sessionActorId]);
 
   const updateDate = (nextDate: string) => {
+    if (detailDirty && !window.confirm("未保存の変更を破棄しますか？")) return;
     setSelectedDate(nextDate);
     const params = new URLSearchParams(searchParams.toString());
     params.set("date", nextDate);
@@ -1047,6 +1093,7 @@ function SalesPageContent() {
   };
 
   const openOrder = (orderId: string) => {
+    if (orderId!==selectedOrderId && detailDirty && !window.confirm("未保存の変更を破棄しますか？")) return;
     const params = new URLSearchParams(searchParams.toString());
     params.set("date", selectedDate);
     params.set("order", orderId);
@@ -1085,7 +1132,6 @@ function SalesPageContent() {
         offlineActors={session.offlineActors}
       />
       <DashboardShell
-        eyebrow="SALES & EXPERIENCE"
         title="売上・待ち時間"
         subtitle="売上や待ち時間の統計を確認"
         className="sales-shell"
@@ -1109,16 +1155,16 @@ function SalesPageContent() {
           <div className="sales-dashboard">
             <section className="card sales-day-bar">
               <div>
-                <span className="sales-kicker">BUSINESS DAY</span>
                 <strong>{formatDay(selectedDate)}</strong>
                 <small>
                   {/* JST 00:00–24:00 集計 / グラフ{" "} */}
                   {data && data.date === selectedDate
-                    ? `${formatTime(data.chartRange.chartStart).slice(0, 5)}–${formatTime(data.chartRange.chartEnd).slice(0, 5)}`
+                    ? `${formatTime(data.chartRange.chartStart).slice(0, 5)}–${(new Date(data.chartRange.chartEnd).getTime() === new Date(data.range.end).getTime() ? "24:00" : formatTime(data.chartRange.chartEnd).slice(0, 5))}`
                     : "09:00–18:00"}
                 </small>
               </div>
               <div className="sales-day-controls">
+                <label className="sales-setting-toggle font-semibold"><input type="checkbox" checked={businessHoursOnly} onChange={event=>setBusinessHoursOnly(event.target.checked)} />営業時間のみ表示</label>
                 <button
                   type="button"
                   className="ghost-btn sales-icon-btn"
@@ -1164,7 +1210,6 @@ function SalesPageContent() {
                 <section className="card sales-panel">
                   <div className="sales-panel-head">
                     <div>
-                      <span className="sales-kicker">SALES</span>
                       <h2>売上</h2>
                     </div>
                   </div>
@@ -1285,7 +1330,6 @@ function SalesPageContent() {
                 <section className="card sales-panel">
                   <div className="sales-panel-head">
                     <div>
-                      <span className="sales-kicker">REAL WAIT</span>
                       <h2>実待ち時間</h2>
                     </div>
                     <div className="sales-wait-controls">
@@ -1394,7 +1438,6 @@ function SalesPageContent() {
                 <section className="card sales-panel sales-experience-panel">
                   <div className="sales-panel-head">
                     <div>
-                      <span className="sales-kicker">EXCEPTIONS</span>
                       <h2>異常</h2>
                     </div>
                     <div className="sales-exclusion-note">
@@ -1437,9 +1480,17 @@ function SalesPageContent() {
           </div>
           {selectedOrderId && (
             <OrderDrawer
+              key={`${detail?.id}:${detail?.lastMutationVersion}`}
               order={detail}
               loading={detailLoading}
               onClose={closeOrder}
+              canEdit={["POS","ADMIN"].includes(session.actor.actorType)}
+              onDirtyChange={setDetailDirty}
+              onSaved={async()=>{
+                const result=await apiFetch<{order:OrderDetail}>(`/api/sales/orders/${selectedOrderId}`);
+                setDetail(result.order);
+                await reload();
+              }}
             />
           )}
         </div>

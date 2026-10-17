@@ -126,6 +126,12 @@ test("takeout items can be served individually; empty inventory is rejected", as
   await assert.rejects(serve(), { code: "STOCK_EMPTY" });
   state.ready = 1; await serve(); assert.equal(state.item.status, "SERVED");
 });
+
+test("serving the final waiting item clears its call and completed orders cannot be called again", async()=>{
+  const {state,db,serve}=fixture();state.ready=1;state.order.lastCalledAt=new Date();
+  await serve();assert.equal(state.order.lastCalledAt,null);
+  await assert.rejects(updateOrderCall(db,{actorId:"counter",orderId:"order",action:"call",idempotencyKey:"late-call"}),{code:"ORDER_ALREADY_SERVED"});
+});
 test("undoing production restores daily totals and protects consumed inventory", async () => {
   const { state, db, cook } = fixture(); await cook(4);
   state.ready = 3;

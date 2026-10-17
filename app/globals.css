@@ -2208,6 +2208,12 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   border-color: #dd9494;
 }
 
+.order-age-critical,
+.counter-tile.critical {
+  background: #f5edff;
+  border-color: #b084d4;
+}
+
 .counter-tile-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -2230,6 +2236,19 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   background: #f0fdf8;
   border-color: #8bceb7;
 }
+
+.counter-serve-all {
+  width: 100%;
+  margin-top: 8px;
+  border: 1px solid #15803d;
+  border-radius: 10px;
+  padding: 10px 14px;
+  background: #15803d;
+  color: #fff;
+  font-weight: 700;
+}
+.counter-serve-all:hover { background: #166534; }
+.counter-serve-all:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .counter-tile.warn {
   background: #fff8ec;
@@ -2441,11 +2460,24 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   font-size: 0.75rem;
 }
 
-.sales-kicker {
-  color: var(--accent-strong);
-  font-size: 0.68rem;
-  font-weight: 900;
-  letter-spacing: 0.14em;
+.sales-setting-toggle,
+.admin-order-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+}
+
+.sales-setting-toggle input[type="checkbox"],
+.admin-order-toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  margin: 0;
+}
+
+.sales-day-controls .sales-setting-toggle {
+  white-space: nowrap;
 }
 
 .sales-day-controls {
@@ -2517,6 +2549,7 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
 .sales-panel-head h2 {
   margin: 2px 0 0;
   font-size: 1.12rem;
+  font-weight: 700;
 }
 
 .sales-chart-select {
@@ -2973,6 +3006,7 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
 .sales-drawer-head h2 {
   margin: 2px 0 0;
   font-size: 1.18rem;
+  font-weight: 700;
 }
 
 .sales-drawer-body {
@@ -3198,7 +3232,7 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   .sales-wait-layout,
   .sales-workspace.has-drawer .sales-panel-grid,
   .sales-workspace.has-drawer .sales-wait-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .sales-menu-table-wrap,
@@ -3209,12 +3243,13 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
 
 @media (max-width: 900px) {
   .sales-workspace.has-drawer {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .sales-order-drawer {
     position: static;
     max-height: none;
+    min-width: 0;
   }
 
   .sales-day-bar,
@@ -3231,6 +3266,19 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
 }
 
 @media (max-width: 620px) {
+  .sales-shell .dashboard-hero > div {
+    flex-wrap: wrap;
+  }
+
+  .sales-shell .dashboard-actions {
+    min-width: 0;
+  }
+
+  .sales-shell .sales-panel-grid,
+  .sales-shell .sales-wait-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .sales-metric-strip {
     grid-template-columns: 1fr 1fr;
   }

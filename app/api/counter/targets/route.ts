@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { projectCounterItems, projectCounterStock } from "@/lib/domain/counter-availability";
+import { projectCounterItems, projectCounterStock, counterServingPlan } from "@/lib/domain/counter-availability";
 import { prisma } from "@/lib/db";
 import { requireSession } from "@/lib/server/auth";
 import { fail, ok } from "@/lib/response";
@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
       const readyByMenu = new Map(stock.map(s => [s.menuId, s.readyCount]));
       return { orders: orders.flatMap(order => {
         const { readyItems, servedItemGroups, unreadyItemGroups } = projectCounterItems(order.items, readyByMenu);
-        return readyItems.length === 0 ? [] : [{ id: order.id, orderNo: order.orderNo, createdAt: order.createdAt, fulfillmentType: order.fulfillmentType, specialNote: order.specialNote, lastCalledAt: order.lastCalledAt, readyItems, servedItemGroups, unreadyItemGroups, itemCount: order.items.length }];
+        return readyItems.length === 0 ? [] : [{ id: order.id, orderNo: order.orderNo, createdAt: order.createdAt, fulfillmentType: order.fulfillmentType, specialNote: order.specialNote, lastCalledAt: order.lastCalledAt, readyItems, servedItemGroups, unreadyItemGroups, itemCount: order.items.length, servingPlan: counterServingPlan(order.items, readyByMenu) }];
       }), stock: projectCounterStock(menus, stock, orders) };
     }, { isolationLevel: "RepeatableRead" });
     return ok(data);
