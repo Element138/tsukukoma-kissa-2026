@@ -2460,16 +2460,14 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   font-size: 0.75rem;
 }
 
-.sales-setting-toggle,
-.admin-order-toggle {
+.sales-setting-toggle {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 0.875rem;
 }
 
-.sales-setting-toggle input[type="checkbox"],
-.admin-order-toggle input[type="checkbox"] {
+.sales-setting-toggle input[type="checkbox"] {
   width: 18px;
   height: 18px;
   flex: 0 0 18px;

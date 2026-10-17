@@ -126,6 +126,7 @@ export async function GET(req: NextRequest) {
         failureReasonText: trace.failureReasonText,
         totalPriceJpy: order.totalPriceJpy,
         specialNote: order.specialNote,
+        lastMutationVersion: order.lastMutationVersion,
         items: order.items.map((item) => ({
           id: item.id,
           menuId: item.menuId,

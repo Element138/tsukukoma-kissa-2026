@@ -625,7 +625,7 @@ const EVENT_LABEL: Record<string, string> = {
   PAYMENT_FAILED: "決済失敗",
   ORDER_CONFIRMED: "注文確定",
   ORDER_FAILED: "注文失敗",
-  MANUAL_CLOSURE: "管理者による手動完了",
+  MANUAL_CLOSURE: "手動完了",
   ORDER_STATISTICS_UPDATED: "備考・集計設定更新",
   PAYMENT_SUCCESS_CALLBACK_AFTER_FAILED: "失敗後に決済成功通知",
 };
