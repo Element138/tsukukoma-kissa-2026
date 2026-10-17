@@ -8,9 +8,10 @@ async function main(){
   const at="2026-10-17T02:00:00.000Z";
   let order:any={id:"test",orderNo:255,createdAt:at,confirmedAt:at,canceledAt:null,fulfillmentType:"DINE_IN",tableNo:null,partySize:1,ageGroupCounts:{},specialNote:"manual closure",excludeFromWaitStats:false,lastMutationVersion:2,paymentStatus:"PAID",paymentMethod:"CASH",orderStatus:"COMPLETED",totalPriceJpy:500,events:[],eventActors:{},createdBy:{id:"pos",label:"POS"},items:[],auditLogs:[],paymentIncidents:[]};
   const saved:any[]=[];const hours:string[]=[];const errors:string[]=[];
+  let role="ADMIN";
   await context.route("**/api/**",async route=>{
     const url=new URL(route.request().url());let data:any={};
-    if(url.pathname==="/api/auth/me")data={actor:{actorId:"admin",actorType:"ADMIN",label:"管理者"},offlineActors:[]};
+    if(url.pathname==="/api/auth/me")data={actor:{actorId:"staff",actorType:role,label:role},offlineActors:[]};
     else if(url.pathname==="/api/sales/orders/test"){
       if(route.request().method()==="PATCH"){const body=route.request().postDataJSON();saved.push(body);order={...order,...body,lastMutationVersion:order.lastMutationVersion+1};}
       data={order};
@@ -21,12 +22,9 @@ async function main(){
       const chartEnd=hours.at(-1)==="false"?"2026-10-17T15:00:00Z":"2026-10-17T03:00:00Z";
       data={date:"2026-10-17",timezone:"Asia/Tokyo",range:{start:at,end:chartEnd,chartStart,chartEnd},chartRange:{chartStart,chartEnd},totals:{orderCount:1,itemCount:1,salesJpy:500,failedOrCanceledCount:0,unconfirmedCount:0},menus:[],salesEvents:[{at,orderId:"test",orderNo:255,menuId:null,itemId:null,menuName:null}],wait:{summaries:[{key:"order:complete",label:"注文（提供完了）",sampleSize:0,p50Seconds:null,maxSeconds:null,lateRatio:null,severeLateRatio:null}],points:[],yMaxMinutes:10},incidents:[]};
     }
-    else if(url.pathname==="/api/admin/order-corrections"){
-      if(route.request().method()==="PATCH"){
-        const body=route.request().postDataJSON();saved.push(body);
-        const change=body.changes[0];order={...order,...change,lastMutationVersion:order.lastMutationVersion+1,...(change.manualClose?{orderStatus:"COMPLETED",specialNote:`${change.specialNote}\nmanual closure`}:{})};
-      }
-      data={orders:[order]};
+    else if(url.pathname==="/api/order-book")data={orders:[order],menuCounts:[],menuTotals:{ordered:1,queued:1,totalSoldPriceJpy:500},incidents:[]};
+    else if(url.pathname==="/api/orders/test/manual-close"){
+      saved.push(route.request().postDataJSON());order={...order,orderStatus:"COMPLETED",specialNote:"manual closure",lastMutationVersion:order.lastMutationVersion+1,items:order.items.map((item:any)=>({...item,status:"SERVED"}))};data={order};
     }
     else if(url.pathname==="/api/admin/actors")data={actors:[]};
     else if(url.pathname==="/api/admin/menus")data={menus:[],categories:[]};
@@ -56,22 +54,23 @@ async function main(){
     await mkdir("tmp/order-corrections",{recursive:true});await page.screenshot({path:"tmp/order-corrections/sales-desktop.png",fullPage:true});
     await page.setViewportSize({width:390,height:844});await page.screenshot({path:"tmp/order-corrections/sales-phone.png",fullPage:true});
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,JSON.stringify(await page.evaluate(()=>[...document.querySelectorAll("body *")].map(element=>({tag:element.tagName,cls:element.className,right:element.getBoundingClientRect().right,width:element.getBoundingClientRect().width})).filter(row=>row.right>innerWidth+1).slice(0,15))));
-    order={...order,orderStatus:"PREPARING",specialNote:"",items:[{status:"QUEUED"}],lastMutationVersion:4};
-    await page.goto("http://localhost:3102/admin",{waitUntil:"domcontentloaded",timeout:60000});
-    const management=page.getByRole("heading",{name:"注文の管理",exact:true}).locator("..");
-    await management.getByRole("checkbox",{name:"手動完了（全商品を提供済みにする）",exact:true}).check();
-    assert.equal(saved.length,1);
-    page.once("dialog",dialog=>dialog.dismiss());await page.getByRole("button",{name:"すべて保存",exact:true}).click();assert.equal(saved.length,1);
-    page.once("dialog",dialog=>dialog.accept());await page.getByRole("button",{name:"すべて保存",exact:true}).click();
-    await page.waitForFunction(()=>document.querySelector<HTMLTextAreaElement>('[aria-label="備考"]')?.value.includes("manual closure"));
-    assert.equal(saved[1].changes[0].manualClose,true);
-    assert.equal(await management.getByRole("checkbox",{name:"手動完了（全商品を提供済みにする）",exact:true}).count(),0);
-    await management.getByLabel("備考",{exact:true}).fill("later amended");
-    await page.getByRole("button",{name:"すべて保存",exact:true}).click();
-    await page.waitForFunction(()=>!document.body.textContent?.includes("注文に未保存の変更があります。"));
-    assert.equal(saved[2].changes[0].specialNote,"later amended");
+    for(role of ["POS","KITCHEN","WAITER","ADMIN"]){
+      order={...order,orderStatus:"PREPARING",specialNote:"",items:[{id:"item",menuId:"m",name:"Coffee",unitPriceJpy:500,status:"QUEUED",kitchenId:null}],lastMutationVersion:4};
+      await page.goto("http://localhost:3102/order-book",{waitUntil:"domcontentloaded",timeout:60000});
+      const before: number=saved.length;
+      page.once("dialog",dialog=>dialog.dismiss());await page.getByRole("button",{name:"手動完了",exact:true}).click();assert.equal(saved.length,before);
+      page.once("dialog",dialog=>{assert.match(dialog.message(),/監査ログ/);void dialog.accept();});await page.getByRole("button",{name:"手動完了",exact:true}).click();
+      await page.getByText("備考: manual closure",{exact:true}).waitFor();
+      assert.equal(saved.length,before+1);assert.deepEqual(saved.at(-1),{expectedVersion:4,confirm:true});
+      assert.equal(await page.getByRole("button",{name:"手動完了",exact:true}).count(),0);
+    }
+    order={...order,confirmedAt:null,paymentStatus:"AWAITING",orderStatus:"PENDING"};
+    await page.reload();await page.getByRole("button",{name:"レシート再印刷",exact:true}).waitFor();
+    assert.equal(await page.getByRole("button",{name:"手動完了",exact:true}).count(),0);
+    await page.goto("http://localhost:3102/admin",{waitUntil:"domcontentloaded",timeout:60000});await page.getByRole("button",{name:"新規メニューを追加",exact:true}).waitFor();
+    assert.equal(await page.getByRole("heading",{name:"注文の管理",exact:true}).count(),0);
     assert.deepEqual(errors,[]);
-    console.log("PASS: completed notes editable; exclusions staged until save; default hours checkbox changes chart query; no English card labels; mobile layout; admin manual closure confirmation and global save; no browser errors.");
+    console.log("PASS: saved inspection controls and hours toggle; all four staff roles can close from order book after confirmation; canceled confirmations send no request; unresolved/completed orders have no closure button; redundant admin card removed; no browser errors.");
   }catch(error){console.error({errors,alerts:await page.getByRole("alert").allTextContents(),saved,layout:await page.evaluate(()=>[...document.querySelectorAll('.sales-chart-wrap,.sales-shell,.sales-workspace,.sales-wait-layout')].map(element=>({class:element.className,width:element.getBoundingClientRect().width,overflow:getComputedStyle(element).overflowX,columns:getComputedStyle(element).gridTemplateColumns}))) });throw error;}
   finally{await browser.close();}
 }

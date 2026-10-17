@@ -44,7 +44,6 @@ async function main() {
     else if(url.pathname==="/api/counter/serve-order"){bulkPosts.push(route.request().postDataJSON());orders.splice(0,orders.length);data={servedItemCount:3,partial:true};}
     else if(url.pathname==="/api/realtime/token"){await route.fulfill({status:503,contentType:"application/json",body:'{"ok":false}'});return;}
     else if(url.pathname==="/api/admin/actors")data={actors:[]};
-    else if(url.pathname==="/api/admin/order-corrections")data={orders:[]};
     else if(url.pathname==="/api/admin/menus")data={menus:[],categories:[]};
     else if(url.pathname==="/api/admin/categories")data={categories:[]};
     else if(url.pathname==="/api/admin/square-payments")data={incidentCount:0};
