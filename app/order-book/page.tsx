@@ -718,10 +718,7 @@ export default function OrderBookPage() {
                   >
                     レシート再印刷
                   </button>
-                  {canEditNote &&
-                    order.orderStatus !== "COMPLETED" &&
-                    order.orderStatus !== "FAILED" &&
-                    order.orderStatus !== "CANCELED" && (
+                  {canEditNote && (
                       <button
                         type="button"
                         className="ghost-btn"

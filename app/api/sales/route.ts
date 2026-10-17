@@ -6,6 +6,7 @@ import { fail, ok } from "@/lib/response";
 
 const querySchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  businessHoursOnly: z.enum(["true", "false"]).default("true"),
 });
 
 type WaitPoint = {
@@ -46,11 +47,11 @@ function tightChartRange(
   const latest = Math.max(...lifetimes.map((row) => row.end.getTime()));
   let startMs = Math.max(
     hardStart.getTime(),
-    Math.floor(earliest / hourMs) * hourMs,
+    Math.min(hardEnd.getTime() - hourMs, Math.floor(earliest / hourMs) * hourMs),
   );
   let endMs = Math.min(
     hardEnd.getTime(),
-    Math.ceil(latest / hourMs) * hourMs,
+    Math.max(hardStart.getTime() + hourMs, Math.ceil(latest / hourMs) * hourMs),
   );
   if (endMs <= startMs) {
     if (startMs + hourMs <= hardEnd.getTime()) {
@@ -128,6 +129,7 @@ export async function GET(req: NextRequest) {
         paymentSkipReasonText: true,
         totalPriceJpy: true,
         events: true,
+        excludeFromWaitStats: true,
         items: {
           select: {
             id: true,
@@ -206,7 +208,7 @@ export async function GET(req: NextRequest) {
           itemId: item.id,
         });
 
-        if (item.servedAt) {
+        if (item.servedAt && !order.excludeFromWaitStats) {
           waitPoints.push({
             key: `menu:${item.menuId}`,
             orderId: order.id,
@@ -227,7 +229,7 @@ export async function GET(req: NextRequest) {
       const firstServedTimes = activeItems
         .map((item) => item.servedAt)
         .filter((value): value is Date => Boolean(value));
-      if (firstServedTimes.length > 0) {
+      if (firstServedTimes.length > 0 && !order.excludeFromWaitStats) {
         const finishedAt = new Date(
           Math.min(...firstServedTimes.map((value) => value.getTime())),
         );
@@ -248,7 +250,7 @@ export async function GET(req: NextRequest) {
       }
 
       if (
-        activeItems.length > 0 &&
+        !order.excludeFromWaitStats && activeItems.length > 0 &&
         activeItems.every((item) => item.servedAt != null)
       ) {
         const finishedAt = new Date(
@@ -293,11 +295,9 @@ export async function GET(req: NextRequest) {
         ),
       ),
     ];
-    const tightRange = tightChartRange(
-      range.chartStart,
-      range.chartEnd,
-      orderLifetimes,
-    );
+    const tightRange = query.businessHoursOnly === "true"
+      ? tightChartRange(range.chartStart, range.chartEnd, orderLifetimes)
+      : { chartStart: range.start, chartEnd: range.end };
     const waitYMaxMinutes = Math.max(
       10,
       Math.ceil(

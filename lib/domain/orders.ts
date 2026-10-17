@@ -542,9 +542,9 @@ export async function markOrderSpecialNote(
     specialNote: string;
   }
 ) {
+  await db.$queryRaw`SELECT id FROM "Order" WHERE id = ${params.orderId} FOR UPDATE`;
   const order = await db.order.findUnique({ where: { id: params.orderId } });
   assert(order, 404, "ORDER_NOT_FOUND", "Order not found");
-  assert(order.orderStatus !== "COMPLETED" && order.orderStatus !== "FAILED", 409, "ORDER_LOCKED", "Cannot edit note");
 
   const updated = await db.order.update({
     where: { id: params.orderId },
