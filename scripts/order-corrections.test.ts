@@ -6,7 +6,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "../lib/db";
 import { GET as salesGET } from "../app/api/sales/route";
 import { PATCH as inspectionPATCH } from "../app/api/sales/orders/[orderId]/route";
-import { PATCH as adminPATCH } from "../app/api/admin/order-corrections/route";
+import { POST as manualClosePOST } from "../app/api/orders/[orderId]/manual-close/route";
 
 const admin={actorId:"admin",actorType:"ADMIN" as const};
 const input={orderId:"o",expectedVersion:4,specialNote:"existing note",excludeFromWaitStats:false,manualClose:true};
@@ -30,8 +30,9 @@ test("manual closure serves only remaining items, clears call, preserves payment
   assert.equal(f.stock.readyCount,0);assert.equal(f.order.specialNote,"existing note\nmanual closure");assert.equal(f.audits[0].actionType,"MANUAL_CLOSURE");
   assert.equal(f.order.lastMutationVersion,5);assert.equal(f.order.events[0].type,"MANUAL_CLOSURE");
 });
-test("manual closure cannot be invoked by POS or waiter; waiter cannot alter statistics",async()=>{
-  for(const actorType of ["POS","WAITER"] as const){const f=fixture();await assert.rejects(correctOrder(f.db,{actorId:"a",actorType},input),{code:"FORBIDDEN"});assert.equal(f.writes,0);}
+test("all operational staff can manually close; displays cannot; waiter cannot alter statistics",async()=>{
+  for(const actorType of ["POS","KITCHEN","WAITER","ADMIN"] as const){const f=fixture();await correctOrder(f.db,{actorId:"a",actorType},input);assert.equal(f.order.orderStatus,"COMPLETED");assert.equal(f.audits[0].actorId,"a");assert.equal(f.audits[0].actorType,actorType);assert.equal(f.audits[0].actionType,"MANUAL_CLOSURE");assert.deepEqual(f.audits[0].afterJson.servedItemIds,["new1","new2"]);}
+  for(const actorType of ["ORDER_DISPLAY","MENU_DISPLAY"] as const){const f=fixture();await assert.rejects(correctOrder(f.db,{actorId:"a",actorType},input),{code:"FORBIDDEN"});assert.equal(f.writes,0);}
   const f=fixture();await assert.rejects(correctOrder(f.db,{actorId:"a",actorType:"WAITER"},{...input,manualClose:false}),{code:"FORBIDDEN"});
 });
 test("stale versions and unresolved/failed/completed orders cannot be manually closed",async()=>{
@@ -48,6 +49,25 @@ test("completed order note/exclusion remain editable; existing manual closure no
 });
 test("order-book note editing accepts completed and failed orders",async()=>{
   for(const status of ["COMPLETED","FAILED"]){const f=fixture();f.order.orderStatus=status;await markOrderSpecialNote(f.db,{...admin,orderId:"o",specialNote:"later note"});assert.equal(f.order.specialNote,"later note");assert.equal(f.order.orderStatus,status);}
+});
+test("staff closure endpoint preserves server notes/exclusion, audits actor, and rejects stale or injected requests",async()=>{
+  const db=prisma as any;
+  const originalSession=db.session.findUnique,originalTransaction=db.$transaction;
+  let role="WAITER";
+  const f=fixture();f.order.excludeFromWaitStats=true;
+  f.db.realtimeEvent={createMany:async()=>({count:1})};
+  db.session.findUnique=async()=>({sessionId:"s",expiresAt:new Date(Date.now()+60000),lastActivityAt:new Date(),actor:{id:"counter",actorType:role,isActive:true,lastSeenAt:new Date(),label:"Counter"}});
+  db.$transaction=async(callback:any)=>callback(f.db);
+  const req=(body:unknown)=>new NextRequest("http://localhost/api/orders/o/manual-close",{method:"POST",headers:{cookie:"kissa_session=test","content-type":"application/json"},body:JSON.stringify(body)});
+  const context={params:Promise.resolve({orderId:"o"})};
+  try{
+    assert.equal((await manualClosePOST(req({expectedVersion:4,confirm:true,specialNote:"overwrite"}),context)).status,400);
+    assert.equal((await manualClosePOST(req({expectedVersion:3,confirm:true}),context)).status,409);assert.equal(f.writes,0);
+    const response=await manualClosePOST(req({expectedVersion:4,confirm:true}),context);assert.equal(response.status,200);
+    assert.equal(f.order.specialNote,"existing note\nmanual closure");assert.equal(f.order.excludeFromWaitStats,true);assert.equal(f.audits[0].actorId,"counter");assert.equal(f.audits[0].actorType,"WAITER");
+    assert.equal((await manualClosePOST(req({expectedVersion:4,confirm:true}),context)).status,409);assert.equal(f.audits.length,1);
+    role="ORDER_DISPLAY";assert.equal((await manualClosePOST(req({expectedVersion:5,confirm:true}),context)).status,403);
+  }finally{db.session.findUnique=originalSession;db.$transaction=originalTransaction;}
 });
 test("sales exclusion removes all order/menu wait samples while retaining revenue; hours checkbox controls range",async()=>{
   const db=prisma as any;
@@ -69,6 +89,7 @@ test("sales exclusion removes all order/menu wait samples while retaining revenu
     const bad=new NextRequest("http://localhost/api/sales/orders/o",{method:"PATCH",headers:{cookie:"kissa_session=test","content-type":"application/json"},body:JSON.stringify(input)});
     assert.equal((await inspectionPATCH(bad,{params:Promise.resolve({orderId:"o"})})).status,400);
     db.session.findUnique=async()=>({sessionId:"s",expiresAt:new Date(Date.now()+60000),lastActivityAt:new Date(),actor:{id:"a",actorType:"POS",isActive:true,lastSeenAt:new Date(),label:"POS"}});
-    assert.equal((await adminPATCH(bad)).status,403);
+    const noConfirm=new NextRequest("http://localhost/api/orders/o/manual-close",{method:"POST",headers:{cookie:"kissa_session=test","content-type":"application/json"},body:JSON.stringify({expectedVersion:4,confirm:false})});
+    assert.equal((await manualClosePOST(noConfirm,{params:Promise.resolve({orderId:"o"})})).status,400);
   }finally{db.session.findUnique=originals.session;db.order.findMany=originals.orders;db.paymentIncident.findMany=originals.incidents;}
 });

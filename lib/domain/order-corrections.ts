@@ -14,8 +14,8 @@ export const orderCorrectionSchema = z.object({
 type Db = PrismaClient | Prisma.TransactionClient;
 
 export async function correctOrder(db: Db, actor: { actorId: string; actorType: ActorType }, input: z.infer<typeof orderCorrectionSchema>) {
-  assert(["POS", "ADMIN"].includes(actor.actorType), 403, "FORBIDDEN", "注文の変更権限がありません");
-  assert(!input.manualClose || actor.actorType === "ADMIN", 403, "FORBIDDEN", "手動完了は管理者のみ実行できます");
+  const allowed = input.manualClose ? ["POS", "KITCHEN", "WAITER", "ADMIN"] : ["POS", "ADMIN"];
+  assert(allowed.includes(actor.actorType), 403, "FORBIDDEN", "注文の変更権限がありません");
   const initial = await db.orderItem.findMany({where:{orderId:input.orderId},select:{menuId:true}});
   const menuIds = [...new Set(initial.map(item=>item.menuId))].sort();
   if (input.manualClose) for (const menuId of menuIds) await db.$queryRaw`SELECT id FROM "Menu" WHERE id = ${menuId} FOR UPDATE`;
@@ -46,6 +46,6 @@ export async function correctOrder(db: Db, actor: { actorId: string; actorType: 
   const updated = await db.order.update({where:{id:order.id},data:{specialNote,excludeFromWaitStats:input.excludeFromWaitStats,lastMutationVersion:{increment:1},...(input.manualClose?{orderStatus:"COMPLETED",lastCalledAt:null}:{})}});
   const actionType = input.manualClose ? "MANUAL_CLOSURE" : "ORDER_STATISTICS_UPDATED";
   await appendOrderEvent(db,order.id,{type:actionType,at:at.toISOString(),actorId:actor.actorId,detail:{excludeFromWaitStats:input.excludeFromWaitStats,servedItemIds:input.manualClose?remaining.map(item=>item.id):[]}});
-  await writeAuditLog(db,{...actor,actionType,entityType:"order",entityId:order.id,orderId:order.id,beforeJson:{specialNote:order.specialNote,excludeFromWaitStats:order.excludeFromWaitStats,orderStatus:order.orderStatus,lastCalledAt:order.lastCalledAt?.toISOString()??null,items:order.items.map(item=>({id:item.id,status:item.status,servedAt:item.servedAt?.toISOString()??null}))},afterJson:{specialNote:updated.specialNote,excludeFromWaitStats:updated.excludeFromWaitStats,orderStatus:updated.orderStatus,servedAt:input.manualClose?at.toISOString():null,stockChanges},reasonText:input.manualClose?"manual closure":null,result:"SUCCESS"});
+  await writeAuditLog(db,{...actor,actionType,entityType:"order",entityId:order.id,orderId:order.id,beforeJson:{specialNote:order.specialNote,excludeFromWaitStats:order.excludeFromWaitStats,orderStatus:order.orderStatus,lastCalledAt:order.lastCalledAt?.toISOString()??null,items:order.items.map(item=>({id:item.id,status:item.status,servedAt:item.servedAt?.toISOString()??null}))},afterJson:{specialNote:updated.specialNote,excludeFromWaitStats:updated.excludeFromWaitStats,orderStatus:updated.orderStatus,servedAt:input.manualClose?at.toISOString():null,servedItemIds:input.manualClose?remaining.map(item=>item.id):[],stockChanges},reasonText:input.manualClose?"manual closure":null,result:"SUCCESS"});
   return updated;
 }

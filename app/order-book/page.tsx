@@ -50,6 +50,7 @@ type OrderRow = {
   failureReasonText: string | null;
   totalPriceJpy: number;
   specialNote: string | null;
+  lastMutationVersion: number;
   items: Array<{
     id: string;
     menuId: string;
@@ -237,6 +238,8 @@ export default function OrderBookPage() {
   const [receiptPrintTarget, setReceiptPrintTarget] =
     useState<ReceiptPrintTarget | null>(null);
   const reloadInFlightRef = useRef(false);
+  const closingRef = useRef(false);
+  const [closing, setClosing] = useState(false);
   const queuedReloadRef = useRef(false);
   const statusSelectValue = status || "__ALL_STATUS__";
   const paymentMethodSelectValue = paymentMethod || "__ALL_PAYMENT__";
@@ -327,6 +330,16 @@ export default function OrderBookPage() {
 
   const reprint = (order: OrderRow) => {
     setReceiptPrintTarget({ id: order.id, orderNo: order.orderNo });
+  };
+  const manualClose = async (order: OrderRow) => {
+    if (closingRef.current) return;
+    if (!window.confirm(`注文 #${order.orderNo} を手動完了しますか？\n調理済み数にかかわらず、残りの商品をすべて提供済みにし、呼び出しを解除します。備考に manual closure を追記し、操作を監査ログに記録します。決済記録は変更しません。`)) return;
+    closingRef.current=true;setClosing(true);
+    try {
+      await apiFetch(`/api/orders/${order.id}/manual-close`,{method:"POST",body:JSON.stringify({expectedVersion:order.lastMutationVersion,confirm:true})});
+      notify({level:"success",message:`注文 #${order.orderNo} を手動完了しました`});
+    }catch(error){notify({level:"error",message:error instanceof Error?error.message:"手動完了に失敗しました"});}
+    finally{await reload();closingRef.current=false;setClosing(false);}
   };
 
   const rows = useMemo(() => {
@@ -692,6 +705,7 @@ export default function OrderBookPage() {
                 </div>
 
                 <div className="row wrap" style={{ marginTop: 10 }}>
+                  {order.confirmedAt && ["PAID","SKIPPED"].includes(order.paymentStatus) && !["COMPLETED","FAILED","CANCELED"].includes(order.orderStatus) && order.items.length>0 && order.items.every(item=>item.status!=="CANCELED") && <button type="button" className="ghost-btn" disabled={closing} onClick={()=>void manualClose(order)}>手動完了</button>}
                   {session.actor.actorType === "WAITER" && order.confirmedAt && !["FAILED", "CANCELED"].includes(order.orderStatus) && (
                     <button type="button" className="order-call-btn" aria-pressed={Boolean(order.lastCalledAt)} onClick={async () => {
                       const cancel = Boolean(order.lastCalledAt);

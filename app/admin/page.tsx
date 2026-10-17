@@ -32,7 +32,6 @@ import { TerminalBanner } from "@/components/terminal-banner";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { LoadingScreen } from "@/components/loading-screen";
 import { SquareIncidentBanner } from "@/components/square-incident-banner";
-import { AdminOrderCorrections, type AdminOrderCorrectionsHandle } from "@/components/admin-order-corrections";
 import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
 import { ACTOR_TYPE_LABEL, AVAILABILITY_LABEL, labelOf } from "@/lib/labels";
 import { useToast } from "@/components/toast";
@@ -506,8 +505,6 @@ export default function AdminPage() {
   const queuedReloadRef = useRef(false);
   const hasSettledWithoutUnsavedRef = useRef(false);
   const saveAllChangesRef = useRef<() => Promise<void>>(async () => {});
-  const orderCorrectionsRef = useRef<AdminOrderCorrectionsHandle>(null);
-  const [orderCorrectionsDirty, setOrderCorrectionsDirty] = useState(false);
 
   const kitchenActors = useMemo(
     () =>
@@ -586,7 +583,6 @@ export default function AdminPage() {
     ];
   }, [activeCategories, activeMenus]);
   const hasUnsavedChanges = useMemo(() => {
-    if (orderCorrectionsDirty) return true;
     const categoryDirty = activeCategories.some((category) => {
       const draftName = categoryNameDrafts[category.id] ?? category.name;
       const draftBadgeText = (
@@ -678,7 +674,6 @@ export default function AdminPage() {
   }, [
     activeCategories,
     activeMenus,
-    orderCorrectionsDirty,
     categoryBadgeColorDrafts,
     categoryBadgeTextDrafts,
     categoryNameDrafts,
@@ -1329,13 +1324,10 @@ export default function AdminPage() {
         nextDisplaySeconds == null &&
         nextOrderDisplayMarqueeText == null &&
         nextOrderDisplayMarqueeSpeedSeconds == null &&
-        nextOrderCallVolume == null &&
-        !orderCorrectionsDirty
+        nextOrderCallVolume == null
       ) {
         return;
       }
-
-      if (orderCorrectionsDirty && !(await orderCorrectionsRef.current?.save())) return;
 
       for (const categoryUpdate of categoryUpdates) {
         if (!categoryUpdate.nextName) {
@@ -1415,7 +1407,6 @@ export default function AdminPage() {
     patchMenu,
     notify,
     reload,
-    orderCorrectionsDirty,
   ]);
   saveAllChangesRef.current = saveAllChanges;
 
@@ -1542,7 +1533,6 @@ export default function AdminPage() {
         }
       >
         <SquareIncidentBanner />
-        <AdminOrderCorrections ref={orderCorrectionsRef} onDirtyChange={setOrderCorrectionsDirty} />
         <TooltipProvider delayDuration={120}>
           <div className="grid gap-3 xl:grid-cols-[1.08fr_0.92fr]">
             <Card>
