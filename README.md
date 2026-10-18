@@ -1,131 +1,127 @@
 # KISSa
 
-KISSa is a backend-first cafe operations system based on the v1.1 spec.
-The system-of-record is the backend. `Order` and `OrderItem` are strictly separated.
+Cafe operations system coordinating checkout, payment reconciliation, kitchen production, serving, customer displays, and sales records across staff terminals.
 
-## Stack
+## Operation
 
-- Next.js (App Router, TypeScript)
-- Prisma ORM
-- PostgreSQL
-- Cookie session auth
+| Interface | Responsibility |
+| --- | --- |
+| `/pos` | Dine-in and takeout orders, table and party details, cash or Square checkout, recorded payment-skip reasons, receipts. |
+| `/kitchen` | Assigned menu demand, batch production, availability and daily limits, kitchen enablement and queued-item reassignment. |
+| `/counter` | Orders with available prepared stock, manual customer calls, item-by-item serving, remaining demand and stock counts. Uses the `WAITER` role. |
+| `/menu-display` | Rotating customer menu with prices, availability, lead times, allergens, and badges. |
+| `/order-display` | Customer order status and queued Japanese voice announcements, including repeat calls and long-wait messages. |
+| `/order-book` | Order history, payment and fulfillment traces, notes, repeat calls, receipt reprints, and CSV export. |
+| `/sales` | Daily sales, menu quantities, fulfillment progress, and wait-time distributions by JST business date. |
+| `/admin` | Terminal accounts, session revocation, menu categories, pricing, kitchen assignments, display settings, and data purge. |
+| `/admin/square-payments` | Unresolved payment attempts, server verification, verified unpaid closure, and payment incidents. |
+| `/audit` | Filtered operational audit records and CSV export. |
 
-## Important runtime behavior
+### Order and stock lifecycle
 
-- All terminal actions are API + DB transaction based.
-- Kitchen processes per `OrderItem`; counter serves customer orders, with dine-in orders handled at order level.
-- Undo is limited to each terminal's last 1 action, with optimistic version checks.
-- Audit logs are written for critical operations.
-- Payment watchdog cron handles timeout/auto-cancel transitions.
+1. Order submission persists an idempotency key, menu-name and price snapshots, individual `OrderItem` records, and daily menu-cap reservations. Prices are integer JPY.
+2. Payment confirmation assigns items to enabled kitchens responsible for each menu. Cash and explicitly skipped payments use the confirmation API; Square requires server verification.
+3. Kitchens record production in batches against shared `MenuStock`, independently of individual orders. JST daily order counts and cooked counts are tracked separately; advance production is supported.
+4. The counter lists confirmed orders that can be partially served from current stock. Listing or calling an order does not reserve stock. Each serving transaction consumes one stock unit and records the item, serving actor, and timestamp.
+5. An order completes when every item is served. Customer calls are explicit, repeatable actions retained as separate records.
 
-## Kitchen ID model (single source)
+Daily limits are reserved at submission. Failed or canceled orders release their original day's reservations once; unresolved payments retain them. Manual count resets retire earlier reservations so subsequent failures cannot reduce newer counts.
 
-- Kitchen unit ID is the same as `Actor.id` where `actorType=KITCHEN`.
-- There is no separate Kitchen master table and no separate `kitchenId` field on Actor.
-- Kitchen registration flow is only `POST /api/admin/actors` with `actorType="KITCHEN"`.
-- `/api/admin/kitchens` is removed.
+### Payment control
 
-## Environment variables
+Square checkout saves one payment attempt before launching the iOS Square POS app. Callback state identifies the attempt; signed webhooks can recover results independently of the browser. Confirmation checks Square's order and payment records for completion, online processing, location, JPY amount, timing, order identity, and absence of tips or refunds. Transaction bindings, row locks, and bounded verification retries prevent duplicate confirmation.
 
-Set these in Vercel Project Settings -> Environment Variables:
+Uncertain payments remain pending and block another order on the originating POS. The watchdog raises a reconciliation incident when the result is overdue; elapsed time does not mark a payment failed or cancel it. Administrators can recheck a transaction or close a verified unpaid attempt with a recorded reconciliation note and terminal-history attestation. A verified payment arriving after failure raises an incident. KISSa does not automatically recharge or refund customers.
 
-- `DATABASE_URL` (runtime URL: Supabase transaction pooler `:6543` recommended)
-- `DIRECT_URL` (direct DB URL for Prisma migrate, non-pooler `:5432`)
-- `SESSION_SECRET`
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `SUPABASE_JWT_SECRET`
-- `SQUARE_APP_ID`
-- `SQUARE_CALLBACK_URL`
-- `SQUARE_ENABLED` (production opt-in: `true`)
-- `SQUARE_LOCATION_ID`
-- `SQUARE_ACCESS_TOKEN` (server-only production token)
-- `SQUARE_WEBHOOK_URL`
-- `SQUARE_WEBHOOK_SIGNING_KEY`
-- `CRON_SECRET` (optional, recommended)
+See [Square setup, reconciliation, and device acceptance checks](docs/square-payments.md). Offline acceptance must also be disabled in the Square app.
 
-## Realtime transport (ops channels)
+## Architecture
 
-- `orders`, `counter`, `menus`, and `kitchen:{id}` are delivered via Supabase Realtime.
-- `categories`, `actors`, `assignments`, `audit` continue to use SSE in this phase.
-- Apply Prisma migrations so `RealtimeEvent` RLS policy and publication wiring are installed.
+Next.js 15 App Router and React 19 provide the terminal interfaces and TypeScript API. PostgreSQL is the system of record, accessed through Prisma 6.
 
-## Vercel deployment bootstrap
+| Component | Behavior |
+| --- | --- |
+| Domain transactions | Coordinate order confirmation, cap reservations, stock consumption, serving, and undo. Menu and order row locks serialize conflicting changes. |
+| Terminal identity | `Actor` represents a terminal or administrator. Kitchen IDs reference `Actor.id` with type `KITCHEN`; SQL triggers enforce that relationship. |
+| Sessions | Server-stored, hashed session tokens in HTTP-only cookies; API role checks, actor heartbeats, inactivity expiry, and administrator revocation. |
+| Undo | Retains the latest three production or serving actions per actor. Reversals check stock or the original served-item state and reject conflicts. |
+| Audit | Records actor, action, entity, result, available before/after data, reasons, correlation IDs, and hash references to preceding records. |
+| Realtime | Persistent `RealtimeEvent` records; SSE subscriptions for requested channels, plus Supabase Postgres Changes for `orders`, `counter`, `menus`, and `kitchen:{id}`. Channel authorization, Supabase RLS, reconnect resync, and periodic refresh govern delivery. |
+| Receipts | Small and large PDFs rendered with Chromium and Adobe Fonts; PDFKit with bundled Noto Sans JP provides the fallback. iPad large-format printing hands the PDF to Epson TM Print Assistant. |
+| Call audio | Bundled number recordings for orders 1 through 2000; authenticated Google TTS generation for higher numbers. |
 
-Production builds run Prisma migrations and postdeploy SQL guards before building. Any failure stops deployment; automatic database resets and automatic reseeding are disabled.
-Preview/development builds generate the client and build without changing the database. Use isolated databases for previews. Existing databases previously managed with db push may need migration-history baselining; resolve that explicitly after backup, never reset the database to make deployment pass.
+Receipt generation and native printer handoff are separate operations. Launching the printer app does not confirm physical printing. See [receipt printing and device setup](docs/receipt-printing.md).
 
-See [Square cashless setup and recovery](docs/square-payments.md) for production configuration, webhook registration, online-only policy, and physical-device acceptance checks.
+## Usage
 
-## Scripts
+```powershell
+npm ci
+Copy-Item .env.example .env
+# Set database URLs and the integrations listed below.
+npm run prisma:generate
+npm run prisma:migrate
+npx prisma db execute --file prisma/postdeploy.sql --schema prisma/schema.prisma
+npm run prisma:seed
+npm run dev
+```
 
-- `npm run dev`
-- `npm run build`
-- `npm run prisma:generate`
-- `npm run prisma:migrate`
-- `npm run prisma:seed`
-- `npm run prisma:deploy:seed`
-- `npm run vercel-build`
+Open `/login`. Seeded credentials are `admin` / `admin1234`; `pos-main`, `kitchen-drink`, `kitchen-food`, `counter-1`, `menu-display-main`, and `order-display-main` use `1234`. Replace these secrets before operating with customer data. Run the seed only for initial setup; it upserts terminal accounts.
 
-## Initial login accounts (seed)
+```powershell
+npm run build
+npm run start
+```
 
-- `admin` / `admin1234`
-- `pos-main` / `1234`
-- `kitchen-drink` / `1234`
-- `kitchen-food` / `1234`
-- `counter-1` / `1234`
-- `menu-display-main` / `1234`
-- `order-display-main` / `1234`
+## Configuration
 
-## Health endpoints
+| Variable | Purpose |
+| --- | --- |
+| `DATABASE_URL` | Runtime PostgreSQL connection. The example includes Supabase transaction-pooler parameters. |
+| `DIRECT_URL` | Direct PostgreSQL connection for Prisma migrations and deployment guards. |
+| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Browser connection for operational realtime subscriptions. |
+| `SUPABASE_JWT_SECRET` | Signs actor-scoped realtime tokens; migrations install the event-table RLS and publication. |
+| `SQUARE_ENABLED` | Set to `true` to permit Square checkout; non-production Vercel environments are rejected. |
+| `SQUARE_APP_ID`, `SQUARE_LOCATION_ID`, `SQUARE_CALLBACK_URL` | Production Square application, seller location, and exact return URL. |
+| `SQUARE_ACCESS_TOKEN` | Server-side Square order and payment verification. |
+| `SQUARE_WEBHOOK_URL`, `SQUARE_WEBHOOK_SIGNING_KEY` | Exact notification URL and signature verification key. |
+| `CRON_SECRET` | If set, the watchdog endpoint requires a matching `x-cron-secret` request header. |
+| `BLOB_READ_WRITE_TOKEN` | Administrator uploads of menu cover images to Vercel Blob. |
+| `GOOGLE_TTS_API_KEY` | Call-number synthesis beyond the bundled audio range; also used by audio-generation scripts. |
+| `RECEIPT_CHROMIUM_EXECUTABLE` | Optional local Chromium executable for receipt rendering. Windows also detects installed Chrome or Edge. |
 
-- `/api/health` basic app health
-- `/api/health/db` DB connectivity + seed readiness hint
+`SESSION_SECRET` and `RECEIPT_PRINTER_MODE` appear in `.env.example` but are not read by the current runtime.
 
-If login returns internal error in production, call `/api/health/db` first.
+## Deployment and verification
 
-## Typical cause of "Internal server error" at login
+`npm run vercel-build` generates Prisma, deploys migrations, applies `prisma/postdeploy.sql`, then builds Next.js. Migration or guard failures stop the build. With `VERCEL_ENV=preview` or `development`, it only generates the client and builds. With `VERCEL_ENV` unset, it takes the migration path. Deployments do not reset or seed the database. Use isolated preview databases and back up operational data before schema changes.
 
-Most common causes:
+`vercel.json` schedules `/api/cron/payment-watchdog` daily at 00:00 UTC (09:00 JST). The endpoint also prunes realtime events older than 24 hours. POS status requests trigger additional best-effort watchdog runs. When `CRON_SECRET` is configured, the scheduler must supply the header documented above.
 
-1. DB schema not migrated (missing tables)
-2. `DATABASE_URL` or `DIRECT_URL` missing/misconfigured
-3. Seed not executed (no actors)
+| Endpoint | Check |
+| --- | --- |
+| `/api/health` | Application response. |
+| `/api/health/db` | Database connectivity, actor counts, and likely missing seed data. |
+| `/api/system/status` | Authenticated terminal connectivity and queued work on inactive kitchens. |
 
-The app now returns clearer DB-related error codes in API responses:
+```powershell
+npx tsc --noEmit --incremental false
+npx tsx --test scripts/*.test.ts
+node --test scripts/*.test.cjs
+npm run build
+```
 
-- `DB_NOT_MIGRATED`
-- `DB_UNREACHABLE`
-- `DB_AUTH_FAILED`
-- `SERVER_MISCONFIG`
+The suites cover payment validation and recovery, cap release, shared stock and undo, menu ordering, counter summaries, receipt rendering, Epson handoff, and static audio routing. Automated payment tests use simulated responses. Square Reader payments and physical receipt printing require device acceptance checks.
 
-## Logo placeholder
+## File structure
 
-- Placeholder SVG: `public/logo-placeholder.svg`
-- Replace with final brand logo later (`public/logo.svg`) when ready.
-
-## 2026-10-15 提供フローの変更
-
-調理完了はメニューごとの共有在庫として記録し、提供時にアイテム1個につき在庫を1個消費します。キッチンは注文数にかかわらず事前調理できます。本日の注文数と調理完了数は別に管理します。
-
-カウンターには共有在庫で一部でも提供できるすべてのオーダーを表示します。在庫は表示段階では予約しません。呼び出しは確認後の手動操作で、繰り返し実行できます。提供後の呼び出しはオーダーブックからも実行できます。
-
-リリース時には `20261015000100_shared_ready_stock` のマイグレーション適用が必要です。旧バージョンの操作を停止してから適用し、新バージョンへ切り替えてください。移行は既存の提供待ちアイテムを共有在庫へ移し、未提供アイテムに戻します。提供済みアイテムは保持します。旧仕様の取り消し履歴と自動呼び出し猶予設定は削除します。
-
-動作確認: `npx tsx --test scripts/shared-stock.test.ts`
-
-カウンター下部は常時「提供待ち / 調理済」を表示します。分子は確定済みの有効なオーダーに残る未提供アイテム数、分母は共有在庫数です。調理済みが0個のメニューは、提供待ちがあっても表示しません。削除済みメニューも調理済み在庫が残る間は表示します。管理画面で任意の「略称」を設定でき、下部表示だけに使います。空欄なら正式なメニュー名を使います。
-
-略称用の任意カラムは`20261017000100_menu_short_name`で追加します。既存データは保持します。数量集計・略称の確認: `npx tsx --test scripts/counter-footer.test.ts scripts/shared-stock.test.ts`
-
-## レシートの書体
-
-Adobe FontsのWeb用キット`jzl2tov`をブラウザーで読み込んでからPDFを生成します。DNP秀英角ゴシック金はL（400）を使用せず、本文をM（500）、メニュー名・見出し・合計・注文番号をB（600）で使います。Noto Sans JPへのフォールバックはRegularとBoldのみを使い、Lightは使用しません。Adobeのフォントファイルをリポジトリに保存しません。
-
-キット・フォントの読み込み失敗、タイムアウト、ブラウザー起動・PDF出力の失敗時は、従来のPDFKitと同梱Noto Sans JPによる生成へ戻ります。Adobe版の描画待ちは20秒、ブラウザー起動待ちは10秒までとし、外部配信の不調で白紙のレシートを返さない構成です。
-
-サーバー用Chromiumに対応するPlaywrightを固定し、デフォルトのブラウザーコンテキストとページを再利用します。同じワーカー内のPDF生成は直列化し、同時発行が互いのブラウザーを終了させないようにします。正常なAdobe版PDFは同じ内容・用紙サイズについて最大15分・32件まで再利用し、Notoへのフォールバックはキャッシュしません。
-
-余白は小が左右各7 mm・上下各8.5 mm、大が左右各5.75 mm・上下各9 mmです。連続・同時発行の実ブラウザー検証は`npx tsx scripts/repeated-receipts.ts`で実行できます。
-
-`npx tsx scripts/preview-receipts.ts --adobe-only`でAdobe版、`--fallback`で読み込み障害を模擬したNoto版を小・大の両サイズで生成できます。自動テストは`npx tsx --test scripts/receipt-rendering.test.ts`で実行します。ローカルのブラウザー実行ファイルは`RECEIPT_CHROMIUM_EXECUTABLE`で指定でき、Windowsではインストール済みChromeまたはEdgeも利用します。
+```text
+app/          Terminal pages and API route handlers
+components/  Shared terminal UI, sessions, realtime, and printing
+lib/domain/  Order, payment, kitchen, stock, serving, and audit rules
+lib/server/  Authentication, realtime delivery, queries, and tracing
+lib/receipt/ PDF renderers and Epson handoff
+prisma/      Data model, migrations, SQL guards, and initial seed
+public/      Call audio, fonts, and display/receipt assets
+scripts/     Tests, receipt previews, audio generation, and build runner
+docs/        Payment and printer operating guides
+```
