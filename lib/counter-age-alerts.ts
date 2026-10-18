@@ -1,20 +1,25 @@
-import { ORDER_AGE_MINUTES, type OrderAgeMinutes } from "@/lib/order-age";
+import { ORDER_AGE_MINUTES } from "@/lib/order-age";
+export const COUNTER_ALERT_MINUTES = [25, 40] as const;
+export type CounterAlertMinutes = (typeof COUNTER_ALERT_MINUTES)[number];
 export type AlertOrder = { id: string; orderNo: number; createdAt: string };
-export type CounterAgeAlert = AlertOrder & { minutes: OrderAgeMinutes };
+export type CounterAgeAlert = AlertOrder & { minutes: CounterAlertMinutes };
 export type AlertHistory = Record<string, { minutes: number; at: number }>;
 
 export function dueCounterAlerts(orders: readonly AlertOrder[], now: number, history: AlertHistory): CounterAgeAlert[] {
   return orders.flatMap(order => {
     const age = now - Date.parse(order.createdAt);
-    const minutes = [...ORDER_AGE_MINUTES].reverse().find(value => age >= value * 60_000);
+    const minutes = [...COUNTER_ALERT_MINUTES].reverse().find(value => age >= value * 60_000);
     // Catch up with the latest relevant threshold, not three obsolete alerts.
     return minutes && minutes > (history[order.id]?.minutes ?? 0) ? [{ ...order, minutes }] : [];
   }).sort((a, b) => Date.parse(a.createdAt) + a.minutes * 60_000 - Date.parse(b.createdAt) - b.minutes * 60_000 || a.orderNo - b.orderNo);
 }
 
 export function counterAlertSources(alert: CounterAgeAlert) {
-  const stage = ORDER_AGE_MINUTES.indexOf(alert.minutes) + 1;
-  return [`/audio/counter-alerts/tone-${stage}.mp3`, ...counterOrderNumberSources(alert.orderNo), `/audio/counter-alerts/elapsed-from-order-${alert.minutes}.mp3`];
+  return [counterAlertToneSource(alert.minutes), ...counterOrderNumberSources(alert.orderNo), `/audio/counter-alerts/elapsed-from-order-${alert.minutes}.mp3`];
+}
+
+export function counterAlertToneSource(minutes: CounterAlertMinutes) {
+  return `/audio/counter-alerts/tone-${ORDER_AGE_MINUTES.indexOf(minutes) + 1}.mp3`;
 }
 
 export function counterOrderNumberSources(orderNo: number): string[] {

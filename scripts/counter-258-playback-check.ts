@@ -31,14 +31,17 @@ async function main(){
     await page.goto("http://localhost:3102/counter",{waitUntil:"domcontentloaded",timeout:60000});
     await page.getByRole("button",{name:"音声通知を有効にする",exact:true}).click();await page.getByRole("dialog").waitFor({state:"hidden"});
     let count=0;const expected:string[]=[];
-    for(const minutes of [10,25,40] as const){
+    await page.evaluate(({base})=>{(window as any).clock=base+1000;document.dispatchEvent(new Event("visibilitychange"));},{base});
+    await page.waitForFunction(()=>document.querySelector(".counter-tile.warn"));
+    assert.deepEqual(await page.evaluate(()=>(window as any).played),[]);
+    for(const minutes of [25,40] as const){
       await page.evaluate(({base,minutes})=>{(window as any).clock=base+(minutes*60-599)*1000;document.dispatchEvent(new Event("visibilitychange"));},{base,minutes});
       count+=3;expected.push(...counterAlertSources({...order,minutes}));
       await page.waitForFunction(count=>(window as any).ended.length===count,count,{timeout:30000});
       assert.deepEqual(await page.evaluate(()=>(window as any).played),expected);
     }
     assert.deepEqual(errors,[]);await mkdir("tmp/counter-samples",{recursive:true});await page.screenshot({path:"tmp/counter-samples/counter-258.png",fullPage:true});
-    console.log("PASS: order #258 played all three real tone → cached number → 注文からX分経過 sequences in counter; real media ended normally; no live order changed.");
+    console.log("PASS: order #258 stays silent at 10 minutes and plays real tone → cached number → 注文からX分経過 at 25/40; no live order changed.");
   }finally{await browser.close();}
 }
 void main().catch(error=>{console.error(error);process.exitCode=1;});
