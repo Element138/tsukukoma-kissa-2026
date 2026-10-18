@@ -27,6 +27,8 @@ Cafe operations system coordinating checkout, payment reconciliation, kitchen pr
 
 Daily limits are reserved at submission. Failed or canceled orders release their original day's reservations once; unresolved payments retain them. Manual count resets retire earlier reservations so subsequent failures cannot reduce newer counts.
 
+POS terminals and administrators can cancel confirmed cash orders with no currently served items, without a time limit. The action is available after cash checkout (including the receipt dialog) and in the order book, and requires a reason and confirmation. Fully undoing serving makes an order eligible again. Cancellation retains the original order number, amount, payment history, actor and reason; marks the order and its items canceled; clears customer calls; excludes it from sales and wait statistics; and releases its original daily-limit reservations. Shared prepared stock and cooked counts remain unchanged. If cash was physically received, staff must return it separately. Enter any replacement order manually. Square and skipped-payment orders are not eligible for this cash cancellation action.
+
 ### Payment control
 
 Square checkout saves one payment attempt before launching the iOS Square POS app. Callback state identifies the attempt; signed webhooks can recover results independently of the browser. Confirmation checks Square's order and payment records for completion, online processing, location, JPY amount, timing, order identity, and absence of tips or refunds. Transaction bindings, row locks, and bounded verification retries prevent duplicate confirmation.

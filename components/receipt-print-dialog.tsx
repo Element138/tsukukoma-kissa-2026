@@ -1,7 +1,7 @@
 "use client";
 
 import { Printer } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -120,9 +120,11 @@ function PrintOption({
 export function ReceiptPrintDialog({
   target,
   onClose,
+  additionalAction,
 }: {
   target: ReceiptPrintTarget | null;
   onClose: () => void;
+  additionalAction?: ReactNode;
 }) {
   return (
     <Dialog
@@ -154,6 +156,7 @@ export function ReceiptPrintDialog({
         </p>
 
         <DialogFooter>
+          {additionalAction}
           <DialogClose asChild>
             <Button type="button" variant="outline">
               印刷せず閉じる
