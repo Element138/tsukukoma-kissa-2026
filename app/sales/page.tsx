@@ -627,6 +627,7 @@ const EVENT_LABEL: Record<string, string> = {
   ORDER_FAILED: "注文失敗",
   MANUAL_CLOSURE: "手動完了",
   ORDER_STATISTICS_UPDATED: "備考・集計設定更新",
+  ORDER_CANCELED: "注文取消",
   PAYMENT_SUCCESS_CALLBACK_AFTER_FAILED: "失敗後に決済成功通知",
 };
 
@@ -763,11 +764,11 @@ function buildTimeline(order: OrderDetail): TimelineRow[] {
       });
     }
   });
-  if (order.canceledAt) {
+  if (order.canceledAt && !rawEvents.some(raw => raw && typeof raw === "object" && !Array.isArray(raw) && (raw as Record<string, unknown>).type === "ORDER_CANCELED")) {
     rows.push({
       id: "canceled",
       at: order.canceledAt,
-      type: "ORDER_FAILED",
+      type: "ORDER_CANCELED",
       title: "注文取消",
       detail: null,
       actor: null,

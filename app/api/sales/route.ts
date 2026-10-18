@@ -348,10 +348,10 @@ export async function GET(req: NextRequest) {
           orderId: order.id,
           orderNo: order.orderNo,
           at:
-            orderEventAt(order.events, ["PAYMENT_FAILED", "ORDER_FAILED"]) ??
+            orderEventAt(order.events, ["PAYMENT_FAILED", "ORDER_FAILED", "ORDER_CANCELED"]) ??
             order.createdAt,
           severity: "danger",
-          type: "ORDER_FAILED",
+          type: order.orderStatus === "CANCELED" ? "ORDER_CANCELED" : "ORDER_FAILED",
           message: "失敗・取消のため売上と待ち時間集計から除外",
           dismissedAt: null,
         });

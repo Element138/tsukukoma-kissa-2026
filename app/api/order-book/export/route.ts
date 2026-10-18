@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession } from "@/lib/server/auth";
 import { fail } from "@/lib/response";
+import { deriveOrderProcessingTrace } from "@/lib/domain/order-processing-trace";
 import { AGE_GROUPS, parseAgeRangesToCounts } from "@/lib/age-groups";
 
 function csvEscape(v: unknown): string {
@@ -67,6 +68,9 @@ export async function GET(req: NextRequest) {
         "created_at",
         "confirmed_at",
         "completed_at",
+        "canceled_at",
+        "cancel_reason_type",
+        "cancel_reason_text",
         "fulfillment_type",
         "table_no",
         "party_size",
@@ -82,6 +86,7 @@ export async function GET(req: NextRequest) {
     );
 
     for (const order of orders) {
+      const trace = deriveOrderProcessingTrace({ createdAt: order.createdAt, events: order.events });
       const ageCounts = parseAgeRangesToCounts(order.ageRangesJson);
       const menuCounts = new Map<string, number>();
       for (const item of order.items) {
@@ -103,6 +108,9 @@ export async function GET(req: NextRequest) {
             );
             return completedAtMs > 0 ? new Date(completedAtMs).toISOString() : "";
           })(),
+          order.canceledAt?.toISOString() ?? "",
+          order.orderStatus === "CANCELED" ? trace.failureReasonType : "",
+          order.orderStatus === "CANCELED" ? trace.failureReasonText : "",
           order.fulfillmentType,
           order.tableNo ?? "",
           order.partySize,
