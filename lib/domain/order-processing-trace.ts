@@ -102,7 +102,7 @@ export function deriveOrderProcessingTrace(params: {
   const events = parseOrderEvents(params.events);
   const failure = latestEventOfType(
     events,
-    new Set(["PAYMENT_FAILED", "ORDER_FAILED"]),
+    new Set(["PAYMENT_FAILED", "ORDER_FAILED", "ORDER_CANCELED"]),
   );
   const successCallback = latestEventOfType(
     events,
@@ -124,6 +124,8 @@ export function failureReasonLabel(reasonType: string | null): string {
       return "タイムアウト";
     case "FAILURE_CALLBACK":
       return "失敗コールバック";
+    case "CASH_ORDER_VOID":
+      return "現金注文取消";
     case "MANUAL_CANCEL":
       return "手動キャンセル";
     case "MANUAL_FAILURE":

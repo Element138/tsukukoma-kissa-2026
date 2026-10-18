@@ -29,6 +29,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { CancelCashOrder } from "@/components/cancel-cash-order";
+import { canCancelCashOrder } from "@/lib/domain/cash-cancel-eligibility";
 import { ReceiptPrintDialog } from "@/components/receipt-print-dialog";
 import type { ReceiptPrintTarget } from "@/lib/receipt/types";
 
@@ -383,6 +385,8 @@ export default function OrderBookPage() {
             ? `注文確定時刻 ${confirmedLabel}`
             : order.orderStatus === "FAILED"
               ? `失敗時刻 ${failedLabel}`
+              : order.orderStatus === "CANCELED"
+                ? `取消時刻 ${failedLabel}`
               : `注文から ${formatMss(elapsedSec)}`,
       };
     });
@@ -466,6 +470,7 @@ export default function OrderBookPage() {
                     <SelectItem value="COMPLETED">
                       {labelOf(ORDER_STATUS_LABEL, "COMPLETED")}
                     </SelectItem>
+                    <SelectItem value="CANCELED">取消</SelectItem>
                     <SelectItem value="FAILED">
                       {labelOf(ORDER_STATUS_LABEL, "FAILED")}
                     </SelectItem>
@@ -668,9 +673,9 @@ export default function OrderBookPage() {
                     備考: {order.specialNote}
                   </div>
                 )}
-                {order.orderStatus === "FAILED" && (
+                {["FAILED", "CANCELED"].includes(order.orderStatus) && (
                   <div className="notice error" style={{ marginTop: 8 }}>
-                    失敗理由: {order.failureReason}
+                    {order.orderStatus === "CANCELED" ? "取消理由" : "失敗理由"}: {order.failureReason}
                   </div>
                 )}
                 <div className="muted" style={{ marginTop: 8 }}>
@@ -705,6 +710,13 @@ export default function OrderBookPage() {
                 </div>
 
                 <div className="row wrap" style={{ marginTop: 10 }}>
+                  {canEditNote && canCancelCashOrder(order) && (
+                    <CancelCashOrder order={order} onCanceled={() => {
+                      setReceiptPrintTarget(null);
+                      notify({ level: "success", message: `注文 #${order.orderNo} を取り消しました` });
+                      void reload();
+                    }} />
+                  )}
                   {order.confirmedAt && ["PAID","SKIPPED"].includes(order.paymentStatus) && !["COMPLETED","FAILED","CANCELED"].includes(order.orderStatus) && order.items.length>0 && order.items.every(item=>item.status!=="CANCELED") && <button type="button" className="ghost-btn" disabled={closing} onClick={()=>void manualClose(order)}>手動完了</button>}
                   {session.actor.actorType === "WAITER" && order.confirmedAt && !["FAILED", "CANCELED"].includes(order.orderStatus) && (
                     <button type="button" className="order-call-btn" aria-pressed={Boolean(order.lastCalledAt)} onClick={async () => {
