@@ -29,7 +29,7 @@ export const PAYMENT_STATUS_LABEL: Record<string, string> = {
   PAID: "支払済み",
   FAILED: "失敗",
   AWAITING: "確認待ち",
-  CANCELED: "失敗(旧取消)",
+  CANCELED: "取消",
   SKIPPED: "スキップ",
 };
 
@@ -39,14 +39,14 @@ export const ORDER_STATUS_LABEL: Record<string, string> = {
   AWAITING_SERVING: "受け取り待ち",
   COMPLETED: "完了",
   FAILED: "失敗",
-  CANCELED: "失敗(旧取消)",
+  CANCELED: "取消",
 };
 
 export const ORDER_ITEM_STATUS_LABEL: Record<string, string> = {
   QUEUED: "未提供",
   READY: "提供待ち",
   SERVED: "提供済み",
-  CANCELED: "失敗(旧取消)",
+  CANCELED: "取消",
 };
 
 export const AUDIT_RESULT_LABEL: Record<string, string> = {

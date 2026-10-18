@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { buildProtectedMenuNameChunks } from "@/lib/menu-name-line-break";
+import { CancelCashOrder } from "@/components/cancel-cash-order";
 import { ReceiptPrintDialog } from "@/components/receipt-print-dialog";
 import type { ReceiptPrintTarget } from "@/lib/receipt/types";
 
@@ -209,7 +210,15 @@ export default function PosPage() {
   const handledPayments = useRef(new Set<string>());
   const [receiptPrintTarget, setReceiptPrintTarget] =
     useState<ReceiptPrintTarget | null>(null);
+  const [lastCashOrder, setLastCashOrder] = useState<{ id: string; orderNo: number; totalPriceJpy: number; canceled?: boolean } | null>(null);
   const notifiedIncidentIdsRef = useRef<Set<string>>(new Set());
+
+  const handleCashCanceled = () => {
+    setReceiptPrintTarget(null);
+    setLastCashOrder(previous => previous ? { ...previous, canceled: true } : null);
+    notify({ level: "success", message: "現金注文を取り消しました。必要な場合は新しく注文してください。" });
+    void loadMenus().catch(() => undefined);
+  };
 
   const loadMenus = async () => {
     const data = await apiFetch<MenuPayload>("/api/admin/menus");
@@ -600,6 +609,7 @@ export default function PosPage() {
           orderNo: number;
           paymentStatus: string;
           orderStatus: string;
+          totalPriceJpy: number;
         };
         square: { launchAvailable: boolean } | null;
       }>("/api/orders", {
@@ -619,6 +629,7 @@ export default function PosPage() {
         rememberPending(data.order.id);
         await refreshPaymentState(data.order.id);
       } else {
+        if (paymentMethod === "CASH") setLastCashOrder({ id: data.order.id, orderNo: data.order.orderNo, totalPriceJpy: data.order.totalPriceJpy });
         resetInputsToDefault();
         setReceiptPrintTarget({
           id: data.order.id,
@@ -992,12 +1003,18 @@ export default function PosPage() {
               <Button disabled={busy} onClick={async () => {
                 setBusy(true);
                 try {
-                  const data = await apiFetch<{ order: { id: string; orderNo: number; paymentStatus: string; paymentMethod: string } }>("/api/orders", {
+                  const data = await apiFetch<{ order: { id: string; orderNo: number; totalPriceJpy: number; orderStatus: string; paymentStatus: string; paymentMethod: string } }>("/api/orders", {
                     method: "POST", body: JSON.stringify(recoveryPayload), timeoutMs: 25_000,
                   });
                   forgetRequest();
                   if (data.order.paymentMethod === "SQUARE") { rememberPending(data.order.id); setPendingSquareOrderId(data.order.id); }
-                  else { resetInputsToDefault(); setReceiptPrintTarget({ id: data.order.id, orderNo: data.order.orderNo }); }
+                  else {
+                    resetInputsToDefault();
+                    if (data.order.paymentStatus === "PAID" || data.order.paymentStatus === "SKIPPED") {
+                      if (data.order.paymentMethod === "CASH") setLastCashOrder({ id: data.order.id, orderNo: data.order.orderNo, totalPriceJpy: data.order.totalPriceJpy });
+                      setReceiptPrintTarget({ id: data.order.id, orderNo: data.order.orderNo });
+                    }
+                  }
                   await refreshPaymentState(data.order.id);
                 } catch (e) {
                   if (e instanceof ApiError && [400, 403, 404].includes(e.status)) forgetRequest();
@@ -1046,14 +1063,19 @@ export default function PosPage() {
               </div>
             )}
 
-            <div className="row wrap" style={{ marginTop: 12 }}>
-            </div>
+            {lastCashOrder && <div className="notice" style={{ marginTop: 12 }}>
+              <p>直前の現金注文 #{lastCashOrder.orderNo} · {fmtJpy(lastCashOrder.totalPriceJpy)} {lastCashOrder.canceled ? "（取消済み）" : ""}</p>
+              {!lastCashOrder.canceled &&
+                <CancelCashOrder order={lastCashOrder} onCanceled={handleCashCanceled} />}
+            </div>}
           </Card>
         </div>
       </DashboardShell>
       <ReceiptPrintDialog
         target={receiptPrintTarget}
         onClose={() => setReceiptPrintTarget(null)}
+        additionalAction={lastCashOrder && !lastCashOrder.canceled && receiptPrintTarget?.id === lastCashOrder.id
+          ? <CancelCashOrder order={lastCashOrder} onCanceled={handleCashCanceled} /> : undefined}
       />
     </>
   );
