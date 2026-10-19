@@ -129,7 +129,7 @@ export default function CounterPage() {
     <Dialog open={!ageAudio.enabled}>
       <DialogContent showCloseButton={false} className="w-[calc(100%-2rem)] max-w-sm" onEscapeKeyDown={event => event.preventDefault()} onInteractOutside={event => event.preventDefault()}>
         <DialogTitle>カウンターを開始</DialogTitle>
-        <DialogDescription>音声通知を有効にしてください。メディア音量も確認してください。</DialogDescription>
+        <DialogDescription>音声通知を有効にしてください。確認音が鳴ります。メディア音量も確認してください。</DialogDescription>
         {ageAudio.error && <p className="notice error" role="alert">{ageAudio.error}</p>}
         <Button type="button" className="min-h-14 w-full text-base" disabled={ageAudio.starting} onClick={() => void ageAudio.enable()}>
           {ageAudio.starting ? "音声を準備中…" : "音声通知を有効にする"}

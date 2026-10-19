@@ -21,6 +21,7 @@ export function useCounterAgeAudio(orders: AlertOrder[], actorId: string | undef
   const latest = useRef({ orders, loadedAt });
   latest.current = { orders, loadedAt };
   const generation = useRef(0);
+  const enabling = useRef(false);
   const key = actorId ? `kissa.counter-age-audio.v1:${actorId}` : null;
 
   useEffect(() => {
@@ -102,18 +103,27 @@ export function useCounterAgeAudio(orders: AlertOrder[], actorId: string | undef
   }, [orders, enabled, now]);
 
   const enable = async () => {
-    if (starting || !actorId) return;
+    if (enabling.current || !actorId) return;
+    enabling.current = true;
     setStarting(true); setError("");
     const epoch = generation.current;
     warmed.current.clear();
+    let current: CounterAudioPlayer | null = null;
     try {
-      const current = player.current ?? new CounterAudioPlayer(); player.current = current;
+      current = player.current ?? new CounterAudioPlayer(); player.current = current;
       await current.unlock();
       await current.preload(BASE_SOURCES);
       if (epoch !== generation.current) return;
       enabledRef.current = true; setEnabled(true);
-    } catch (e) { setError(e instanceof Error ? e.message : "音声を有効にできませんでした"); }
-    finally { setStarting(false); }
+    } catch (e) {
+      current?.dispose();
+      if (player.current === current) player.current = null;
+      if (epoch === generation.current) setError(e instanceof Error ? e.message : "音声を有効にできませんでした");
+    }
+    finally {
+      enabling.current = false;
+      if (epoch === generation.current) setStarting(false);
+    }
   };
   const disable = () => {
     enabledRef.current = false; setEnabled(false); active.current?.controller.abort();
