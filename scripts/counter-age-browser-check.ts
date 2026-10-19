@@ -15,8 +15,8 @@ async function main() {
   await context.addInitScript(({base})=>{
     // tsx preserves class names with this helper when serializing the fixture.
     (0, eval)("globalThis.__name = value => value;");
-    const state=window as unknown as {clock:number;played:string[];overlap:boolean};
-    state.clock=base;state.played=[];state.overlap=false;
+    const state=window as unknown as {clock:number;played:string[];overlap:boolean;hangUnlock:boolean};
+    state.clock=base;state.played=[];state.overlap=false;state.hangUnlock=false;
     try { if (!localStorage.getItem("kissa.counter-age-audio.v1:counter-test")) localStorage.setItem("kissa.counter-age-audio.v1:counter-test",JSON.stringify({two:{minutes:10,at:base},three:{minutes:25,at:base}})); } catch {}
     Date.now=()=>state.clock;
     const blobs=new Map<string,Blob>();let next=0,playing=0;
@@ -25,7 +25,11 @@ async function main() {
     class FakeAudio {
       src="";onended:(()=>void)|null=null;onerror:(()=>void)|null=null;timer:number|null=null;active=false;
       async play(){
-        if(this.src.startsWith("data:"))return;
+        if(this.src==="/audio/counter-alerts/tone-2.mp3") {
+          if(state.hangUnlock) return new Promise<void>(()=>{});
+          this.timer=window.setTimeout(()=>this.onended?.(),30);
+          return;
+        }
         const blob=blobs.get(this.src);if(!blob)throw Error("missing audio blob");
         state.played.push(await blob.text());
         if(playing)state.overlap=true;playing++;this.active=true;
@@ -70,8 +74,15 @@ async function main() {
     await page.mouse.click(5,5);
     assert.equal(await gate.isVisible(),true);
     await page.screenshot({path:"tmp/counter-audio-gate.png",fullPage:true});
+    await page.evaluate(()=>{(window as any).hangUnlock=true;});
     await gate.getByRole("button",{name:"音声通知を有効にする",exact:true}).click();
     await gate.getByRole("alert").waitFor();
+    assert.match(await gate.getByRole("alert").innerText(),/音声の開始を確認できませんでした/);
+    assert.equal(await gate.getByRole("button",{name:"音声通知を有効にする",exact:true}).isEnabled(),true);
+    assert.equal(await page.locator(".counter-panel button:enabled").count(),0);
+    await page.evaluate(()=>{(window as any).hangUnlock=false;});
+    await gate.getByRole("button",{name:"音声通知を有効にする",exact:true}).click();
+    await gate.getByRole("alert").filter({hasText:"音声を読み込めませんでした"}).waitFor();
     assert.equal(await page.locator(".counter-panel button:enabled").count(),0);
     failAudio = false;
     await page.getByRole("button",{name:"音声通知を有効にする",exact:true}).click();
@@ -133,7 +144,7 @@ async function main() {
       audio.onerror=()=>{clearTimeout(timer);reject(Error(`invalid audio ${src}`));};audio.preload="auto";audio.load();
     }))));
     assert.equal(durations.every(n=>Number.isFinite(n)&&n>0),true);await realContext.close();
-    console.log("PASS: mandatory audio dialog blocks actions, Escape/outside taps and failed activation; retry unlocks counter; no threshold legend; serialized alerts, reload deduplication, bulk serving and allergen defaults pass; no browser errors.");
+    console.log("PASS: stalled Safari-style play times out with retry; mandatory audio dialog blocks actions, Escape/outside taps and failed activation; retry unlocks counter; serialized alerts, reload deduplication and bulk serving pass; no browser errors.");
   }catch(e){console.error({alerts:await page.getByRole("alert").allTextContents(),errors,played:await page.evaluate(()=>(window as any).played)});throw e;}
   finally{await browser.close();}
 }
