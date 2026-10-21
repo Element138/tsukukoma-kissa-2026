@@ -25,6 +25,7 @@ type KitchenMenuRow = {
   hasActiveKitchenCoverage: boolean;
   queuedCount: number;
   surplusCount: number;
+  readyCount: number;
   todayCookedCount: number;
   oldestQueuedSeconds: number;
   oldestElapsed: string;
@@ -136,7 +137,7 @@ export default function KitchenPage() {
               for (const menu of payload.menus) {
                 const max = 999;
                 const current = prev[menu.menuId] ?? 1;
-                next[menu.menuId] = Math.max(1, Math.min(max, current));
+                next[menu.menuId] = Math.max(-Math.min(max, menu.readyCount ?? 0), Math.min(max, current));
               }
               return next;
             });
@@ -184,7 +185,7 @@ export default function KitchenPage() {
 
 
   useMidnightRefresh(Boolean(session),dayChanged=>{
-    if(dayChanged)setMenus(current=>current.map(menu=>({...menu,queuedCount:menu.queuedOrders.length,surplusCount:0})));
+    if(dayChanged)setMenus(current=>current.map(menu=>({...menu,queuedCount:menu.queuedOrders.length,surplusCount:0,readyCount:0})));
     void reload("menus");
   });
   useRealtimeSubscription({
@@ -223,10 +224,11 @@ export default function KitchenPage() {
         result = await submit(true);
       }
       setReadyQuantityByMenuId(prev => ({ ...prev, [menuId]: 1 }));
-      notify({ level: "success", message: `${result.markedReadyCount} 個を調理済みにしました` });
+      notify({ level: "success", message: result.markedReadyCount < 0 ? `調理済みを ${Math.abs(result.markedReadyCount)} 個減らしました` : `${result.markedReadyCount} 個を調理済みにしました` });
       await reload("menus");
     } catch (e) {
       notify({ level: "error", message: e instanceof Error ? e.message : "調理済みへの更新に失敗しました" });
+      if (quantity < 0) await reload("menus");
     } finally { readyInFlightRef.current = false; setBusy(false); }
   };
 
@@ -419,7 +421,7 @@ export default function KitchenPage() {
                 const capPickerOpen = capPickerMenuId === menu.menuId;
                 const capValue = menu.dailyOrderCap;
                 const readyQuantity = Math.max(
-                  1,
+                  -Math.min(999, menu.readyCount ?? 0),
                   Math.min(
                     999,
                     readyQuantityByMenuId[menu.menuId] ?? 1,
@@ -584,11 +586,11 @@ export default function KitchenPage() {
                             type="button"
                             className="ready-edge-control ready-edge-control-left"
                             aria-label="数量を減らす"
-                            disabled={busy || readyQuantity <= 1}
+                            disabled={busy || readyQuantity <= -Math.min(999, menu.readyCount ?? 0)}
                             onClick={() =>
                               setReadyQuantityByMenuId((prev) => ({
                                 ...prev,
-                                [menu.menuId]: Math.max(1, readyQuantity - 1),
+                                [menu.menuId]: Math.max(-Math.min(999, menu.readyCount ?? 0), readyQuantity - 1),
                               }))
                             }
                           >
@@ -596,8 +598,8 @@ export default function KitchenPage() {
                           </button>
                         <button
                           type="button"
-                          className="ready-action-submit"
-                          disabled={busy}
+                          className={cn("ready-action-submit", readyQuantity < 0 && "ready-action-submit-negative")}
+                          disabled={busy || readyQuantity === 0}
                           onClick={() =>
                             void submitReady(
                               menu.menuId,
@@ -605,8 +607,8 @@ export default function KitchenPage() {
                             )
                           }
                         >
-                          {readyQuantity}
-                          個調理済みにする
+                          {Math.abs(readyQuantity)}
+                          {readyQuantity < 0 ? "個調理済みを減らす" : "個調理済みにする"}
                         </button>
                           <button
                             type="button"

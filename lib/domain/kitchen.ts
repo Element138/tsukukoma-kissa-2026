@@ -13,6 +13,7 @@ export async function markKitchenMenuItemsReady(
   db: DbClient,
   params: { actorId: string; kitchenId: string; menuId: string; quantity: number; idempotencyKey: string; confirmOverCap?: boolean }
 ) {
+  assert(Number.isSafeInteger(params.quantity) && params.quantity !== 0 && Math.abs(params.quantity) <= 999, 400, "INVALID_READY_QUANTITY", "数量は0以外の-999〜999の整数で指定してください");
   // A per-menu lock serializes production, serving, undo and duplicate requests.
   await db.$queryRaw`SELECT id FROM "Menu" WHERE id = ${params.menuId} FOR UPDATE`;
   await resetExpiredReadyStock(db, [params.menuId]);
@@ -27,8 +28,16 @@ export async function markKitchenMenuItemsReady(
   if (menu.dailyOrderCap != null && cooked <= menu.dailyOrderCap && cooked + params.quantity > menu.dailyOrderCap && !params.confirmOverCap) {
     throw new AppError(409, "COOKED_CAP_CONFIRM_REQUIRED", "本日の調理完了数が上限を超えます。調理完了にしますか？");
   }
-  await db.menuStock.upsert({ where: { menuId: params.menuId }, create: { menuId: params.menuId, readyCount: params.quantity }, update: { readyCount: { increment: params.quantity } } });
-  await db.menuDailyCount.upsert({ where: { menuId_jstDate: { menuId: params.menuId, jstDate } }, create: { menuId: params.menuId, jstDate, cookedCount: params.quantity }, update: { cookedCount: { increment: params.quantity } } });
+  if (params.quantity < 0) {
+    const decrease = -params.quantity;
+    assert(cooked >= decrease, 409, "READY_COUNT_INSUFFICIENT", "現在の調理済み数を超えて減らすことはできません");
+    const changed = await db.menuStock.updateMany({ where: { menuId: params.menuId, readyCount: { gte: decrease } }, data: { readyCount: { decrement: decrease } } });
+    assert(changed.count === 1, 409, "READY_COUNT_INSUFFICIENT", "調理済み在庫が不足しています。最新の数量を確認してください");
+    await db.menuDailyCount.update({ where: { menuId_jstDate: { menuId: params.menuId, jstDate } }, data: { cookedCount: { decrement: decrease } } });
+  } else {
+    await db.menuStock.upsert({ where: { menuId: params.menuId }, create: { menuId: params.menuId, readyCount: params.quantity }, update: { readyCount: { increment: params.quantity } } });
+    await db.menuDailyCount.upsert({ where: { menuId_jstDate: { menuId: params.menuId, jstDate } }, create: { menuId: params.menuId, jstDate, cookedCount: params.quantity }, update: { cookedCount: { increment: params.quantity } } });
+  }
   await saveUndoOperation(db, { actorId: params.actorId, operationType: "ITEM_READY_BATCH", targetEntityType: "menu_stock", targetEntityId: params.menuId, orderId: null, expectedOrderVersion: 0, payload: { menuId: params.menuId, quantity: params.quantity, jstDate } });
   const result = { menuId: params.menuId, markedReadyCount: params.quantity, affectedOrderCount: 0 };
   await writeAuditLog(db, { actorId: params.actorId, actorType: "KITCHEN", actionType: "ITEM_READY_BATCH", entityType: "menu", entityId: params.menuId, correlationId: params.idempotencyKey, afterJson: result, result: "SUCCESS" });

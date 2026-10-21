@@ -23,7 +23,7 @@ export const RECEIPT_PAPER = {
   // Keep a further 2 mm per side inside the printer's 48 mm print area.
   small: {
     label: "印刷（小）",
-    printer: "ZJ-5890K / Zjiang",
+    printer: "SII MP-B20",
     paperWidthMm: 58,
     printableWidthMm: 44,
     horizontalMarginMm: 7,
