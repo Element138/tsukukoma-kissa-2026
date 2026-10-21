@@ -5,13 +5,34 @@ order-book's レシート再印刷 action opens the same dialog. Receipts are av
 for PAID or intentionally SKIPPED payments; failed and canceled orders are
 excluded. Fulfillment does not have to be COMPLETED.
 
-On iPad, the large option hands the PDF to TM Print Assistant. Other routes
-open PDFs in a new tab. Printer handoff remains separate from PDF generation.
+On iPad, the large option hands the PDF to TM Print Assistant and the small
+option uses SII URL Print Agent for MP-B20. On laptops, both open PDFs in a new
+tab. Printer handoff remains separate from PDF generation.
+
+## MP-B20 small-receipt setup
+
+The adopted MP-B20 uses 58 mm paper and a 48 mm print area. Pair it with the
+iPad over Bluetooth, install SII URL Print Agent, and select MP-B20 in that app.
+Then open a paid receipt in POS, wait for preparation and tap 印刷（小） to open
+the SII app. Tear off the paper manually after printing. Laptop PDF previews
+and the existing small layout are preserved; the Chinese-printer/BR RawPrinter
+route is no longer the designated small-printer flow.
+
+The authenticated PDF is sent as URL-encoded Base64 using
+`siiprintagent://1.0/print`, with 58 mm paper, fit-to-width, a 60-second timeout,
+native error dialogs/reselection and manual tear-bar feed. Connections are
+released after printing so another terminal can connect. PDFs over 500 KiB or
+handoffs over 750 KiB show an error and retain the PDF fallback. Fit-to-width
+also makes SII reject receipts exceeding its 500 mm length limit instead of
+silently truncating. Hardware output still needs device testing.
+
+Protocol: https://www.sii-ps.com/common/URLPRNAgent_Android_iOS_JA_01.pdf
+Tests: `node --test scripts/sii-handoff.test.cjs scripts/epson-handoff.test.cjs`.
 
 ## Layout and assets
 
-- Large: 79.5 mm page, 72 mm content width, 3.75 mm horizontal margins.
-- Small: 58 mm page, 48 mm content width, 5 mm horizontal margins.
+- Large: 79.5 mm page, 68 mm content width, 5.75 mm horizontal margins.
+- Small: 58 mm page, 44 mm content width, 7 mm horizontal margins.
 - Shared renderer: `lib/receipt/render-pdf.ts`; page settings: `lib/receipt/paper.ts`.
 - Japanese text uses embedded Noto Sans JP. Only the order-number digits use
   embedded Lato Bold from Google Fonts. Font licenses are in `public/fonts`.
@@ -46,8 +67,15 @@ performed, and launching the app is not reported as a successful print.
 
 The request asks the app to fit the PDF to the TM-P80II's 72 mm print area,
 display errors, and permit printer reselection after connection failures.
+It explicitly sends `cut=feed` to feed the finished receipt to the tear/cut
+position, instead of relying on trailing blank PDF pixels. The manual-cutter
+TM-P80II feeds without actuating a cutter; an auto-cutter model may also cut.
+This is not a programmable 5 mm extra margin. No dummy dot or PDF layout change
+is added, and the physical feed distance still needs checking on the printer.
+Do not substitute `feed-position=cutting`: that option is for black-mark paper.
 After success it returns to the calling POS/order-book URL. A PDF-preview link
-remains available. Laptops and the small option continue opening PDFs.
+remains available. Laptops continue opening PDFs; iPad's small option uses
+SII URL Print Agent as described above.
 
 First use: open TM Print Assistant, select the TM-P80II, and run its communication
 test. Use Bluetooth Classic or Wi-Fi: Epson excludes PDF printing over BLE.
@@ -64,5 +92,6 @@ iPad launch and physical printing still require testing on the operator device.
 
 Sources:
 - https://www.epson.jp/products/receiptprinter/develop/print.htm
+- https://download4.epson.biz/sec_pubs/pos/reference_en/escpos/gs_cv.html
 - https://www.epson.jp/support/portal/used/t203b084b.htm
 - https://download3.ebz.epson.net/dsc/f/03/00/17/22/14/19fdc3488a02b7312bfd575e6046b6fba267be4e/ov_TM_Print_Assistant_iOS_v1.17.0.pdf

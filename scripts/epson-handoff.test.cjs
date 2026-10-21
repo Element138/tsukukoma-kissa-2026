@@ -31,9 +31,18 @@ test('Epson URL round-trips binary PDF with correctly escaped Base64', () => {
   assert.equal(url.searchParams.get('success'), 'https://pos.example/order-book?date=2026-10-17');
   assert.equal(url.searchParams.get('error-dialog'), 'yes');
   assert.equal(url.searchParams.get('reselect'), 'yes');
+  assert.equal(url.searchParams.get('cut'), 'feed');
   assert.equal(url.searchParams.get('fit-to-width'), 'yes');
   assert.equal(url.searchParams.get('printable-width'), '72');
   assert.ok(!url.href.includes('token='));
+});
+
+test('Epson requests end feed without modifying the PDF or using black-mark feed', () => {
+  const pdf = Buffer.from('%PDF-1.7\noriginal receipt with bottom whitespace\n%%EOF');
+  const url = new URL(epsonPdfHandoff(pdf, 'https://pos.example/pos'));
+  assert.equal(url.searchParams.get('cut'), 'feed');
+  assert.equal(url.searchParams.has('feed-position'), false);
+  assert.deepEqual(Buffer.from(url.searchParams.get('data'), 'base64'), pdf);
 });
 test('rejects invalid PDF, unsafe callback, oversized PDF and oversized encoded URL', () => {
   assert.throws(() => epsonPdfHandoff(Buffer.from('login page'), 'https://pos.example'));

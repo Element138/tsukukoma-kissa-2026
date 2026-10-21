@@ -95,7 +95,7 @@ export async function executeUndo(db: DbClient, params: { actorId: string; actor
     await resetExpiredReadyStock(db, [menuId]);
     assert(params.actorType === "KITCHEN", 403, "FORBIDDEN", "Undo forbidden");
     count = Number(payload.quantity);
-    assert(Number.isSafeInteger(count) && count > 0 && typeof payload.jstDate === "string", 409, "UNDO_TARGET_CHANGED", "Undo invalid");
+    assert(Number.isSafeInteger(count) && count !== 0 && Math.abs(count) <= 999 && typeof payload.jstDate === "string", 409, "UNDO_TARGET_CHANGED", "Undo invalid");
     const stock = await db.menuStock.updateMany({ where: { menuId, readyCount: { gte: count } }, data: { readyCount: { decrement: count } } });
     assert(stock.count === 1, 409, "UNDO_CONFLICT", "調理済み在庫が提供されたため取り消せません");
     await db.menuDailyCount.update({ where: { menuId_jstDate: { menuId, jstDate: payload.jstDate } }, data: { cookedCount: { decrement: count } } });
@@ -115,5 +115,5 @@ export async function executeUndo(db: DbClient, params: { actorId: string; actor
   } else { throw new AppError(409, "UNDO_UNSUPPORTED", "旧仕様の操作は取り消せません"); }
   await db.undoOperation.delete({ where: { id: undo.id } });
   await writeAuditLog(db, { actorId: params.actorId, actorType: params.actorType, actionType: "UNDO", entityType: "undo_operation", entityId: undo.id, orderId, afterJson: { revertedItemCount: count, menuId }, result: "SUCCESS" });
-  return { operationType: undo.operationType, revertedItemCount: count, affectedOrders: [] };
+  return { operationType: undo.operationType, revertedItemCount: Math.abs(count), affectedOrders: [] };
 }

@@ -31,6 +31,9 @@ export function epsonPdfHandoff(pdf: Uint8Array, returnUrl: string) {
     "error-dialog": "yes",
     reselect: "yes",
     timeout: "60000",
+    // Feed the receipt to the tear/cut position after printing. On the manual-
+    // cutter TM-P80II this feeds paper only; do not use a full-cut request.
+    cut: "feed",
     "fit-to-width": "yes",
     "printable-width": "72",
     "paper-width": "80",

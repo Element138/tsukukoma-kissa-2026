@@ -165,6 +165,7 @@ export async function GET(req: NextRequest) {
           hasActiveKitchenCoverage: coveredMenuSet.has(assignment.menuId),
           queuedCount: Math.max(0, queue.queuedCount - (stockMap.get(assignment.menuId) ?? 0)),
           surplusCount: Math.max(0, (stockMap.get(assignment.menuId) ?? 0) - queue.queuedCount),
+          readyCount: stockMap.get(assignment.menuId) ?? 0,
           todayCookedCount: cookedMap.get(assignment.menuId) ?? 0,
           oldestQueuedSeconds,
           oldestElapsed: queue.oldestConfirmedAt ? elapsedMss(queue.oldestConfirmedAt) : "0:00",
