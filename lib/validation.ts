@@ -62,7 +62,7 @@ export const itemReadySchema = z.object({
 
 export const kitchenMenuReadySchema = z.object({
   menuId: z.string().uuid(),
-  quantity: z.number().int().min(1).max(999),
+  quantity: z.number().int().min(-999).max(999).refine(value => value !== 0, "数量に0は指定できません"),
   idempotencyKey: z.string().min(8).max(160),
   confirmOverCap: z.boolean().optional()
 });
