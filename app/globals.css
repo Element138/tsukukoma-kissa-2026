@@ -345,7 +345,7 @@ textarea:focus {
 
 button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
     .ghost-btn
-  ):not(.toast-close),
+  ):not(.toast-close):not(.ready-action-submit-negative),
 .btn-link {
   border: 1px solid transparent;
   border-radius: 12px;
@@ -1497,6 +1497,14 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
 
 .ready-action-submit:hover {
   background: #0d6f50;
+}
+
+.ready-action-submit-negative {
+  background: #c62828;
+}
+
+.ready-action-submit-negative:hover {
+  background: #a71f1f;
 }
 
 .ready-action-submit:disabled,

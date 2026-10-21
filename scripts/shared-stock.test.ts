@@ -7,6 +7,7 @@ import { executeUndo } from "../lib/domain/undo";
 import { deriveOrderStatus } from "../lib/domain/order-status";
 import { projectCounterItems } from "../lib/domain/counter-availability";
 import { updateOrderCall } from "../lib/domain/order-calls";
+import { kitchenMenuReadySchema } from "../lib/validation";
 
 // A stateful database double exercises domain writes without touching service data.
 function fixture() {
@@ -100,6 +101,54 @@ test("kitchens cannot produce an unassigned menu", async () => {
   const { state, cook } = fixture(); state.assigned = false;
   await assert.rejects(cook(1), { code: "FORBIDDEN" }); assert.equal(state.ready, 0);
 });
+test("negative corrections change stock/daily totals, not orders, and support undo", async () => {
+  const { state, cook, db } = fixture(); state.ready = 6; state.cooked = 10;
+  await cook(-4);
+  assert.equal(state.ready, 2); assert.equal(state.cooked, 6);
+  assert.equal(state.item.status, "QUEUED"); assert.equal(state.order.orderStatus, "PREPARING");
+  assert.equal(state.audits[0].afterJson.markedReadyCount, -4);
+  assert.equal(state.undos[0].payload.quantity, -4);
+  const result = await executeUndo(db, { actorId: "kitchen", actorType: "KITCHEN" });
+  assert.equal(state.ready, 6); assert.equal(state.cooked, 10); assert.equal(result.revertedItemCount, 4);
+});
+
+test("negative corrections cannot remove served production or overdraw current stock", async () => {
+  const { state, cook } = fixture(); state.ready = 2; state.cooked = 8;
+  await assert.rejects(cook(-3), { code: "READY_COUNT_INSUFFICIENT" });
+  assert.equal(state.ready, 2); assert.equal(state.cooked, 8); assert.equal(state.undos.length, 0);
+  await cook(-2); assert.equal(state.ready, 0); assert.equal(state.cooked, 6);
+});
+
+test("replayed negative requests are idempotent and new requests recheck current stock", async () => {
+  const { state, cook } = fixture(); state.ready = 3; state.cooked = 3;
+  await cook(-2); await cook(-2);
+  assert.equal(state.ready, 1); assert.equal(state.cooked, 1); assert.equal(state.audits.length, 1);
+  await assert.rejects(cook(-2, false, "second"), { code: "READY_COUNT_INSUFFICIENT" });
+  assert.equal(state.ready, 1);
+});
+
+test("negative corrections protect daily totals and kitchen permissions", async () => {
+  const { state, cook } = fixture(); state.ready = 3; state.cooked = 1;
+  await assert.rejects(cook(-2), { code: "READY_COUNT_INSUFFICIENT" });
+  assert.equal(state.ready, 3); assert.equal(state.cooked, 1);
+  state.assigned = false; await assert.rejects(cook(-1), { code: "FORBIDDEN" });
+});
+
+test("negative corrections at cooking cap do not require over-cap confirmation", async () => {
+  const { state, cook } = fixture(); state.ready = 3; state.cooked = 10; state.cap = 10;
+  await cook(-1); assert.equal(state.ready, 2); assert.equal(state.cooked, 9);
+});
+
+test("signed ready validation rejects zero, fractions and excessive values", async () => {
+  const base = { menuId: "00000000-0000-4000-8000-000000000001", idempotencyKey: "test-key-1" };
+  for (const quantity of [-999,-1,1,999]) assert.equal(kitchenMenuReadySchema.safeParse({ ...base, quantity }).success, true);
+  const { cook } = fixture();
+  for (const quantity of [-1000,0,0.5,1000]) {
+    assert.equal(kitchenMenuReadySchema.safeParse({ ...base, quantity }).success, false);
+    await assert.rejects(cook(quantity), { code: "INVALID_READY_QUANTITY" });
+  }
+});
+
 test("uncalled service needs approval, then consumes exactly one unit", async () => {
   const { state, serve } = fixture(); state.ready = 3;
   await assert.rejects(serve(), { code: "SERVE_CONFIRM_REQUIRED" }); assert.equal(state.ready, 3);
