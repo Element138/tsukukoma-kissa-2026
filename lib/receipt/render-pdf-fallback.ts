@@ -84,7 +84,7 @@ export async function renderReceiptPdfFallback(params: {
 }) {
   const { data, size, regularFontBytes, boldFontBytes } = params;
   const paper = RECEIPT_PAPER[size];
-  const pageWidth = mmToPoints(paper.paperWidthMm);
+  const pageWidth = mmToPoints(paper.pdfWidthMm);
   const contentLeft = mmToPoints(paper.horizontalMarginMm);
   const contentWidth = mmToPoints(paper.printableWidthMm);
   const verticalMargin = mmToPoints(paper.verticalMarginMm);
