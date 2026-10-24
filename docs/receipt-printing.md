@@ -31,8 +31,19 @@ Tests: `node --test scripts/sii-handoff.test.cjs scripts/epson-handoff.test.cjs`
 
 ## Layout and assets
 
+The print dialog is viewport-height bounded with a fixed header/close control
+and an independently scrolling body. Local browser coverage uses iPhone SE-sized
+375 x 667, reduced-height 375 x 550, landscape 667 x 375, and desktop 1280 x 800
+viewports, with native PDF preparation ready, stalled, and error states.
+Run `node --test scripts/receipt-dialog-small-screen.test.cjs` for fixture-only
+verification without accessing orders or invoking installed printing apps.
+
 - Large: 79.5 mm page, 68 mm content width, 5.75 mm horizontal margins.
-- Small: 58 mm page, 44 mm content width, 7 mm horizontal margins.
+- Small: 58 mm roll, 48 mm PDF canvas, 44 mm content width, 2 mm internal
+  horizontal margins. SII fits this canvas to the MP-B20's 48 mm print area,
+  avoiding a second reduction for the roll's unprintable edges. Expected physical
+  side margins are approximately 7 mm including those edges. Vertical padding
+  remains 8.5 mm; printer/tear-bar feeding is separate.
 - Shared renderer: `lib/receipt/render-pdf.ts`; page settings: `lib/receipt/paper.ts`.
 - Japanese text uses embedded Noto Sans JP. Only the order-number digits use
   embedded Lato Bold from Google Fonts. Font licenses are in `public/fonts`.

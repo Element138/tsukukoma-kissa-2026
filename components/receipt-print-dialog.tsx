@@ -114,7 +114,7 @@ function PrintOption({
         <span>
           <strong>{paper.label}</strong>
           <small>
-            {paper.printer} · {paper.paperWidthMm} mm PDF
+            {paper.printer} · {paper.pdfWidthMm} mm PDF
           </small>
         </span>
       </a>
@@ -141,33 +141,33 @@ export function ReceiptPrintDialog({
       }}
     >
       <DialogContent className="receipt-print-dialog">
-        <DialogHeader>
+        <DialogHeader className="receipt-print-header">
           <DialogTitle>レシート印刷</DialogTitle>
           <DialogDescription>
             注文 #{target?.orderNo ?? "-"} の用紙サイズを選択してください。
-            iPadでは大サイズはTM Print Assistant、小サイズはSII URL Print Agentを開きます。PCではPDFを新しいタブで開きます。
+            iPad/iPhoneでは各プリンター用アプリ、PCではPDFを開きます。
           </DialogDescription>
         </DialogHeader>
 
-        {target ? (
-          <div className="receipt-print-options">
-            <PrintOption orderId={target.id} size="large" />
-            <PrintOption orderId={target.id} size="small" />
-          </div>
-        ) : null}
+        <div className="receipt-print-body">
+          {target ? (
+            <div className="receipt-print-options">
+              <PrintOption orderId={target.id} size="large" />
+              <PrintOption orderId={target.id} size="small" />
+            </div>
+          ) : null}
 
-        <p className="receipt-print-note">
-          印刷しない場合は閉じて注文画面へ戻れます。再印刷はオーダーブックから行えます。
-        </p>
+          <p className="receipt-print-note">
+            印刷しない場合は閉じて注文画面へ戻れます。再印刷はオーダーブックから行えます。
+          </p>
 
-        <DialogFooter>
-          {additionalAction}
-          <DialogClose asChild>
-            <Button type="button" variant="outline">
-              印刷せず閉じる
-            </Button>
-          </DialogClose>
-        </DialogFooter>
+          <DialogFooter>
+            {additionalAction}
+            <DialogClose asChild>
+              <Button type="button" variant="outline">印刷せず閉じる</Button>
+            </DialogClose>
+          </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );

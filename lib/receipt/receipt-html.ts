@@ -32,9 +32,9 @@ export function receiptHtml(params: ReceiptRenderParams) {
 @font-face { font-family: ReceiptNoto; font-style: normal; font-weight: 600; src: url(data:font/otf;base64,${Buffer.from(params.boldFontBytes).toString("base64")}) format("opentype"); }
 @page { margin: 0; }
 * { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; width: ${paper.paperWidthMm}mm; color: #000; background: #fff; }
+html, body { margin: 0; padding: 0; width: ${paper.pdfWidthMm}mm; color: #000; background: #fff; }
 body { font-family: "dnp-shuei-gothic-kin-std", ReceiptNoto, sans-serif; font-weight: 500; font-synthesis: none; font-size: ${paper.bodyFontPt}pt; line-height: 1.42; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-main { width: ${paper.paperWidthMm}mm; padding: ${paper.verticalMarginMm}mm ${paper.horizontalMarginMm}mm; }
+main { width: ${paper.pdfWidthMm}mm; padding: ${paper.verticalMarginMm}mm ${paper.horizontalMarginMm}mm; }
 header { display: grid; grid-template-columns: ${size === "small" ? 15 : 19}mm minmax(0,1fr); gap: 3mm; margin-bottom: 4mm; }
 .logo { width: 100%; display: block; }
 .brand { display: flex; flex-direction: column; justify-content: space-between; padding-bottom: .7mm; font-weight: 600; }

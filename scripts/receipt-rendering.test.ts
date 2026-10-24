@@ -25,6 +25,9 @@ for (const size of ["small", "large"] as const) {
     assert.match(contents, /NotoSansJP-Regular/);
     assert.match(contents, /NotoSansJP-Bold/);
     assert.equal([...contents.matchAll(/\/Type\s*\/Page\b/g)].length, 1);
+    const box = contents.match(/\/MediaBox\s*\[\s*0\s+0\s+([\d.]+)\s+([\d.]+)\s*\]/);
+    assert.ok(box, "PDF must declare its page dimensions");
+    assert.ok(Math.abs(Number(box[1]) * 25.4 / 72 - (size === "small" ? 48 : 79.5)) < 0.01);
   });
 }
 
@@ -33,6 +36,13 @@ test("receipt text is escaped before Adobe's web kit executes", async () => {
   assert.ok(html.includes("&lt;script&gt; &amp; コーヒー"));
   assert.ok(!html.includes("<script> & コーヒー"));
   assert.ok(html.includes("jzl2tov"));
+});
+
+test("small HTML uses the MP-B20 print-area canvas without changing vertical padding", async () => {
+  const html = receiptHtml(await receipt("small"));
+  assert.ok(html.includes("width: 48mm"));
+  assert.ok(html.includes("padding: 8.5mm 2mm"));
+  assert.ok(!html.includes("width: 58mm"));
 });
 
 test("reopening an unchanged Adobe receipt uses the completed PDF during a later outage", async () => {
