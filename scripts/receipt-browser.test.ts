@@ -51,8 +51,20 @@ test("a browser closed by the server is not reused", async () => {
   await runner.close();
 });
 
-test("printable width stays inside both increased horizontal margins", () => {
+test("content and internal margins fill the PDF canvas, not the printer roll", () => {
   for (const paper of Object.values(RECEIPT_PAPER)) {
-    assert.equal(paper.printableWidthMm + paper.horizontalMarginMm * 2, paper.paperWidthMm);
+    assert.equal(paper.printableWidthMm + paper.horizontalMarginMm * 2, paper.pdfWidthMm);
   }
+});
+
+test("MP-B20's 58 mm roll receives a 48 mm PDF with 44 mm content and 2 mm internal margins", () => {
+  const paper = RECEIPT_PAPER.small;
+  assert.equal(paper.paperWidthMm, 58);
+  assert.equal(paper.pdfWidthMm, 48);
+  assert.equal(paper.printableWidthMm, 44);
+  assert.equal(paper.horizontalMarginMm, 2);
+  assert.equal(paper.verticalMarginMm, 8.5);
+  assert.equal(RECEIPT_PAPER.large.pdfWidthMm, 79.5);
+  // FitToWidth now scales the PDF 1:1 rather than 48/58.
+  assert.equal(paper.printableWidthMm * (48 / paper.pdfWidthMm), 44);
 });

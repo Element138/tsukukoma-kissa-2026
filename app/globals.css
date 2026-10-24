@@ -3515,6 +3515,30 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   gap: 18px;
   border-radius: 18px;
   padding: 24px;
+  max-height: calc(100vh - 24px);
+  max-height: calc(100dvh - 24px);
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.receipt-print-header {
+  min-width: 0;
+  padding-right: 52px;
+  overflow-wrap: anywhere;
+}
+
+.receipt-print-body {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  gap: 18px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  overflow-wrap: anywhere;
+}
+
+.receipt-print-options > * {
+  min-width: 0;
 }
 
 .receipt-print-options {
@@ -3562,6 +3586,15 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
 }
 
 @media (max-width: 520px) {
+  .receipt-print-dialog {
+    padding: 16px;
+    gap: 12px;
+  }
+
+  .receipt-print-body {
+    gap: 12px;
+  }
+
   .receipt-print-options {
     grid-template-columns: 1fr;
   }

@@ -28,7 +28,7 @@ export async function renderAdobeReceiptPdf(params: ReceiptRenderParams) {
     const height = await page.locator("main").evaluate(element => Math.ceil(element.getBoundingClientRect().height) + 1);
     if (!Number.isFinite(height) || height < 100) throw new Error("Receipt layout is empty");
     const pdf = await page.pdf({
-      width: `${RECEIPT_PAPER[params.size].paperWidthMm}mm`, height: `${height}px`,
+      width: `${RECEIPT_PAPER[params.size].pdfWidthMm}mm`, height: `${height}px`,
       printBackground: true, displayHeaderFooter: false,
       margin: { top: 0, bottom: 0, left: 0, right: 0 },
     });
