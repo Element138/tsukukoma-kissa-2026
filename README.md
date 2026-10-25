@@ -1,3 +1,5 @@
+This repository is planned to be released to the general public under the MIT License on November 2, 2026.
+
 # KISSa
 
 Cafe operations system coordinating checkout, payment reconciliation, kitchen production, serving, customer displays, and sales records across staff terminals.
