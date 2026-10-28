@@ -153,7 +153,6 @@ export default function AuditPage() {
         offlineActors={session.offlineActors}
       />
       <DashboardShell
-        eyebrow="AUDIT LOG"
         title="監査ログ"
         // subtitle="操作履歴と変更要約を即時確認"
       >

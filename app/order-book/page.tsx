@@ -408,7 +408,6 @@ export default function OrderBookPage() {
         offlineActors={session.offlineActors}
       />
       <DashboardShell
-        eyebrow="ORDER BOOK"
         title="オーダーブック"
         // subtitle="注文進行と決済状態を時系列で追跡"
       >

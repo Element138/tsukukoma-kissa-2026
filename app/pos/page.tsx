@@ -677,7 +677,6 @@ export default function PosPage() {
         offlineActors={session.offlineActors}
       />
       <DashboardShell
-        eyebrow="LIVE TERMINAL"
         title={`${labelOf(ACTOR_TYPE_LABEL, session.actor.actorType)} · ${session.actor.label}`}
         // subtitle="注文登録と会計をリアルタイム運用"
         hideHeader

@@ -76,13 +76,6 @@ export default function LoginPage() {
     () => actors.find((actor) => actor.id === selectedActorId) ?? null,
     [actors, selectedActorId],
   );
-  const actorTypeChips = useMemo(
-    () =>
-      [...new Set(actors.map((actor) => actor.actorType))].map((actorType) =>
-        labelOf(ACTOR_TYPE_LABEL, actorType),
-      ),
-    [actors],
-  );
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -115,25 +108,14 @@ export default function LoginPage() {
 
   return (
     <main className="login-page">
-      <div className="login-aura login-aura-one" aria-hidden />
-      <div className="login-aura login-aura-two" aria-hidden />
-      <div className="login-grid-overlay" aria-hidden />
       <section className="login-stage">
         <div className="login-hero">
           <p className="login-eyebrow">75期 喫茶</p>
           <h1 className="login-title">KISSaターミナル</h1>
-          <div className="login-chip-row">
-            {actorTypeChips.map((chip) => (
-              <span key={chip} className="login-chip">
-                {chip}
-              </span>
-            ))}
-          </div>
         </div>
 
         <Card className="login-card">
           <div className="login-card-head">
-            <p className="login-card-eyebrow">SIGN IN</p>
             <h2 className="login-card-title">ようこそ</h2>
             <p className="login-card-description">
               アカウントを選び、パスワードを入力してください。
