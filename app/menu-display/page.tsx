@@ -654,7 +654,6 @@ export default function MenuDisplayPage() {
 
       <DashboardShell
         title="メニュー"
-        fancyHeader
         className={
           isFullscreen ? "menu-display-fullscreen" : "menu-display-standard"
         }

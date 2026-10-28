@@ -16,7 +16,7 @@ test('negative kitchen button stays red against the full global CSS cascade', as
       const computed = getComputedStyle(element);
       return { background: computed.backgroundColor, image: computed.backgroundImage, color: computed.color };
     });
-    assert.match((await style('#ready')).image, /linear-gradient/);
+    assert.deepEqual(await style('#ready'), { background: 'rgb(15, 118, 110)', image: 'none', color: 'rgb(255, 255, 255)' });
     assert.deepEqual(await style('#reduce'), { background: 'rgb(198, 40, 40)', image: 'none', color: 'rgb(255, 255, 255)' });
     await page.locator('#reduce').hover();
     assert.deepEqual(await style('#reduce'), { background: 'rgb(167, 31, 31)', image: 'none', color: 'rgb(255, 255, 255)' });

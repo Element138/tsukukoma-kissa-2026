@@ -1134,7 +1134,6 @@ function SalesPageContent() {
       />
       <DashboardShell
         title="売上・待ち時間"
-        subtitle="売上や待ち時間の統計を確認"
         className="sales-shell"
         actions={
           <div className="row wrap">

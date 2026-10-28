@@ -22,7 +22,7 @@ export function SquareIncidentBanner() {
   }, [reload]);
   useRealtimeSubscription({ enabled: true, channels: ["orders"], onEvent: () => void reload(), onResync: () => void reload() });
   if (count === 0) return null;
-  return <Link href="/admin/square-payments" role="status" className="mb-4 flex items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-4 text-amber-950 transition-colors hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500">
+  return <Link href="/admin/square-payments" role="status" className="mb-4 flex items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-4 text-amber-950 transition-colors hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500">
     <AlertTriangle className="h-5 w-5 shrink-0" aria-hidden="true" />
     <div className="min-w-0 flex-1"><p className="font-semibold">Square決済の確認が必要です</p><p className="mt-0.5 text-sm">未確認の通知が{count}件あります。</p></div>
     <span className="flex shrink-0 items-center gap-1 text-sm font-semibold">確認する<ArrowRight className="h-4 w-4" aria-hidden="true" /></span>

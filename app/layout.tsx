@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import { Inter, Zen_Kaku_Gothic_New } from "next/font/google";
+import { DM_Sans, Zen_Kaku_Gothic_New } from "next/font/google";
 import "./globals.css";
 import { ToastProvider } from "@/components/toast";
 
-const inter = Inter({
+const dmSans = DM_Sans({
   subsets: ["latin"],
-  variable: "--font-inter"
+  variable: "--font-dm-sans"
 });
 
 const zenKaku = Zen_Kaku_Gothic_New({
@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ja">
-      <body className={`${inter.variable} ${zenKaku.variable}`}>
+      <body className={`${dmSans.variable} ${zenKaku.variable}`}>
         <ToastProvider>{children}</ToastProvider>
       </body>
     </html>

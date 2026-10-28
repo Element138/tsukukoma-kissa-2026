@@ -1518,9 +1518,7 @@ export default function AdminPage() {
       />
       <DashboardShell
         className="admin-shell"
-        eyebrow="ADMIN CONTROL"
         title="管理者パネル"
-        fancyHeader
         actions={
           <div className="flex items-center justify-end gap-2">
             <Button asChild variant="outline" size="sm">

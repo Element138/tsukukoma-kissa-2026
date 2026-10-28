@@ -386,9 +386,7 @@ export default function KitchenPage() {
         offlineActors={session.offlineActors}
       />
       <DashboardShell
-        eyebrow="LIVE TERMINAL"
         title={`${labelOf(ACTOR_TYPE_LABEL, session.actor.actorType)} · ${session.actor.label}`}
-        subtitle="メニュー別に調理進行と上限を管理"
         hideHeader
       >
         <div className="grid">
