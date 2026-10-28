@@ -10,6 +10,7 @@ import { AppError, assert } from "@/lib/errors";
 import { aggregateOrderPrice, deriveOrderStatus } from "@/lib/domain/order-status";
 import { assignUnassignedItemsForOrder } from "@/lib/domain/kitchen-assignment";
 import { writeAuditLog } from "@/lib/domain/audit";
+import { attachCashierPhoto, requirePhotoStorageAvailable } from "@/lib/domain/cashier-photos";
 import { reserveMenuDailyCountsForOrder, releaseMenuDailyCountsForOrder } from "@/lib/domain/menu-cap";
 import { now, secondsFromNow, tokyoDateKey } from "@/lib/time";
 
@@ -58,7 +59,8 @@ export async function findOpenSquareAwaitingOrderForPos(db: DbClient, actorId: s
       orderNo: true,
       createdAt: true,
       paymentAwaitDeadlineAt: true,
-      totalPriceJpy: true
+      totalPriceJpy: true,
+      idempotencyKey: true
     },
     orderBy: {
       createdAt: "desc"
@@ -132,7 +134,7 @@ function expandItems(menus: Map<string, { id: string; name: string; priceJpy: nu
 }
 
 export async function createOrderAtPaymentStart(
-  db: DbClient,
+  db: Prisma.TransactionClient,
   params: {
     actorId: string;
     actorType: ActorType;
@@ -165,6 +167,8 @@ export async function createOrderAtPaymentStart(
   if (duplicate) {
     return { order: duplicate, duplicated: true };
   }
+
+  await requirePhotoStorageAvailable(db);
 
   const awaiting = await findOpenSquareAwaitingOrderForPos(db, params.actorId);
   if (awaiting) {
@@ -279,6 +283,10 @@ export async function createOrderAtPaymentStart(
     include: {
       items: true
     }
+  });
+
+  if (shouldAutoConfirm) await attachCashierPhoto(db, {
+    checkoutKey: params.payload.idempotencyKey, actorId: params.actorId, orderId: order.id,
   });
 
   await writeAuditLog(db, {

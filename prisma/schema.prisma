@@ -227,6 +227,7 @@ model Order {
   paymentIncidents       PaymentIncident[]
   squareAttempt          SquarePaymentAttempt?
   capReservations        OrderMenuCapReservation[]
+  cashierPhoto           CashierPhoto?
 
   @@index([createdAt])
   @@index([orderStatus, createdAt])
@@ -364,6 +365,32 @@ model AppSetting {
   orderCallVolume               Float    @default(0.8)
   createdAt                     DateTime @default(now())
   updatedAt                     DateTime @updatedAt
+}
+
+model CashierPhoto {
+  id              String    @id @default(uuid())
+  checkoutKey     String    @unique @db.VarChar(128)
+  actorId         String    @db.VarChar(64)
+  sessionId       String
+  requestedAt     DateTime  @default(now())
+  capturedAt      DateTime?
+  storedAt        DateTime?
+  objectPath      String?   @unique
+  sha256          String?   @db.VarChar(64)
+  byteSize        Int?
+  failureCode     String?   @db.VarChar(64)
+  waivedAt        DateTime?
+  orderId         String?   @unique
+  order           Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([actorId, requestedAt])
+}
+
+model PhotoStorageState {
+  id                Int       @id @default(1)
+  failedAt          DateTime?
+  failureCode       String?   @db.VarChar(64)
+  ignoreUntil       DateTime?
 }
 
 model PaymentIncident {

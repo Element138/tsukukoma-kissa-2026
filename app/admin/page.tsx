@@ -32,6 +32,7 @@ import { TerminalBanner } from "@/components/terminal-banner";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { LoadingScreen } from "@/components/loading-screen";
 import { SquareIncidentBanner } from "@/components/square-incident-banner";
+import { PhotoStorageBanner } from "@/components/photo-storage-banner";
 import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
 import { ACTOR_TYPE_LABEL, AVAILABILITY_LABEL, labelOf } from "@/lib/labels";
 import { useToast } from "@/components/toast";
@@ -1530,6 +1531,7 @@ export default function AdminPage() {
           </div>
         }
       >
+        <PhotoStorageBanner />
         <SquareIncidentBanner />
         <TooltipProvider delayDuration={120}>
           <div className="grid gap-3 xl:grid-cols-[1.08fr_0.92fr]">
