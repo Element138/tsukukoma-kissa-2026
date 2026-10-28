@@ -2,6 +2,8 @@ This repository is planned to be released to the general public under the MIT Li
 
 # KISSa
 
+POS camera requirements, private cashier photos, and the audited daily storage-failure override are described in [Cashier photos](docs/cashier-photos.md).
+
 Cafe operations system coordinating checkout, payment reconciliation, kitchen production, serving, customer displays, and sales records across staff terminals.
 
 ## Operation

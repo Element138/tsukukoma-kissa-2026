@@ -45,6 +45,7 @@ export async function GET(req: NextRequest) {
           : {})
       },
       include: {
+        cashierPhoto: { select: { storedAt: true, waivedAt: true } },
         items: {
           include: {
             kitchenActor: {
@@ -109,6 +110,7 @@ export async function GET(req: NextRequest) {
 
       return {
         id: order.id,
+        cashierPhotoStatus: order.cashierPhoto?.storedAt ? "STORED" : order.cashierPhoto?.waivedAt ? "WAIVED" : null,
         orderNo: order.orderNo,
         createdAt: order.createdAt,
         confirmedAt: order.confirmedAt,

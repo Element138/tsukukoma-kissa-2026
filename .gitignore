@@ -1,6 +1,7 @@
 node_modules
 .next
 .env
+.env*.local
 .vercel
 prisma/dev.db
 tmp/

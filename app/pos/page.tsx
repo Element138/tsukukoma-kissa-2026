@@ -6,6 +6,8 @@ import { useSession } from "@/components/use-session";
 import { TerminalBanner } from "@/components/terminal-banner";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { ConfirmSlider } from "@/components/confirm-slider";
+import { useCashierCamera } from "@/components/use-cashier-camera";
+import { CashierCameraGate } from "@/components/cashier-camera-gate";
 import { LoadingScreen } from "@/components/loading-screen";
 import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
 import { useWakeLock } from "@/components/use-wake-lock";
@@ -80,6 +82,7 @@ const STATUS_BUTTON_ACTIVE_TONE: Record<
 const WATCHDOG_HEARTBEAT_MS = 12_000;
 
 type AwaitingOrderState = {
+  checkoutKey: string | null;
   id: string;
   orderNo: number;
   createdAt: string;
@@ -167,6 +170,7 @@ function renderMenuName(text: string) {
 
 export default function PosPage() {
   const { loading, session } = useSession(["POS"]);
+  const camera = useCashierCamera(Boolean(session), session?.actor.actorId);
   const { notify } = useToast();
   useWakeLock(Boolean(session));
 
@@ -200,13 +204,18 @@ export default function PosPage() {
     string | null
   >(null);
   const launchInFlight = useRef(false);
+  const [preparedSquareOrderId, setPreparedSquareOrderId] = useState<string | null>(null);
   const submitInFlight = useRef(false);
   const refreshInFlight = useRef(false);
   const [recoveryPayload, setRecoveryPayload] = useState<Record<string, unknown> | null>(null);
   const [paymentStateReady, setPaymentStateReady] = useState(false);
   const storagePrefix = session ? `kissa.checkout.v1:${session.actor.actorId}` : "kissa.checkout.v1";
   const rememberPending = (id: string) => { localStorage.setItem(storagePrefix + ":pending", id); };
-  const forgetRequest = () => { localStorage.removeItem(storagePrefix + ":request"); setRecoveryPayload(null); };
+  const forgetRequest = () => {
+    const saved = localStorage.getItem(storagePrefix + ":request");
+    if (saved) { try { camera.forget(JSON.parse(saved).idempotencyKey); } catch { /* Invalid recovery payload. */ } }
+    localStorage.removeItem(storagePrefix + ":request"); setRecoveryPayload(null);
+  };
   const handledPayments = useRef(new Set<string>());
   const [receiptPrintTarget, setReceiptPrintTarget] =
     useState<ReceiptPrintTarget | null>(null);
@@ -256,6 +265,7 @@ export default function PosPage() {
       }>(`/api/payment-watchdog/ping?${params.toString()}`);
 
       setAwaitingOrder(data.awaitingOrder ?? null);
+      if (data.awaitingOrder && !data.awaitingOrder.launchAvailable && data.awaitingOrder.checkoutKey) camera.forget(data.awaitingOrder.checkoutKey);
       setPaymentStateReady(true);
       setIncidents(data.incidents ?? []);
       if (data.awaitingOrder?.verificationPending) {
@@ -553,7 +563,7 @@ export default function PosPage() {
   };
 
   const submitOrder = async () => {
-    if (submitInFlight.current || recoveryPayload || !paymentStateReady) return;
+    if (submitInFlight.current || recoveryPayload || !paymentStateReady || !camera.ready) return;
     if (awaitingOrder) {
       notify({
         level: "warning",
@@ -603,6 +613,7 @@ export default function PosPage() {
 
       localStorage.setItem(storagePrefix + ":request", JSON.stringify(payload));
       setRecoveryPayload(payload);
+      if (paymentMethod !== "SQUARE") await camera.prepare(payload.idempotencyKey);
       const data = await apiFetch<{
         order: {
           id: string;
@@ -670,6 +681,8 @@ export default function PosPage() {
 
   return (
     <>
+      <CashierCameraGate videoRef={camera.videoRef} ready={camera.ready} connecting={camera.connecting} error={camera.error} onConnect={() => void camera.start()} />
+      <div inert={!camera.ready} aria-hidden={!camera.ready}>
       <TerminalBanner
         actorId={session.actor.actorId}
         actorType={session.actor.actorType}
@@ -1002,6 +1015,7 @@ export default function PosPage() {
               <Button disabled={busy} onClick={async () => {
                 setBusy(true);
                 try {
+                  if (recoveryPayload.paymentMethod !== "SQUARE") await camera.prepare(String(recoveryPayload.idempotencyKey));
                   const data = await apiFetch<{ order: { id: string; orderNo: number; totalPriceJpy: number; orderStatus: string; paymentStatus: string; paymentMethod: string } }>("/api/orders", {
                     method: "POST", body: JSON.stringify(recoveryPayload), timeoutMs: 25_000,
                   });
@@ -1036,7 +1050,7 @@ export default function PosPage() {
                 <div className="row wrap" style={{ marginTop: 8 }}>
                   {awaitingOrder.launchAvailable && (
                     <form action="/api/square/launch" method="post" onSubmit={event => {
-                      if (launchInFlight.current || !navigator.onLine) {
+                      if (launchInFlight.current || !navigator.onLine || !camera.ready || preparedSquareOrderId !== awaitingOrder.id) {
                         event.preventDefault();
                         if (!navigator.onLine) notify({ level: "error", message: "オフライン決済は利用できません" });
                         return;
@@ -1045,7 +1059,17 @@ export default function PosPage() {
                       rememberPending(awaitingOrder.id);
                     }}>
                       <input type="hidden" name="orderId" value={awaitingOrder.id} />
-                      <Button type="submit" disabled={busy}>Squareで決済を開始</Button>
+                      {preparedSquareOrderId === awaitingOrder.id
+                        ? <Button type="submit" disabled={busy}>Squareを開く</Button>
+                        : <Button type="button" disabled={busy} onClick={async () => {
+                          setBusy(true);
+                          try {
+                            if (!awaitingOrder.checkoutKey) throw new Error("この注文の撮影情報がありません。管理者に確認してください");
+                            await camera.prepare(awaitingOrder.checkoutKey);
+                            setPreparedSquareOrderId(awaitingOrder.id);
+                          } catch (error) { notify({ level: "error", message: error instanceof Error ? error.message : "撮影できません" }); }
+                          finally { setBusy(false); }
+                        }}>撮影してSquare決済へ</Button>}
                     </form>
                   )}
                   <Button variant="outline" disabled={busy} onClick={async () => {
@@ -1076,6 +1100,7 @@ export default function PosPage() {
         additionalAction={lastCashOrder && !lastCashOrder.canceled && receiptPrintTarget?.id === lastCashOrder.id
           ? <CancelCashOrder order={lastCashOrder} onCanceled={handleCashCanceled} /> : undefined}
       />
+      </div>
     </>
   );
 }

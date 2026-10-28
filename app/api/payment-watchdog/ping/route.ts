@@ -21,6 +21,7 @@ async function handle(req: NextRequest) {
     const awaitingOrder = awaiting
       ? {
           id: awaiting.id,
+          checkoutKey: awaiting.idempotencyKey,
           orderNo: awaiting.orderNo,
           createdAt: awaiting.createdAt,
           paymentAwaitDeadlineAt: awaiting.paymentAwaitDeadlineAt,

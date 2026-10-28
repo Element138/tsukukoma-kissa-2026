@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { CashierPhotoViewer } from "@/components/cashier-photo-viewer";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { apiFetch, fmtJpy } from "@/lib/client";
 import { useSession } from "@/components/use-session";
@@ -35,6 +36,7 @@ import { ReceiptPrintDialog } from "@/components/receipt-print-dialog";
 import type { ReceiptPrintTarget } from "@/lib/receipt/types";
 
 type OrderRow = {
+  cashierPhotoStatus: "STORED" | "WAIVED" | null;
   id: string;
   orderNo: number;
   createdAt: string;
@@ -667,6 +669,7 @@ export default function OrderBookPage() {
                   </div>
                 </div>
 
+                <CashierPhotoViewer orderId={order.id} status={order.cashierPhotoStatus} />
                 {order.specialNote && (
                   <div className="notice" style={{ marginTop: 8 }}>
                     備考: {order.specialNote}
