@@ -7,6 +7,10 @@ server, installation or login is needed. The file contains the entire viewer,
 logo, initial menu/images and the exact DM Sans / Zen Kaku Gothic New font build
 used by the web display, including every configured weight and Japanese subset.
 All font and software redistribution licenses are embedded in the HTML.
+The HTML title is 喫茶「翡翠」. Tiny gray text at the top right shows the last
+successful live retrieval in JST, including a restored cached retrieval time.
+It stays hidden when only the bundled snapshot has been used, and failed updates
+do not advance it.
 
 The file renders its saved menu first, then attempts a credential-free update on
 load, every 30 seconds, and on focus/network recovery. The public feed and public
