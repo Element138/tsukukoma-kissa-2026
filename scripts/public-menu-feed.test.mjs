@@ -1,0 +1,15 @@
+import assert from "node:assert/strict";
+const origin = process.env.MENU_TEST_ORIGIN ?? "http://localhost:3120";
+const response = await fetch(`${origin}/api/public/menu-display`);
+assert.equal(response.status, 200);
+const { ok, data } = await response.json();
+assert.equal(ok, true);
+assert.deepEqual(Object.keys(data).sort(), ["categories", "serverNow", "settings"]);
+const permitted = ["id", "name", "priceJpy", "availability", "coverImageDataUrl", "allergens", "allergenDisplayEnabled", "customBadgeText", "customBadgeColor", "showLowStockBadge", "remainingUntilCap"].sort();
+for (const category of data.categories) for (const menu of category.menus) assert.deepEqual(Object.keys(menu).sort(), permitted);
+assert.match(response.headers.get("cache-control"), /s-maxage=15/);
+assert.equal((await fetch(`${origin}/api/public/menu-display`, { headers: { "If-None-Match": response.headers.get("etag") } })).status, 304);
+assert.equal((await fetch(`${origin}/api/public/menu-display`, { method: "POST" })).status, 405);
+assert.equal((await fetch(`${origin}/api/menu-display`)).status, 401);
+assert.equal((await fetch(`${origin}/api/admin/menus`)).status, 401);
+console.log("Public feed checks passed: no-login read-only display projection, ETag/304, short CDN cache; original display/admin endpoints remain authenticated.");

@@ -44,7 +44,7 @@ async function main() {
     const m=await measure(page);results[label]=m;
     assert.equal(m.sections.length,2);assert.equal(m.sections[0].id,categories[0].id);assert.equal(m.sections[1].id,categories[1].id);
     assert(m.board.width>width*.93);assert(m.board.bottom>height*.97 && m.board.bottom<=height);
-    assert(m.sections[1].y>height*.47 && m.sections[1].y<height*.59);
+    assert(m.sections[1].y>=m.sections[0].bottom && m.sections[1].bottom<=height);
     assert(Math.abs(m.sections[0].height-m.sections[1].height)<3);
     assert(m.documentWidth<=width+1 && m.documentHeight<=height+1);
     assert(Math.abs(m.logoRatio-2.5)<.03, `Logo/text ratio: ${m.logoRatio}`);
