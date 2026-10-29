@@ -8,6 +8,7 @@ import { DashboardShell } from "@/components/dashboard-shell";
 import { ConfirmSlider } from "@/components/confirm-slider";
 import { useCashierCamera } from "@/components/use-cashier-camera";
 import { CashierCameraGate } from "@/components/cashier-camera-gate";
+import { CashChange } from "@/components/cash-change";
 import { LoadingScreen } from "@/components/loading-screen";
 import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
 import { useWakeLock } from "@/components/use-wake-lock";
@@ -176,6 +177,7 @@ export default function PosPage() {
 
   const [menus, setMenus] = useState<MenuPayload | null>(null);
   const [cart, setCart] = useState<Record<string, number>>({});
+  const [cashEntryVersion, setCashEntryVersion] = useState(0);
 
   const [fulfillmentType, setFulfillmentType] = useState<"DINE_IN" | "TAKEOUT">(
     "DINE_IN",
@@ -236,6 +238,7 @@ export default function PosPage() {
 
   const resetInputsToDefault = () => {
     setCart({});
+    setCashEntryVersion((version) => version + 1);
     setAgeGroupCounts(createEmptyAgeGroupCounts());
     setSpecialNote("");
     setSkipReasonText("");
@@ -862,6 +865,9 @@ export default function PosPage() {
                 <span>合計</span>
                 <strong className="grand-total">{fmtJpy(displayTotal)}</strong>
               </div>
+              {paymentMethod === "CASH" && (
+                <CashChange key={cashEntryVersion} totalJpy={displayTotal} disabled={busy || isAwaitingLocked} />
+              )}
 
               <div className="grid" style={{ marginTop: 12 }}>
                 <label>

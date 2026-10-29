@@ -1957,6 +1957,22 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   font-weight: 700;
 }
 
+.pos-cash-breakdown {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pos-cash-received {
+  width: min(45%, 10rem);
+  text-align: right;
+}
+
+.pos-cash-breakdown output {
+  font-weight: 700;
+}
+
 .order-status-badge {
   border-width: 1px;
 }
