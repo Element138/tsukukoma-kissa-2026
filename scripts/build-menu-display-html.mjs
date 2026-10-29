@@ -35,7 +35,7 @@ const licenses = [
 const html = `<!doctype html>
 <html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src data:; img-src data:; connect-src ${feed.origin}">
-<title>喫茶「翡翠」</title><style>${fonts.css}\n${styles.css}\n.menu-display-brand{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)}.menu-display-brand .menu-display-logo{justify-self:start}.menu-display-brand>div{grid-column:2;text-align:center}.file-menu-last-retrieved{position:fixed;top:8px;right:12px;z-index:20;color:#94a3b8;font-size:clamp(9px,.65vw,14px);font-weight:400;line-height:1.3;pointer-events:none}</style></head>
+<title>喫茶「翡翠」</title><style>${fonts.css}\n${styles.css}\n.menu-display-brand{width:100%;display:flex;justify-content:center;align-items:center}.menu-display-brand>div{text-align:center}.menu-display-row-allergen{display:none!important}.file-menu-last-retrieved{position:fixed;top:8px;right:12px;z-index:20;color:#94a3b8;font-size:clamp(9px,.65vw,14px);font-weight:400;line-height:1.3;pointer-events:none}</style></head>
 <body><div id="root"></div><script id="menu-config" type="application/json">${config}</script>
 <script>${bundle.outputFiles[0].text.replace(/<\/script/gi, "<\\/script")}</script>
 <!-- Third-party font and software licenses\n${licenses}\n--></body></html>`;

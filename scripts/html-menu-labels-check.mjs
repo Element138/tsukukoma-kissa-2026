@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { chromium } from "playwright-core";
 
-const path=resolve("output/Kissa-Menu-HTML-Title-Time/Menu.html");
+const path=resolve(process.env.HTML_MENU_PATH ?? "output/Kissa-Menu-HTML-Title-Time/Menu.html");
 const source=await readFile(path,"utf8");
 const config=JSON.parse(/<script id="menu-config" type="application\/json">([\s\S]*?)<\/script>/.exec(source)[1]);
 await mkdir("tmp/html-labels",{recursive:true});
@@ -23,6 +23,12 @@ async function start(){
 }
 try{
   let page=await start();assert.equal(await page.title(),"喫茶「翡翠」");assert.equal(await page.locator(".file-menu-last-retrieved").count(),0);
+  assert(await page.evaluate(()=>{
+    const logo=document.querySelector(".menu-display-logo").getBoundingClientRect();
+    const title=document.querySelector(".menu-display-brand>div").getBoundingClientRect();
+    return Math.abs((logo.left+title.right)/2-innerWidth/2)<3 &&
+      [...document.querySelectorAll(".menu-display-row-allergen")].every(el=>getComputedStyle(el).display==="none");
+  }),"Logo and title must be centered together, with allergens hidden");
   online=true;await page.evaluate(()=>window.dispatchEvent(new Event("online")));await page.locator(".file-menu-last-retrieved").waitFor();
   const timestamp=page.locator(".file-menu-last-retrieved"),saved=await timestamp.getAttribute("datetime");
   const expected=new Intl.DateTimeFormat("ja-JP",{timeZone:"Asia/Tokyo",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hourCycle:"h23"}).format(new Date(saved));
