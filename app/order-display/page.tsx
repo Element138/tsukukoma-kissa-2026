@@ -8,6 +8,7 @@ import { useSession } from "@/components/use-session";
 import { useWakeLock } from "@/components/use-wake-lock";
 import { useToast } from "@/components/toast";
 import { ORDER_AGE_MINUTES } from "@/lib/order-age";
+import { canRefreshOrderDisplay, ORDER_DISPLAY_PAGE_REFRESH_MS, readOrderDisplayResume } from "@/lib/client/order-display-refresh";
 
 type DisplayOrder = {
   id: string;
@@ -57,6 +58,7 @@ const CALL_BURST_WINDOW_MS = 5000;
 const UNREADY_SCROLL_DURATION_MS = 36_000;
 const READY_SCROLL_DURATION_MS = 14_000;
 const ORDER_DISPLAY_REFRESH_MS = 5_000;
+const REFRESH_RESUME_KEY = "kissa:order-display:refresh-resume";
 const CALL_MELODY_VOLUME_SCALE = 0.95;
 const CALL_ASSETS = {
   melody: "/audio/order-call/call-melody-song-20260714.wav",
@@ -241,6 +243,8 @@ export default function OrderDisplayPage() {
   const reloadInFlightRef = useRef(false);
   const queuedReloadRef = useRef(false);
   const callCursorRef = useRef<number | null>(null);
+  const pageRefreshDueAtRef = useRef(Date.now() + ORDER_DISPLAY_PAGE_REFRESH_MS);
+  const resumeLoadedRef = useRef(false);
   const callQueueRef = useRef<QueuedCall[]>([]);
   const callInFlightRef = useRef(false);
   const lastCallEndedAtRef = useRef(0);
@@ -327,11 +331,13 @@ export default function OrderDisplayPage() {
       return;
     }
     reloadInFlightRef.current = true;
+    let refreshed = false;
 
     try {
       const payload =
         await apiFetch<OrderDisplayPayload>(callCursorRef.current == null ? "/api/order-display" : `/api/order-display?afterCallId=${callCursorRef.current}`);
       applyPayload(payload);
+      refreshed = true;
     } catch (e) {
       notify({
         level: "error",
@@ -343,6 +349,25 @@ export default function OrderDisplayPage() {
       if (queuedReloadRef.current) {
         queuedReloadRef.current = false;
         void reload();
+        return;
+      }
+      if (refreshed && session && callCursorRef.current !== null && canRefreshOrderDisplay({
+        now: Date.now(),
+        dueAt: pageRefreshDueAtRef.current,
+        lastCallEndedAt: lastCallEndedAtRef.current,
+        callInFlight: callInFlightRef.current,
+        queuedCalls: callQueueRef.current.length,
+        online: navigator.onLine,
+      })) {
+        try {
+          // Only reload when the next page can recover calls received during navigation.
+          sessionStorage.setItem(REFRESH_RESUME_KEY, JSON.stringify({
+            actorId: session.actor.actorId, cursor: callCursorRef.current, at: Date.now(),
+          }));
+          window.location.reload();
+        } catch {
+          // Keep the working display if session storage is unavailable.
+        }
       }
     }
   };
@@ -365,6 +390,17 @@ export default function OrderDisplayPage() {
   useEffect(() => {
     if (!session) {
       return;
+    }
+    if (!resumeLoadedRef.current) {
+      resumeLoadedRef.current = true;
+      try {
+        callCursorRef.current = readOrderDisplayResume(
+          sessionStorage.getItem(REFRESH_RESUME_KEY), session.actor.actorId, Date.now(),
+        );
+        sessionStorage.removeItem(REFRESH_RESUME_KEY);
+      } catch {
+        // Normal first-load behavior when storage is unavailable.
+      }
     }
     void reload();
     void reloadSettings();
