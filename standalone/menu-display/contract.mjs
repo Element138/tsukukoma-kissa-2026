@@ -39,4 +39,3 @@ export function validateMenu(data) {
   });
   return { categories, settings: { pageDisplaySeconds: seconds, lastOrders } };
 }
-
