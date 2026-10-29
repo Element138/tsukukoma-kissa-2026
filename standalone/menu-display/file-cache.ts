@@ -87,6 +87,7 @@ export function createFileMenuStore(config: FileMenuConfig, onUpdate: () => void
   let current: Snapshot = { version: 1, data: validateMenu(config.seed.data), images: {}, fetchedAt: config.seed.fetchedAt, clockOffsetMs: 0 };
   let rendered = current.data;
   let inFlight: Promise<void> | null = null;
+  let lastRetrievedAt: string | null = null;
 
   function imageHash(source: string) {
     const url = new URL(source, feed.origin);
@@ -115,7 +116,7 @@ export function createFileMenuStore(config: FileMenuConfig, onUpdate: () => void
     for (const saved of candidates) {
       try {
         if (saved.version !== 1 || !Number.isFinite(saved.clockOffsetMs) || !Number.isFinite(Date.parse(saved.fetchedAt)) || !saved.images || typeof saved.images !== "object") throw new Error("Invalid saved menu");
-        rendered = await materialize(saved);current = saved;return;
+        rendered = await materialize(saved);current = saved;lastRetrievedAt = saved.fetchedAt;onUpdate();return;
       } catch { /* Keep the bundled menu if stored data is incomplete. */ }
     }
     rendered = await materialize(current);
@@ -163,7 +164,7 @@ export function createFileMenuStore(config: FileMenuConfig, onUpdate: () => void
         // One database transaction preserves the previous complete snapshot if a write fails.
         try { await storage(key, next); }
         catch { try { localStorage.setItem(key, JSON.stringify(next)); } catch { /* Storage-denying controllers still get live data and the bundled offline fallback. */ } }
-        rendered = nextRendered;current = next;onUpdate();
+        rendered = nextRendered;current = next;lastRetrievedAt = next.fetchedAt;onUpdate();
       } catch {
         // Network, validation or image failure leaves the last complete menu visible.
         controller.abort();
@@ -174,5 +175,6 @@ export function createFileMenuStore(config: FileMenuConfig, onUpdate: () => void
   return {
     loadData: async (): Promise<MenuDisplayPayload> => { await initialized;return { ...rendered, serverNow: new Date(Date.now() + current.clockOffsetMs).toISOString() }; },
     refresh,
+    getLastRetrievedAt: () => lastRetrievedAt,
   };
 }
