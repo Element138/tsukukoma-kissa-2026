@@ -13,23 +13,27 @@ export function CashChange({ totalJpy, disabled = false }: { totalJpy: number; d
     <div className="pos-cash-breakdown">
       <label className="row between" htmlFor={inputId}>
         <span>お預り</span>
-        <input
-          id={inputId}
-          className="pos-cash-received"
-          type="text"
-          inputMode="numeric"
-          autoComplete="off"
-          value={received}
-          disabled={disabled}
-          onFocus={(event) => event.currentTarget.select()}
-          onChange={(event) => {
-            const value = event.target.value.normalize("NFKC").replace(/[\s,]/g, "");
-            if (value === "" || (/^\d+$/.test(value) && Number.isSafeInteger(Number(value)))) {
-              setReceived(value);
-            }
-          }}
-          onBlur={() => setReceived(String(receivedJpy))}
-        />
+        <span className="pos-cash-received-field">
+          <span className="pos-cash-yen" aria-hidden="true">￥</span>
+          <input
+            id={inputId}
+            aria-label="お預り"
+            className="pos-cash-received"
+            type="text"
+            inputMode="numeric"
+            autoComplete="off"
+            value={received}
+            disabled={disabled}
+            onFocus={(event) => event.currentTarget.select()}
+            onChange={(event) => {
+              const value = event.target.value.normalize("NFKC").replace(/[\s,]/g, "");
+              if (value === "" || (/^\d+$/.test(value) && Number.isSafeInteger(Number(value)))) {
+                setReceived(value);
+              }
+            }}
+            onBlur={() => setReceived(String(receivedJpy))}
+          />
+        </span>
       </label>
       <div className="row between">
         <span>お釣り</span>

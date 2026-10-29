@@ -1084,6 +1084,24 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   background: var(--surface-strong);
 }
 
+@media (min-width: 700px) {
+  .age-group-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(var(--age-group-rows), auto);
+    grid-auto-flow: column;
+  }
+
+  .age-group-row {
+    gap: 8px;
+  }
+
+  .age-group-row > span,
+  .age-group-row > .row {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+}
+
 .confirm-slider {
   position: relative;
   width: min(460px, 100%);
@@ -1964,8 +1982,22 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   font-variant-numeric: tabular-nums;
 }
 
-.pos-cash-received {
+.pos-cash-received-field {
+  position: relative;
+  display: block;
   width: min(45%, 10rem);
+}
+
+.pos-cash-yen {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.pos-cash-received {
+  padding-left: 32px;
   text-align: right;
 }
 

@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { Fragment, ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { CSSProperties, Fragment, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, apiFetch, fmtJpy } from "@/lib/client";
 import { useSession } from "@/components/use-session";
 import { TerminalBanner } from "@/components/terminal-banner";
@@ -892,7 +892,7 @@ export default function PosPage() {
                   </Select>
                 </label>
 
-                <div className="age-group-grid">
+                <div className="age-group-grid" style={{ "--age-group-rows": Math.ceil(AGE_GROUPS.length / 2) } as CSSProperties}>
                   {AGE_GROUPS.map((group) => (
                     <div className="age-group-row" key={group.key}>
                       <span>{group.label}</span>

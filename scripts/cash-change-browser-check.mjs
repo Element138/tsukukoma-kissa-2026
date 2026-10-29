@@ -33,6 +33,8 @@ try {
   const change = page.getByLabel("お釣り", { exact: true });
   await input.waitFor();
   assert.equal(await input.inputValue(), "0");
+  assert.equal(await page.locator(".pos-cash-yen").innerText(), "￥");
+  assert(await page.locator(".pos-cash-yen").isVisible());
   assert.equal(await change.innerText(), "—");
   await input.click();await page.keyboard.type("1000");
   assert.equal(await input.inputValue(), "1000", "Focus selects the initial zero");
