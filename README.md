@@ -91,11 +91,12 @@ npm run start
 | `SQUARE_ACCESS_TOKEN` | Server-side Square order and payment verification. |
 | `SQUARE_WEBHOOK_URL`, `SQUARE_WEBHOOK_SIGNING_KEY` | Exact notification URL and signature verification key. |
 | `CRON_SECRET` | If set, the watchdog endpoint requires a matching `x-cron-secret` request header. |
-| `BLOB_READ_WRITE_TOKEN` | Administrator uploads of menu cover images to Vercel Blob. |
 | `GOOGLE_TTS_API_KEY` | Call-number synthesis beyond the bundled audio range; also used by audio-generation scripts. |
 | `RECEIPT_CHROMIUM_EXECUTABLE` | Optional local Chromium executable for receipt rendering. Windows also detects installed Chrome or Edge. |
 
 `SESSION_SECRET` and `RECEIPT_PRINTER_MODE` appear in `.env.example` but are not read by the current runtime.
+
+Menu cover uploads use PostgreSQL `MenuCoverImage` byte storage, with automatic WebP compression to at most 200 KB per image and content-hash deduplication. Public immutable image URLs are cached independently of authenticated menu metadata. Existing Vercel Blob image references are ignored; upload replacements from the usual menu editor. Blob credentials and its previous contents are no longer required. Cashier photos continue to use private Supabase Storage.
 
 ## Deployment and verification
 
