@@ -1,0 +1,5 @@
+@font-face { font-family: "Local Menu"; src: url("/fonts/NotoSansJP-Regular.otf") format("opentype"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Local Menu"; src: url("/fonts/NotoSansJP-Bold.otf") format("opentype"); font-weight: 700 900; font-display: swap; }
+body { --font-dm-sans: "Local Menu"; --font-zen-kaku: "Local Menu"; }
+.local-start { height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; }
+.local-start img { height: 160px; }

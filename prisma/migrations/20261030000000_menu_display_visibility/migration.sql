@@ -1,0 +1,1 @@
+ALTER TABLE "Menu" ADD COLUMN "showOnMenuDisplay" BOOLEAN NOT NULL DEFAULT true;

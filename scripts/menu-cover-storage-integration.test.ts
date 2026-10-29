@@ -56,6 +56,7 @@ async function main() {
     const context={params:Promise.resolve({imageId})};
     const image=await serve.GET(req(url),context);
     assert.equal(image.status,200);assert.equal(image.headers.get("content-type"),"image/webp");
+    assert.equal(image.headers.get("access-control-allow-origin"),"*");
     assert.match(image.headers.get("cache-control")!,/immutable/);
     assert.equal((await sharp(Buffer.from(await image.arrayBuffer())).metadata()).width,1024);
     assert.equal((await serve.GET(req(url,undefined,{headers:{"If-None-Match":`"${imageId}"`}}),context)).status,304);

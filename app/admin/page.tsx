@@ -33,6 +33,8 @@ import { DashboardShell } from "@/components/dashboard-shell";
 import { LoadingScreen } from "@/components/loading-screen";
 import { SquareIncidentBanner } from "@/components/square-incident-banner";
 import { PhotoStorageBanner } from "@/components/photo-storage-banner";
+import { MenuLastOrdersSettings } from "@/components/menu-last-orders-settings";
+import { MenuDisplayVisibilitySwitch } from "@/components/menu-display-visibility-switch";
 import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
 import { ACTOR_TYPE_LABEL, AVAILABILITY_LABEL, labelOf } from "@/lib/labels";
 import { useToast } from "@/components/toast";
@@ -107,6 +109,7 @@ type Menu = {
   coverImageDataUrl: string | null;
   allergensJson: SpecifiedAllergenKey[];
   allergenDisplayEnabled: boolean;
+  showOnMenuDisplay: boolean;
   customBadgeText: string | null;
   customBadgeColor: string | null;
   dailyOrderCap: number | null;
@@ -2298,7 +2301,7 @@ export default function AdminPage() {
                               ? `選択中: ${newMenuAllergens
                                   .map((key) => allergenLabelOf(key))
                                   .join("、")}`
-                              : "選択中: 特定原材料なし"}
+                              : ""}
                         </div>
                       </div>
                       <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
@@ -2696,6 +2699,7 @@ export default function AdminPage() {
                                       </Select>
                                     </label>
                                   </div>
+                                  <MenuDisplayVisibilitySwitch menuId={menu.id} menuName={menu.name} visible={menu.showOnMenuDisplay ?? true} onSaved={reload} />
                                   <div className="grid gap-2 rounded-md border bg-card/70 p-3">
                                     <div className="text-xs font-semibold text-muted-foreground">
                                       特定原材料（8品目）
@@ -2789,7 +2793,7 @@ export default function AdminPage() {
                                                 allergenLabelOf(key),
                                               )
                                               .join("、")}`
-                                          : "選択中: 特定原材料なし"}
+                                          : ""}
                                     </div>
                                   </div>
                                   <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
@@ -3177,6 +3181,7 @@ export default function AdminPage() {
               </span>
             </CardContent>
           </Card>
+          <MenuLastOrdersSettings />
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm">データ削除</CardTitle>

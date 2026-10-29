@@ -48,7 +48,7 @@ export function allergenLabelOf(key: SpecifiedAllergenKey) {
 
 export function formatAllergenNotice(allergens: SpecifiedAllergenKey[]) {
   if (allergens.length === 0) {
-    return "特定原材料なし";
+    return "";
   }
   return `${allergens.map((key) => allergenLabelOf(key)).join("、")}を含む`;
 }

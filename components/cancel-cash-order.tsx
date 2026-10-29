@@ -16,7 +16,7 @@ export function CancelCashOrder({ order, onCanceled }: {
   const [error, setError] = useState<string | null>(null);
   const inFlight = useRef(false);
   return <>
-    <button type="button" className="ghost-btn" onClick={() => { setError(null); setOpen(true); }}>現金注文を取り消す</button>
+    <Button type="button" variant="destructive" onClick={() => { setError(null); setOpen(true); }}>現金注文を取り消す</Button>
     <Dialog open={open} onOpenChange={value => { if (!inFlight.current) setOpen(value); }}>
       <DialogContent>
         <DialogTitle>注文 #{order.orderNo} を取り消しますか？</DialogTitle>
@@ -28,7 +28,7 @@ export function CancelCashOrder({ order, onCanceled }: {
         {error && <p role="alert" className="notice error">{error}</p>}
         <div className="row wrap">
           <Button variant="outline" disabled={busy} onClick={() => setOpen(false)}>戻る</Button>
-          <Button disabled={busy || !reason.trim()} onClick={async () => {
+          <Button variant="destructive" disabled={busy || !reason.trim()} onClick={async () => {
             if (inFlight.current) return;
             inFlight.current = true;
             setBusy(true); setError(null);
