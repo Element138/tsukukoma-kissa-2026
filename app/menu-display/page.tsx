@@ -10,6 +10,7 @@ import {
 } from "react";
 import { apiFetch, fmtJpy } from "@/lib/client";
 import { normalizeMenuCoverUrl } from "@/lib/menu-cover";
+import { menuDisplayClosed, type MenuLastOrder } from "@/lib/menu-last-order";
 import { menuDisplayPages, PORTRAIT_MENU_QUERY, type MenuCategoryContext } from "@/lib/menu-display-layout";
 import { useSession } from "@/components/use-session";
 import { TerminalBanner } from "@/components/terminal-banner";
@@ -46,11 +47,13 @@ type DisplayCategory = {
 
 type MenuDisplaySettings = {
   pageDisplaySeconds: number;
+  lastOrders?: MenuLastOrder[];
 };
 
 type MenuDisplayPayload = {
   categories: DisplayCategory[];
   settings: MenuDisplaySettings;
+  serverNow?: string;
 };
 
 const DEFAULT_SETTINGS: MenuDisplaySettings = {
@@ -294,6 +297,8 @@ export default function MenuDisplayPage() {
   const [settings, setSettings] =
     useState<MenuDisplaySettings>(DEFAULT_SETTINGS);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isLastOrderClosed, setIsLastOrderClosed] = useState(false);
+  const clockRef = useRef<{ serverMillis: number; monotonicMillis: number } | null>(null);
   const [isPortrait, setIsPortrait] = useState(false);
   const [layoutRevision, setLayoutRevision] = useState(0);
   const [pageIndex, setPageIndex] = useState(0);
@@ -387,6 +392,9 @@ export default function MenuDisplayPage() {
     );
 
     setSettings(nextSettings);
+    const serverMillis = Date.parse(payload.serverNow ?? "");
+    clockRef.current = { serverMillis: Number.isFinite(serverMillis) ? serverMillis : Date.now(), monotonicMillis: performance.now() };
+    setIsLastOrderClosed(menuDisplayClosed(nextSettings.lastOrders ?? [], new Date(clockRef.current.serverMillis)));
     pendingCycleDurationMsRef.current = nextPageDisplayMs;
 
     if (currentCategories.length === 0) {
@@ -600,9 +608,20 @@ export default function MenuDisplayPage() {
     };
   }, [cycleTick, pageIndex, pageStructureSignature, shouldFadeBetweenPages, layoutRevision]);
 
+  useEffect(() => {
+    const update = () => {
+      const clock = clockRef.current;
+      if (clock) setIsLastOrderClosed(menuDisplayClosed(settings.lastOrders ?? [], new Date(clock.serverMillis + performance.now() - clock.monotonicMillis)));
+    };
+    update();
+    const timer = window.setInterval(update, 1000);
+    document.addEventListener("visibilitychange", update);
+    return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", update); };
+  }, [settings.lastOrders]);
+
   useRealtimeSubscription({
     enabled: Boolean(session),
-    channels: ["menus", "categories", "orders"],
+    channels: ["menus", "categories", "orders", "settings"],
     onEvent: () => {
       void reload();
     },
@@ -662,7 +681,8 @@ export default function MenuDisplayPage() {
   };
 
   return (
-    <div className={`menu-display-screen${isPortrait ? " is-portrait" : ""}`}>
+    <>
+    <div className={`menu-display-screen${isPortrait ? " is-portrait" : ""}`} inert={isLastOrderClosed} aria-hidden={isLastOrderClosed || undefined}>
       {!isFullscreen && (
         <TerminalBanner
           actorId={session.actor.actorId}
@@ -673,11 +693,16 @@ export default function MenuDisplayPage() {
       )}
 
       <DashboardShell
-        title="メニュー"
+        title="喫茶"
         className={
           isFullscreen ? "menu-display-fullscreen" : "menu-display-standard"
         }
-        actions={
+        header={<header className="dashboard-hero menu-display-brand-header">
+          <div className="menu-display-brand">
+            <img src="/images/cafe-logo.svg" alt="喫茶ロゴ" className="menu-display-logo" />
+            <div><h1 className="dashboard-title">喫茶</h1><p className="menu-display-location">正門入ってすぐ右</p></div>
+          </div>
+          <div className="dashboard-actions">
           <button
             type="button"
             className="ghost-btn"
@@ -685,7 +710,8 @@ export default function MenuDisplayPage() {
           >
             {isFullscreen ? "全画面を終了" : "全画面表示"}
           </button>
-        }
+          </div>
+        </header>}
       >
         <div
           className={`menu-display-columns ${isPageFading ? "is-fading" : ""}`}
@@ -738,7 +764,7 @@ export default function MenuDisplayPage() {
                       const hasImage = Boolean(imageSrc);
                       const allergenNotice = menu.allergenDisplayEnabled
                         ? formatAllergenNotice(menu.allergens)
-                        : "";
+                        : "アレルゲン情報なし";
                       const hasAllergenWarning =
                         menu.allergenDisplayEnabled && menu.allergens.length > 0;
                       const badgeText = menu.customBadgeText?.trim() ?? "";
@@ -787,7 +813,7 @@ export default function MenuDisplayPage() {
                               </div>
                             ) : null}
                             <strong>{renderDisplayText(menu.name)}</strong>
-                            {menu.allergenDisplayEnabled ? (
+                            {allergenNotice ? (
                               <div
                                 className={`menu-display-row-allergen ${hasAllergenWarning ? "has-allergen" : "none"}`}
                               >
@@ -805,7 +831,7 @@ export default function MenuDisplayPage() {
                                 </span>
                                 {showIncreasedWait ? (
                                   <span className="menu-display-row-wait">
-                                    お時間をいただきます
+                                    待ち時間が長くなっております
                                   </span>
                                 ) : null}
                               </div>
@@ -834,5 +860,13 @@ export default function MenuDisplayPage() {
         </div>
       </DashboardShell>
     </div>
+    {isLastOrderClosed && <div className="menu-display-closed" role="status" aria-live="polite">
+      <div className="menu-display-closed-content">
+        <img src="/images/cafe-logo.svg" alt="喫茶ロゴ" />
+        <p>喫茶はラストオーダー時刻を過ぎました</p>
+        <p>ありがとうございました</p>
+      </div>
+    </div>}
+    </>
   );
 }

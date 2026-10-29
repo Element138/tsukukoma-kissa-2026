@@ -1,0 +1,20 @@
+import assert from "node:assert/strict";
+import { menuDisplayClosed, menuLastOrderTime, parseMenuLastOrder } from "../lib/menu-last-order";
+import { formatAllergenNotice } from "../lib/allergens";
+
+assert.equal(parseMenuLastOrder("2026-02-30", "12:00"), null);
+assert.equal(parseMenuLastOrder("2026-10-29", "24:00"), null);
+assert.equal(parseMenuLastOrder("2026-10-29", "9:00"), null);
+const close = parseMenuLastOrder("2026-10-29", "16:30")!;
+assert.equal(close.toISOString(), "2026-10-29T07:30:00.000Z");
+assert.equal(menuLastOrderTime(close), "16:30");
+const entries = [{ date: "2026-10-29", closesAt: close.toISOString() }];
+assert.equal(menuDisplayClosed(entries, new Date(close.getTime() - 1)), false);
+assert.equal(menuDisplayClosed(entries, close), true);
+assert.equal(menuDisplayClosed(entries, new Date("2026-10-29T14:59:59Z")), true);
+assert.equal(menuDisplayClosed(entries, new Date("2026-10-29T15:00:00Z")), false);
+assert.equal(menuDisplayClosed(entries, new Date("2026-10-28T15:00:00Z")), false);
+assert.equal(menuDisplayClosed([], close), false);
+assert.equal(menuDisplayClosed([{ date: entries[0].date, closesAt: "invalid" }], close), false);
+assert.equal(formatAllergenNotice([]), "");
+console.log("Last-order JST boundary, invalid-date and allergen checks passed.");

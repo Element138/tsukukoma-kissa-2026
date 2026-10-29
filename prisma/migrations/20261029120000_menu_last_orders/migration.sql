@@ -1,0 +1,8 @@
+CREATE TABLE "MenuDisplayLastOrder" (
+  "jstDate" VARCHAR(10) NOT NULL,
+  "closesAt" TIMESTAMP(3) NOT NULL,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL,
+  CONSTRAINT "MenuDisplayLastOrder_pkey" PRIMARY KEY ("jstDate")
+);
+ALTER TABLE "MenuDisplayLastOrder" ENABLE ROW LEVEL SECURITY;

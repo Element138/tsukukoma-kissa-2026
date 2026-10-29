@@ -33,6 +33,7 @@ import { DashboardShell } from "@/components/dashboard-shell";
 import { LoadingScreen } from "@/components/loading-screen";
 import { SquareIncidentBanner } from "@/components/square-incident-banner";
 import { PhotoStorageBanner } from "@/components/photo-storage-banner";
+import { MenuLastOrdersSettings } from "@/components/menu-last-orders-settings";
 import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
 import { ACTOR_TYPE_LABEL, AVAILABILITY_LABEL, labelOf } from "@/lib/labels";
 import { useToast } from "@/components/toast";
@@ -2298,7 +2299,7 @@ export default function AdminPage() {
                               ? `選択中: ${newMenuAllergens
                                   .map((key) => allergenLabelOf(key))
                                   .join("、")}`
-                              : "選択中: 特定原材料なし"}
+                              : ""}
                         </div>
                       </div>
                       <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
@@ -2789,7 +2790,7 @@ export default function AdminPage() {
                                                 allergenLabelOf(key),
                                               )
                                               .join("、")}`
-                                          : "選択中: 特定原材料なし"}
+                                          : ""}
                                     </div>
                                   </div>
                                   <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
@@ -3177,6 +3178,7 @@ export default function AdminPage() {
               </span>
             </CardContent>
           </Card>
+          <MenuLastOrdersSettings />
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm">データ削除</CardTitle>

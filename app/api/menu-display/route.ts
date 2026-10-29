@@ -5,6 +5,7 @@ import { requireSession } from "@/lib/server/auth";
 import { fail, ok } from "@/lib/response";
 import { normalizeSpecifiedAllergens } from "@/lib/allergens";
 import { normalizeMenuCoverUrl } from "@/lib/menu-cover";
+import { tokyoDateKey } from "@/lib/time";
 
 const LOW_STOCK_BADGE_THRESHOLD_UNLIMITED = 100000;
 
@@ -12,7 +13,7 @@ export async function GET(req: NextRequest) {
   try {
     await requireSession(req, { actorTypes: ["MENU_DISPLAY", "POS", "ADMIN"] });
 
-    const [categories, menus, setting] = await Promise.all([
+    const [categories, menus, setting, lastOrders] = await Promise.all([
       prisma.menuCategory.findMany({
         where: { isActive: true },
         orderBy: [{ displayOrder: "asc" }, { name: "asc" }],
@@ -30,6 +31,11 @@ export async function GET(req: NextRequest) {
           orderDisplayMarqueeSpeedSeconds: 24,
         },
         update: {},
+      }),
+      prisma.menuDisplayLastOrder.findMany({
+        where: { jstDate: { gte: tokyoDateKey() } },
+        select: { jstDate: true, closesAt: true },
+        orderBy: { jstDate: "asc" },
       }),
     ]);
     const capStateMap = await getMenuCapStates(
@@ -78,8 +84,10 @@ export async function GET(req: NextRequest) {
 
     return ok({
       categories: result,
+      serverNow: new Date().toISOString(),
       settings: {
         pageDisplaySeconds: setting.menuDisplayPageSeconds,
+        lastOrders: lastOrders.map(entry => ({ date: entry.jstDate, closesAt: entry.closesAt })),
       },
     });
   } catch (error) {
