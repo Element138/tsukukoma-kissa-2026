@@ -80,6 +80,7 @@ const ERROR_MESSAGE_JA: Record<string, string> = {
   DB_UNAVAILABLE: "データベースに接続できません",
   DB_UNREACHABLE: "データベースに接続できません",
   DB_TIMEOUT: "データベース処理がタイムアウトしました",
+  DB_QUERY_FAILED: "データベース処理に失敗しました",
   UNIQUE_CONSTRAINT: "同じ値のデータがすでに存在します",
   FK_CONSTRAINT: "関連データの整合性エラーが発生しました",
   TX_CONFLICT: "データ競合が発生しました。再試行してください",
@@ -223,7 +224,13 @@ export function fail(error: unknown) {
       name: error.name,
       message: error.message,
     });
-    return errorResponse(503, "DB_TIMEOUT", "Database operation timed out");
+    if (/\b(?:42P01|42703|42804|42883)\b|operator does not exist|type .* does not exist/i.test(error.message)) {
+      return errorResponse(503, "DB_SCHEMA_MISMATCH", "Database schema does not match the query");
+    }
+    if (/\b57014\b|statement timeout|query timeout|timed?\s*out/i.test(error.message)) {
+      return errorResponse(503, "DB_TIMEOUT", "Database operation timed out");
+    }
+    return errorResponse(500, "DB_QUERY_FAILED", "Database query failed");
   }
 
   if (isEnvMissingDbUrl(error)) {
