@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import { apiFetch, fmtJpy } from "@/lib/client";
+import { normalizeMenuCoverUrl } from "@/lib/menu-cover";
 import { useSession } from "@/components/use-session";
 import { TerminalBanner } from "@/components/terminal-banner";
 import { DashboardShell } from "@/components/dashboard-shell";
@@ -300,6 +301,7 @@ export default function MenuDisplayPage() {
   useWakeLock(Boolean(session));
 
   const [categories, setCategories] = useState<DisplayCategory[]>([]);
+  const [failedCoverUrls, setFailedCoverUrls] = useState<Set<string>>(() => new Set());
   const [settings, setSettings] =
     useState<MenuDisplaySettings>(DEFAULT_SETTINGS);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -713,7 +715,8 @@ export default function MenuDisplayPage() {
                         menu.availability === "SOLD_OUT";
                       const showIncreasedWait =
                         menu.availability === "INCREASED_WAIT";
-                      const imageSrc = menu.coverImageDataUrl;
+                      const coverUrl = normalizeMenuCoverUrl(menu.coverImageDataUrl);
+                      const imageSrc = coverUrl && !failedCoverUrls.has(coverUrl) ? coverUrl : null;
                       const hasImage = Boolean(imageSrc);
                       const allergenNotice = menu.allergenDisplayEnabled
                         ? formatAllergenNotice(menu.allergens)
@@ -792,6 +795,9 @@ export default function MenuDisplayPage() {
                                 src={imageSrc ?? undefined}
                                 alt={`${menu.name} の画像`}
                                 className="menu-display-row-image"
+                                onError={() => {
+                                  if (imageSrc) setFailedCoverUrls(previous => new Set(previous).add(imageSrc));
+                                }}
                               />
                             </div>
                           ) : null}

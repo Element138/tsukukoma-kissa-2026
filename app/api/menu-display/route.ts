@@ -4,6 +4,7 @@ import { getMenuCapStates } from "@/lib/domain/menu-cap";
 import { requireSession } from "@/lib/server/auth";
 import { fail, ok } from "@/lib/response";
 import { normalizeSpecifiedAllergens } from "@/lib/allergens";
+import { normalizeMenuCoverUrl } from "@/lib/menu-cover";
 
 const LOW_STOCK_BADGE_THRESHOLD_UNLIMITED = 100000;
 
@@ -64,7 +65,7 @@ export async function GET(req: NextRequest) {
             name: menu.name,
             priceJpy: menu.priceJpy,
             availability: isCapReached ? "SOLD_OUT" : menu.availability,
-            coverImageDataUrl: menu.coverImageDataUrl,
+            coverImageDataUrl: normalizeMenuCoverUrl(menu.coverImageDataUrl),
             allergens: normalizeSpecifiedAllergens(menu.allergensJson),
             allergenDisplayEnabled: menu.allergenDisplayEnabled,
             customBadgeText: menu.customBadgeText,

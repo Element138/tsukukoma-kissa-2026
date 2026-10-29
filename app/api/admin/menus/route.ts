@@ -9,6 +9,7 @@ import { writeAuditLog } from "@/lib/domain/audit";
 import { getMenuCapStates } from "@/lib/domain/menu-cap";
 import { withRouteTrace, traceError } from "@/lib/server/trace";
 import { AppError } from "@/lib/errors";
+import { normalizeMenuCoverUrl } from "@/lib/menu-cover";
 import {
   broadcastInvalidation,
   CHANNEL_GROUPS,
@@ -150,6 +151,7 @@ export async function GET(req: NextRequest) {
           const isCapReached = capState?.isCapReached ?? false;
           return {
             ...menu,
+            coverImageDataUrl: normalizeMenuCoverUrl(menu.coverImageDataUrl),
             availability: isCapReached ? "SOLD_OUT" : menu.availability,
             assignedKitchenId: assignedKitchenByMenuId.get(menu.id) ?? null,
             hasActiveKitchenCoverage: coveredMenuIds.has(menu.id),
@@ -196,7 +198,7 @@ export async function POST(req: NextRequest) {
             displayOrder: body.displayOrder,
             categoryId: body.categoryId,
             showLeadTime: body.showLeadTime ?? true,
-            coverImageDataUrl: body.coverImageDataUrl ?? null,
+            coverImageDataUrl: normalizeMenuCoverUrl(body.coverImageDataUrl),
             allergensJson: body.allergensJson ?? [],
             allergenDisplayEnabled: body.allergenDisplayEnabled ?? false,
             customBadgeText: body.customBadgeText ?? null,
@@ -271,7 +273,7 @@ export async function POST(req: NextRequest) {
       });
       trace("tx.create.ok", { menuId: menu.id });
 
-      return ok({ menu });
+      return ok({ menu: { ...menu, coverImageDataUrl: normalizeMenuCoverUrl(menu.coverImageDataUrl) } });
     } catch (error) {
       traceError(trace, "error", error);
       return fail(error);
@@ -425,7 +427,7 @@ export async function PATCH(req: NextRequest) {
             categoryId: body.categoryId,
             isActive: body.isActive,
             showLeadTime: body.showLeadTime,
-            coverImageDataUrl: body.coverImageDataUrl,
+            coverImageDataUrl: body.coverImageDataUrl === undefined ? undefined : normalizeMenuCoverUrl(body.coverImageDataUrl),
             allergensJson: body.allergensJson,
             allergenDisplayEnabled: body.allergenDisplayEnabled,
             customBadgeText: body.customBadgeText,
@@ -470,7 +472,7 @@ export async function PATCH(req: NextRequest) {
       });
       trace("tx.update.ok", { menuId: menu.id });
 
-      return ok({ menu });
+      return ok({ menu: { ...menu, coverImageDataUrl: normalizeMenuCoverUrl(menu.coverImageDataUrl) } });
     } catch (error) {
       traceError(trace, "error", error);
       return fail(error);

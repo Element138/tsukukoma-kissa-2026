@@ -181,6 +181,12 @@ model MenuKitchenAssignment {
   @@index([kitchenId, enabled])
 }
 
+model MenuCoverImage {
+  id        String   @id @db.VarChar(64)
+  bytes     Bytes
+  createdAt DateTime @default(now())
+}
+
 model MenuDailyCount {
   menuId     String
   jstDate    String   @db.VarChar(10)
