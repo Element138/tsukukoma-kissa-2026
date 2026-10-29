@@ -71,9 +71,12 @@ async function main() {
     await page.screenshot({path:"tmp/menu-branding/closed-fullscreen.png",fullPage:true});
     await page.evaluate(()=>document.exitFullscreen());
     lastOrders=[];
+    // Unmount the MENU_DISPLAY session poller before changing the mocked actor.
+    await page.goto("about:blank");
     role="ADMIN";await page.setViewportSize({width:1440,height:1000});await go("/admin");
     await page.getByRole("heading",{name:"ラストオーダー時刻",exact:true}).waitFor();
     const date=page.getByLabel("日付（JST）",{exact:true}),time=page.getByLabel("時刻",{exact:true});
+    await page.waitForFunction(()=>document.querySelector<HTMLInputElement>('input[type="date"][min="2026-10-29"]')?.disabled===false);
     assert.equal(await date.getAttribute("min"),"2026-10-29");
     await date.fill("2026-11-01");await time.fill("16:30");
     const card=page.locator(".rounded-lg").filter({has:page.getByRole("heading",{name:"ラストオーダー時刻",exact:true})}).last();

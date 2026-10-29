@@ -649,12 +649,19 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   margin: 18px auto 20px;
 }
 
-.menu-display-screen { display: contents; }
+.menu-display-screen { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+.menu-display-screen > .terminal-banner { flex-shrink: 0; }
+.menu-display-screen .dashboard-shell { flex: 1; height: auto; min-height: 0; grid-template-rows: auto minmax(0, 1fr); }
+.menu-display-screen .dashboard-body { display: grid; grid-template-rows: minmax(0, 1fr); min-height: 0; }
+.menu-display-screen .menu-display-columns { height: 100%; min-height: 0; }
+.menu-display-screen .menu-display-category { height: 100%; min-height: 0; grid-template-rows: auto minmax(0, 1fr); }
+.menu-display-screen .menu-display-scroll-viewport { height: 100%; min-height: 0; }
 
 .menu-display-brand-header { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
-.menu-display-brand { display: flex; align-items: center; gap: clamp(16px, 1.5vw, 34px); }
-.menu-display-logo { height: clamp(64px, 5.5vw, 110px); width: auto; flex: none; }
-.menu-display-location { margin-top: .35em; color: #475569; font-size: clamp(16px, 1.3vw, 24px); letter-spacing: .08em; }
+.menu-display-brand { --brand-title-size: clamp(1.8rem, 2.9vw, 2.6rem); --brand-location-size: clamp(16px, 1.3vw, 24px); display: flex; align-items: center; gap: clamp(16px, 1.5vw, 34px); }
+.menu-display-brand .dashboard-title { font-size: var(--brand-title-size); line-height: 1.15; margin: 0; }
+.menu-display-logo { height: calc((var(--brand-title-size) * 1.15 + var(--brand-location-size) * 1.75) * 2.5); width: auto; flex: none; }
+.menu-display-location { margin-top: .35em; color: #475569; font-size: var(--brand-location-size); line-height: 1.4; letter-spacing: .08em; }
 .menu-display-closed { position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center; background: #d9dde1; color: #334155; }
 .menu-display-closed-content { display: flex; flex-direction: column; align-items: center; gap: .5em; padding: 24px; text-align: center; font-size: clamp(14px, 1.5vw, 32px); line-height: 1.6; }
 .menu-display-closed-content img { width: clamp(64px, 6vw, 130px); height: auto; margin-bottom: .6em; }
@@ -3509,8 +3516,7 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
 
   .is-portrait .dashboard-hero { padding: 0; border-bottom: 0; }
   .is-portrait .dashboard-title { font-size: clamp(44px, 4.1vw, 92px); letter-spacing: .04em; }
-  .is-portrait .menu-display-logo { height: clamp(80px, 8vw, 180px); }
-  .is-portrait .menu-display-location { font-size: clamp(20px, 1.9vw, 44px); }
+  .is-portrait .menu-display-brand { --brand-title-size: clamp(44px, 4.1vw, 92px); --brand-location-size: clamp(20px, 1.9vw, 44px); }
   .is-portrait .dashboard-actions { padding-top: 8px; }
   .is-portrait .dashboard-actions .ghost-btn { font-size: clamp(16px, 1.25vw, 28px); padding: .65em 1em; }
   .is-portrait .dashboard-body { display: grid; grid-template-rows: minmax(0, 1fr); min-height: 0; }

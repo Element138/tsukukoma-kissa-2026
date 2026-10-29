@@ -11,6 +11,7 @@ const defaultCategories = [category("food", "フード・スイーツ", ["小倉
 async function measure(page: Page) {
   return page.evaluate(() => ({
     width: innerWidth, height: innerHeight, portrait: Boolean(document.querySelector(".is-portrait")),
+    logoRatio: document.querySelector(".menu-display-logo")!.getBoundingClientRect().height / document.querySelector(".menu-display-brand > div")!.getBoundingClientRect().height,
     documentWidth: document.documentElement.scrollWidth, documentHeight: document.documentElement.scrollHeight,
     board: (() => { const r=document.querySelector(".menu-display-columns")!.getBoundingClientRect(); return {x:r.x,y:r.y,width:r.width,height:r.height,bottom:r.bottom}; })(),
     sections: Array.from(document.querySelectorAll(".menu-display-category")).map(section => {
@@ -41,11 +42,12 @@ async function main() {
   async function portrait(label:string,width:number,height:number){
     await page.setViewportSize({width,height});await page.locator(".is-portrait").waitFor();
     const m=await measure(page);results[label]=m;
-    assert.equal(m.sections.length,2);assert.equal(m.sections[0].id,"portrait-food");assert.equal(m.sections[1].id,"portrait-drinks");
+    assert.equal(m.sections.length,2);assert.equal(m.sections[0].id,categories[0].id);assert.equal(m.sections[1].id,categories[1].id);
     assert(m.board.width>width*.93);assert(m.board.bottom>height*.97 && m.board.bottom<=height);
     assert(m.sections[1].y>height*.47 && m.sections[1].y<height*.59);
     assert(Math.abs(m.sections[0].height-m.sections[1].height)<3);
     assert(m.documentWidth<=width+1 && m.documentHeight<=height+1);
+    assert(Math.abs(m.logoRatio-2.5)<.03, `Logo/text ratio: ${m.logoRatio}`);
     assert.deepEqual(m.clippedText,[]);assert(m.itemFont>=30);
     return m;
   }
@@ -68,13 +70,15 @@ async function main() {
     await page.waitForFunction(()=>!document.querySelector(".is-portrait"));
     const landscape=await measure(page);results.landscape=landscape;
     assert(landscape.sections[1].x>landscape.sections[0].x);assert.equal(landscape.sections[0].y,landscape.sections[1].y);
+    assert(landscape.sections.every(section=>section.y>=0&&section.bottom<=1080));
+    assert(landscape.documentHeight<=1081);assert(Math.abs(landscape.logoRatio-2.5)<.03);
     await page.screenshot({path:"tmp/portrait-menu/landscape.png",fullPage:true});
     await page.setViewportSize({width:2160,height:3840});await page.locator(".is-portrait").waitFor();
-    categories=[category("drinks","ドリンク",defaultCategories[1].menus),category("sweets","スイーツ",defaultCategories[0].menus.slice(0,2)),category("food","フード",defaultCategories[0].menus.slice(2))];
-    categories[1].customBadgeText="数量限定";categories[1].customBadgeColor="#b45309";
-    await load();await portrait("separate-food-sweets",2160,3840);
-    assert.equal(await page.locator('[data-menu-section="portrait-food"] .menu-display-source-category').count(),5);
-    await page.screenshot({path:"tmp/portrait-menu/separate-categories.png",fullPage:true});
+    categories=[category("drinks","First category",defaultCategories[1].menus),category("food","Second category",defaultCategories[0].menus)];
+    categories[0].customBadgeText="数量限定";categories[0].customBadgeColor="#b45309";
+    await load();await portrait("category-order",2160,3840);
+    assert.equal(await page.locator(".menu-display-source-category").count(),0);
+    await page.screenshot({path:"tmp/portrait-menu/category-order.png",fullPage:true});
     const sampleImage="data:image/webp;base64,"+(await sharp({create:{width:400,height:300,channels:3,background:"#537f60"}}).webp().toBuffer()).toString("base64");
     categories=defaultCategories.map(group=>({...group,menus:group.menus.map((menu,index)=>({...menu,coverImageDataUrl:index<2?sampleImage:null}))}));
     await load();await portrait("with-photos-4k",2160,3840);
@@ -94,7 +98,7 @@ async function main() {
     assert(scrolled.every(track=>track.transform!=="none"));
     assert.deepEqual(errors,[]);
     await writeFile("tmp/portrait-menu/measurements.json",JSON.stringify(results,null,2));
-    console.log("Portrait menu browser checks passed: 2160×3840 standard/fullscreen, 1080×1920, landscape rotation, separate food/sweets grouping, badges, full panel use, unclipped text and animated overflow.");
+    console.log("Portrait menu browser checks passed: 2160×3840 standard/fullscreen, 1080×1920, landscape rotation, category order, badges, full panel use, unclipped text and animated overflow.");
   }catch(error){await page.screenshot({path:"tmp/portrait-menu/failure.png",fullPage:true});if(await page.locator(".menu-display-columns").count())console.log(JSON.stringify(await measure(page),null,2));else console.log((await page.locator("body").innerText()).slice(0,1000),errors);throw error;}
   finally{await browser.close();}
 }
