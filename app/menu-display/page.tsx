@@ -10,6 +10,7 @@ import {
 } from "react";
 import { apiFetch, fmtJpy } from "@/lib/client";
 import { normalizeMenuCoverUrl } from "@/lib/menu-cover";
+import { menuDisplayPages, PORTRAIT_MENU_QUERY, type MenuCategoryContext } from "@/lib/menu-display-layout";
 import { useSession } from "@/components/use-session";
 import { TerminalBanner } from "@/components/terminal-banner";
 import { DashboardShell } from "@/components/dashboard-shell";
@@ -28,7 +29,7 @@ type DisplayCategory = {
   name: string;
   customBadgeText: string | null;
   customBadgeColor: string | null;
-  menus: Array<{
+  menus: Array<MenuCategoryContext & {
     id: string;
     name: string;
     priceJpy: number;
@@ -196,18 +197,6 @@ function resolvePageDisplayMs(pageDisplaySeconds: number | undefined) {
   return Math.max(6000, Math.floor(safeSeconds * 1000));
 }
 
-function splitCategoryPages(categories: DisplayCategory[]) {
-  if (categories.length === 0) {
-    return [] as DisplayCategory[][];
-  }
-  const columnsPerPage = Math.min(3, categories.length);
-  const pages: DisplayCategory[][] = [];
-  for (let i = 0; i < categories.length; i += columnsPerPage) {
-    pages.push(categories.slice(i, i + columnsPerPage));
-  }
-  return pages;
-}
-
 function categoryLayoutSignature(categories: DisplayCategory[]) {
   return categories.map((category) => category.id).join("|");
 }
@@ -305,6 +294,8 @@ export default function MenuDisplayPage() {
   const [settings, setSettings] =
     useState<MenuDisplaySettings>(DEFAULT_SETTINGS);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isPortrait, setIsPortrait] = useState(false);
+  const [layoutRevision, setLayoutRevision] = useState(0);
   const [pageIndex, setPageIndex] = useState(0);
   const [isPageFading, setIsPageFading] = useState(false);
   const [cycleTick, setCycleTick] = useState(0);
@@ -324,11 +315,11 @@ export default function MenuDisplayPage() {
   const trackRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const categoryPages = useMemo(
-    () => splitCategoryPages(categories),
-    [categories],
+    () => menuDisplayPages(categories, isPortrait),
+    [categories, isPortrait],
   );
   const activePage = categoryPages[pageIndex] ?? [];
-  const shouldFadeBetweenPages = categories.length > 3;
+  const shouldFadeBetweenPages = categoryPages.length > 1;
   const pageStructureSignature = useMemo(
     () =>
       categoryPages
@@ -348,6 +339,33 @@ export default function MenuDisplayPage() {
   useEffect(() => {
     activePageRef.current = activePage;
   }, [activePage]);
+
+  useEffect(() => {
+    const media = window.matchMedia(PORTRAIT_MENU_QUERY);
+    const update = () => setIsPortrait(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+
+  useEffect(() => {
+    let frame = 0;
+    let alive = true;
+    const remeasure = () => {
+      if (!alive) return;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => { if (alive) setLayoutRevision(value => value + 1); });
+    };
+    const observer = new ResizeObserver(remeasure);
+    for (const category of activePageRef.current) {
+      const viewport = viewportRefs.current[category.id];
+      const track = trackRefs.current[category.id];
+      if (viewport) observer.observe(viewport);
+      if (track) observer.observe(track);
+    }
+    void document.fonts.ready.then(remeasure);
+    return () => { alive = false; observer.disconnect(); cancelAnimationFrame(frame); };
+  }, [pageStructureSignature, pageIndex, isPortrait]);
 
   useEffect(() => {
     pendingCycleDurationMsRef.current = resolvePageDisplayMs(
@@ -476,7 +494,7 @@ export default function MenuDisplayPage() {
           0,
           viewport.clientHeight - viewportPaddingY,
         );
-        const overflowPx = Math.max(0, track.scrollHeight - visibleHeight + 2);
+        const overflowPx = Math.max(0, track.scrollHeight - visibleHeight);
         if (overflowPx <= 1) {
           continue;
         }
@@ -580,7 +598,7 @@ export default function MenuDisplayPage() {
         animation.cancel();
       }
     };
-  }, [cycleTick, pageIndex, pageStructureSignature, shouldFadeBetweenPages]);
+  }, [cycleTick, pageIndex, pageStructureSignature, shouldFadeBetweenPages, layoutRevision]);
 
   useRealtimeSubscription({
     enabled: Boolean(session),
@@ -644,7 +662,7 @@ export default function MenuDisplayPage() {
   };
 
   return (
-    <>
+    <div className={`menu-display-screen${isPortrait ? " is-portrait" : ""}`}>
       {!isFullscreen && (
         <TerminalBanner
           actorId={session.actor.actorId}
@@ -683,7 +701,7 @@ export default function MenuDisplayPage() {
               category.customBadgeColor?.trim() || "#d97706";
 
             return (
-              <section key={category.id} className="menu-display-category">
+              <section key={category.id} className="menu-display-category" data-menu-section={category.id}>
                 <header className="menu-display-category-header">
                   <div className="menu-display-category-title-row">
                     <h2>{renderDisplayText(category.name)}</h2>
@@ -746,6 +764,10 @@ export default function MenuDisplayPage() {
                           }
                         >
                           <div className="menu-display-row-text">
+                            {menu.sourceCategoryName && <div className="menu-display-source-category">
+                              <span>{menu.sourceCategoryName}</span>
+                              {menu.sourceCategoryBadgeText && <span className="menu-display-row-badge" style={{ backgroundColor: menu.sourceCategoryBadgeColor || "#d97706" }}>{menu.sourceCategoryBadgeText}</span>}
+                            </div>}
                             {!unavailable &&
                             (badgeText || showLowStockBadge) ? (
                               <div className="menu-display-row-badge-wrap">
@@ -811,6 +833,6 @@ export default function MenuDisplayPage() {
           })}
         </div>
       </DashboardShell>
-    </>
+    </div>
   );
 }

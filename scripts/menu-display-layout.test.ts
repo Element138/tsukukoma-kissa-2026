@@ -1,0 +1,22 @@
+import assert from "node:assert/strict";
+import { menuDisplayPages, type MenuCategoryContext } from "../lib/menu-display-layout";
+
+type Item = MenuCategoryContext & { id: string; name: string };
+const category = (id: string, name: string, badge: string | null = null) => ({ id, name, customBadgeText: badge, customBadgeColor: "#0f766e", menus: [{ id: `${id}-item`, name: `${id} item` } as Item] });
+const drinks = category("drinks", "ドリンク");
+const food = category("food", "フード・スイーツ", "おすすめ");
+assert.deepEqual(menuDisplayPages([drinks, food], true)[0].map(group => group.name), ["フード・スイーツ", "ドリンク"]);
+assert.equal(menuDisplayPages([drinks, food], true)[0][0].customBadgeText, "おすすめ");
+const separate = [drinks, category("sweet", "スイーツ", "数量限定"), category("meal", "フード"), category("tea", "Tea & beverages")];
+const portrait = menuDisplayPages(separate, true);
+assert.equal(portrait.length, 1);
+assert.equal(portrait[0].length, 2);
+assert.equal(portrait[0][0].menus.length, 2);
+assert.equal(portrait[0][1].menus.length, 2);
+assert.equal(portrait[0][0].menus[0].sourceCategoryName, "スイーツ");
+assert.equal(portrait[0][0].menus[0].sourceCategoryBadgeText, "数量限定");
+assert.deepEqual(menuDisplayPages(separate, false).map(page => page.map(group => group.id)), [["drinks", "sweet", "meal"], ["tea"]]);
+assert.deepEqual(menuDisplayPages([], true), []);
+assert.equal(menuDisplayPages([drinks], true)[0].length, 1);
+assert.equal(menuDisplayPages([food], true)[0].length, 1);
+console.log("Menu layout checks passed: portrait ordering, separate food/sweets grouping, badge/context preservation, single-category handling and unchanged landscape pagination.");
