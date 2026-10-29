@@ -11,7 +11,7 @@ BEGIN
   PERFORM 1
   FROM "public"."Actor" a
   WHERE a."id" = NEW."kitchenId"
-    AND a."actorType" = 'KITCHEN'::"ActorType";
+    AND a."actorType" = 'KITCHEN'::"public"."ActorType";
 
   IF NOT FOUND THEN
     RAISE EXCEPTION 'kitchenId % must reference Actor(actorType=KITCHEN)', NEW."kitchenId";
@@ -19,7 +19,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = pg_catalog, public;
 
 DROP TRIGGER IF EXISTS "MenuKitchenAssignment_kitchenId_kitchen_actor_check" ON "public"."MenuKitchenAssignment";
 CREATE TRIGGER "MenuKitchenAssignment_kitchenId_kitchen_actor_check"
@@ -36,7 +36,7 @@ EXECUTE FUNCTION "public"."assert_kitchen_actor_ref"();
 CREATE OR REPLACE FUNCTION "public"."assert_actor_remains_kitchen_if_referenced"()
 RETURNS TRIGGER AS $$
 BEGIN
-  IF NEW."actorType" = 'KITCHEN'::"ActorType" THEN
+  IF NEW."actorType" = 'KITCHEN'::"public"."ActorType" THEN
     RETURN NEW;
   END IF;
 
@@ -54,11 +54,11 @@ BEGIN
 
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = pg_catalog, public;
 
 DROP TRIGGER IF EXISTS "Actor_actorType_kitchen_ref_guard" ON "public"."Actor";
 CREATE TRIGGER "Actor_actorType_kitchen_ref_guard"
 BEFORE UPDATE OF "actorType" ON "public"."Actor"
 FOR EACH ROW
-WHEN (OLD."actorType" = 'KITCHEN'::"ActorType")
+WHEN (OLD."actorType" = 'KITCHEN'::"public"."ActorType")
 EXECUTE FUNCTION "public"."assert_actor_remains_kitchen_if_referenced"();
