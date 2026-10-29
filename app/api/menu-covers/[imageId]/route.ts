@@ -13,6 +13,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ imageId
       "Cache-Control": "public, max-age=31536000, s-maxage=31536000, immutable",
       "X-Content-Type-Options": "nosniff",
       ETag: `"${imageId}"`,
+      "Access-Control-Allow-Origin": "*",
     };
     if (req.headers.get("if-none-match") === headers.ETag) return new NextResponse(null, { status: 304, headers });
     return new NextResponse(new Uint8Array(image.bytes), { headers });

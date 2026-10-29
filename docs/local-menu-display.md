@@ -1,5 +1,45 @@
 # Local Windows menu display
 
+## Double-click HTML (recommended distribution)
+
+`Menu.html` opens directly in Windows Chrome or Edge. No helper, runtime, local
+server, installation or login is needed. The file contains the entire viewer,
+logo, initial menu/images and the exact DM Sans / Zen Kaku Gothic New font build
+used by the web display, including every configured weight and Japanese subset.
+All font and software redistribution licenses are embedded in the HTML.
+
+The file renders its saved menu first, then attempts a credential-free update on
+load, every 30 seconds, and on focus/network recovery. The public feed and public
+food-image API allow non-credentialed cross-origin GETs. No authenticated endpoint
+is opened up. New images are validated as WebP against their SHA-256 content ID,
+converted to embedded images and reused on later updates. The previous complete
+snapshot stays visible if fetching, validation or any image download fails.
+
+Complete snapshots are saved atomically in IndexedDB, with localStorage as a
+fallback. Cache/image recovery after a full browser restart has been tested with
+normal Windows Chrome and Edge profiles loading the actual `file://` HTML. The
+file path/browser profile determines browser storage behavior: clearing storage,
+private sessions or a controller that prohibits persistence can discard updates.
+The bundled snapshot and fonts remain available even when all storage is blocked.
+The HTML cannot silently rewrite itself on disk; keep the helper distribution only
+if independent disk persistence is required.
+
+Build after `npm run build` generates the web font assets:
+
+```
+npx tsx scripts/export-menu-display-seed.ts --production-read-only
+node scripts/build-menu-display-html.mjs --out output/Kissa-Menu-HTML/Menu.html
+```
+
+No Windows runtime download is needed for this format. The output is a single
+self-contained file. Its production live feed becomes available when the PR is
+deployed; the bundled menu and proper fonts work offline beforehand. Tests are in
+`scripts/file-menu-browser-check.mjs`, including CORS updates without session
+cookies, exact rendered fonts, incomplete-update fallback, persistent image cache,
+JST closing, visibility changes and storage-disabled fallback.
+
+## Optional helper distribution
+
 The distribution is a self-contained Windows x64 folder with HTML/JS/CSS, the cafe
 logo, local fonts, an initial menu snapshot, and a checksum-verified Node.js LTS
 runtime. No npm, Node installation, database credentials, or login is required on

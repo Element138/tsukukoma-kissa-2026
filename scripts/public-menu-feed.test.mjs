@@ -8,6 +8,9 @@ assert.deepEqual(Object.keys(data).sort(), ["categories", "serverNow", "settings
 const permitted = ["id", "name", "priceJpy", "availability", "coverImageDataUrl", "allergens", "allergenDisplayEnabled", "customBadgeText", "customBadgeColor", "showLowStockBadge", "remainingUntilCap"].sort();
 for (const category of data.categories) for (const menu of category.menus) assert.deepEqual(Object.keys(menu).sort(), permitted);
 assert.match(response.headers.get("cache-control"), /s-maxage=15/);
+assert.equal(response.headers.get("access-control-allow-origin"), "*");
+assert.match(response.headers.get("access-control-expose-headers"), /Date/);
+assert.equal(response.headers.get("access-control-allow-credentials"), null);
 assert.equal((await fetch(`${origin}/api/public/menu-display`, { headers: { "If-None-Match": response.headers.get("etag") } })).status, 304);
 assert.equal((await fetch(`${origin}/api/public/menu-display`, { method: "POST" })).status, 405);
 assert.equal((await fetch(`${origin}/api/menu-display`)).status, 401);

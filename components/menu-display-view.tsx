@@ -284,11 +284,12 @@ function buildRenderChunks(text: string) {
     .filter((chunk) => chunk.text.length > 0);
 }
 
-export function MenuDisplayView({ loadData, revision = 0, terminalBanner, hideControls = false, onError }: {
+export function MenuDisplayView({ loadData, revision = 0, terminalBanner, hideControls = false, logoSrc = "/images/cafe-logo.svg", onError }: {
   loadData: () => Promise<MenuDisplayPayload>;
   revision?: number;
   terminalBanner?: ReactNode;
   hideControls?: boolean;
+  logoSrc?: string;
   onError?: (message: string) => void;
 }) {
   useWakeLock(true);
@@ -664,7 +665,7 @@ if (!hasLoaded) {
         }
         header={<header className="dashboard-hero menu-display-brand-header">
           <div className="menu-display-brand">
-            <img src="/images/cafe-logo.svg" alt="喫茶ロゴ" className="menu-display-logo" />
+            <img src={logoSrc} alt="喫茶ロゴ" className="menu-display-logo" />
             <div><h1 className="dashboard-title">喫茶</h1><p className="menu-display-location">正門入ってすぐ右</p></div>
           </div>
           {!hideControls && <div className="dashboard-actions">
@@ -827,7 +828,7 @@ if (!hasLoaded) {
     </div>
     {isLastOrderClosed && <div className="menu-display-closed" role="status" aria-live="polite">
       <div className="menu-display-closed-content">
-        <img src="/images/cafe-logo.svg" alt="喫茶ロゴ" />
+        <img src={logoSrc} alt="喫茶ロゴ" />
         <p>喫茶はラストオーダー時刻を過ぎました</p>
         <p>ありがとうございました</p>
       </div>

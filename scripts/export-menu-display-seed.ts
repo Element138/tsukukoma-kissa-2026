@@ -3,12 +3,21 @@ import { parse } from "dotenv";
 
 async function main() {
   if (!process.argv.includes("--production-read-only")) throw new Error("Explicit --production-read-only is required");
-  Object.assign(process.env, parse(readFileSync(".env")), { KISSA_TRACE_DB: "0" });
+  const configured = parse(readFileSync(".env"));
+  for (const key of ["DATABASE_URL", "DIRECT_URL"]) {
+    const url = new URL(configured[key]);
+    if (url.searchParams.has("schema") && url.searchParams.get("schema") !== "public") throw new Error("Production public schema required");
+    url.searchParams.set("schema", "public");configured[key] = url.href;
+  }
+  Object.assign(process.env, configured, { KISSA_TRACE_DB: "0" });
   const { prisma } = await import("../lib/db");
   const { getMenuDisplayData } = await import("../lib/server/menu-display-data");
   try {
     const seed = await prisma.$transaction(async tx => {
       await tx.$executeRawUnsafe("SET TRANSACTION READ ONLY");
+      // A pooled connection may inherit a previous client's search_path. Keep
+      // unqualified metadata probes local to this read-only transaction.
+      await tx.$executeRawUnsafe('SET LOCAL search_path TO "public"');
       const [{ schema, lastOrders }] = await tx.$queryRawUnsafe<Array<{schema:string;lastOrders:boolean}>>(`SELECT current_schema() AS schema, to_regclass('"MenuDisplayLastOrder"') IS NOT NULL AS "lastOrders"`);
       if (schema !== "public") throw new Error("Expected public production schema");
       const [{ visibility }] = await tx.$queryRawUnsafe<Array<{visibility:boolean}>>(`SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'Menu' AND column_name = 'showOnMenuDisplay') AS visibility`);

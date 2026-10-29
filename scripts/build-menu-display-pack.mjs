@@ -20,7 +20,7 @@ if (feed.protocol !== "https:" && !(args.includes("--test") && feed.hostname ===
 try { await access(destination);throw new Error("Output directory already exists; choose a fresh --out directory"); }
 catch (error) { if (error.code !== "ENOENT") throw error; }
 await mkdir(join(destination, "assets"), { recursive: true });
-for (const file of ["index.html", "server.mjs", "Launch.ps1", "Stop.ps1", "Start-Menu.cmd", "Start-Server.cmd", "Stop-Menu.cmd", "README.txt"]) await cp(`standalone/menu-display/${file}`, join(destination, file));
+for (const file of ["index.html", "server.mjs", "contract.mjs", "Launch.ps1", "Stop.ps1", "Start-Menu.cmd", "Start-Server.cmd", "Stop-Menu.cmd", "README.txt"]) await cp(`standalone/menu-display/${file}`, join(destination, file));
 await mkdir(join(destination, "images"));await cp("public/images/cafe-logo.svg", join(destination, "images/cafe-logo.svg"));
 await mkdir(join(destination, "fonts"));
 for (const file of ["NotoSansJP-Regular.otf", "NotoSansJP-Bold.otf", "OFL-Noto-Sans-JP.txt"]) await cp(`public/fonts/${file}`, join(destination, "fonts", file));
