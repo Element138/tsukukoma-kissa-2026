@@ -115,6 +115,7 @@ export async function GET(req: NextRequest) {
         createdAt: order.createdAt,
         confirmedAt: order.confirmedAt,
         lastCalledAt: order.lastCalledAt,
+        ghostedAt: order.ghostedAt,
         completedAt,
         fulfillmentType: order.fulfillmentType,
         tableNo: order.tableNo,
@@ -170,7 +171,7 @@ export async function GET(req: NextRequest) {
           existing.ordered += 1;
           existing.queued += 1;
           existing.totalSoldPriceJpy += item.unitPriceJpy;
-        } else if (item.status === "READY") {
+        } else if (item.status === "READY" || item.status === "GHOSTED") {
           existing.ordered += 1;
           existing.totalSoldPriceJpy += item.unitPriceJpy;
         } else if (item.status === "SERVED") {

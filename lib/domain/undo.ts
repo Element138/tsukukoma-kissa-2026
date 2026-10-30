@@ -78,7 +78,7 @@ export async function executeUndo(db: DbClient, params: { actorId: string; actor
     assert(order && !["FAILED","CANCELED"].includes(order.orderStatus) && order.lastMutationVersion === undo.expectedOrderVersion,409,"UNDO_CONFLICT","注文の状態が変わったため取り消せません");
     const quantities = new Map<string,number>();
     for (const item of entries) {
-      const changed = await db.orderItem.updateMany({where:{id:item.id,orderId:undo.orderId,menuId:item.menuId,status:"SERVED",servedByActorId:params.actorId,servedAt:new Date(payload.servedAt)},data:{status:"QUEUED",readyAt:null,servedAt:null,servedByActorId:null}});
+      const changed = await db.orderItem.updateMany({where:{id:item.id,orderId:undo.orderId,menuId:item.menuId,status:"SERVED",servedByActorId:params.actorId,servedAt:new Date(payload.servedAt)},data:{status:order.ghostedAt ? "GHOSTED" : "QUEUED",readyAt:null,servedAt:null,servedByActorId:null}});
       assert(changed.count === 1,409,"UNDO_CONFLICT","商品の状態が変わったため取り消せません");
       quantities.set(item.menuId,(quantities.get(item.menuId)??0)+1);
     }
@@ -107,7 +107,7 @@ export async function executeUndo(db: DbClient, params: { actorId: string; actor
     await resetExpiredReadyStock(db, [menuId]);
     const order = await db.order.findUnique({ where: { id: undo.orderId } });
     assert(order && !["FAILED", "CANCELED"].includes(order.orderStatus), 409, "UNDO_CONFLICT", "Undo conflict");
-    const changed = await db.orderItem.updateMany({ where: { id: undo.targetEntityId, status: "SERVED", servedByActorId: params.actorId, servedAt: typeof payload.servedAt === "string" ? new Date(payload.servedAt) : undefined }, data: { status: "QUEUED", readyAt: null, servedAt: null, servedByActorId: null } });
+    const changed = await db.orderItem.updateMany({ where: { id: undo.targetEntityId, status: "SERVED", servedByActorId: params.actorId, servedAt: typeof payload.servedAt === "string" ? new Date(payload.servedAt) : undefined }, data: { status: order.ghostedAt ? "GHOSTED" : "QUEUED", readyAt: null, servedAt: null, servedByActorId: null } });
     assert(changed.count === 1, 409, "UNDO_CONFLICT", "Undo conflict");
     await db.menuStock.upsert({ where: { menuId }, create: { menuId, readyCount: 1 }, update: { readyCount: { increment: 1 } } });
     await recalcAndPersistOrderStatus(db, undo.orderId, true);

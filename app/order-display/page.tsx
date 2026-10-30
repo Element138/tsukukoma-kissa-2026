@@ -8,6 +8,7 @@ import { useSession } from "@/components/use-session";
 import { useWakeLock } from "@/components/use-wake-lock";
 import { useToast } from "@/components/toast";
 import { ORDER_AGE_MINUTES } from "@/lib/order-age";
+import { AbsentOrderPanel } from "@/components/absent-order-panel";
 import { canRefreshOrderDisplay, ORDER_DISPLAY_PAGE_REFRESH_MS, readOrderDisplayResume } from "@/lib/client/order-display-refresh";
 
 type DisplayOrder = {
@@ -25,6 +26,7 @@ type OrderDisplayPayload = {
   calls: Array<Pick<DisplayOrder, "id" | "orderNo" | "createdAt"> & { callCount: number }>;
   readyOrders: DisplayOrder[];
   unreadyOrders: DisplayOrder[];
+  ghostOrders: DisplayOrder[];
 };
 
 type OrderDisplaySettings = {
@@ -227,6 +229,7 @@ export default function OrderDisplayPage() {
   useWakeLock(Boolean(session));
   const [readyOrders, setReadyOrders] = useState<DisplayOrder[]>([]);
   const [unreadyOrders, setUnreadyOrders] = useState<DisplayOrder[]>([]);
+  const [ghostOrders, setGhostOrders] = useState<DisplayOrder[]>([]);
   const [settings, setSettings] = useState<OrderDisplaySettings>({
     orderDisplayMarqueeText: "",
     orderDisplayMarqueeSpeedSeconds: 24,
@@ -323,6 +326,7 @@ export default function OrderDisplayPage() {
     callCursorRef.current = payload.callCursor;
     setReadyOrders(payload.readyOrders);
     setUnreadyOrders(payload.unreadyOrders);
+    setGhostOrders(payload.ghostOrders ?? []);
   };
 
   const reload = async () => {
@@ -435,7 +439,7 @@ export default function OrderDisplayPage() {
 
   const hasReady = readyOrders.length > 0;
   const hasUnready = unreadyOrders.length > 0;
-  const hasOrders = hasReady || hasUnready;
+  const hasOrders = hasReady || hasUnready || ghostOrders.length > 0;
   const readyMode = readyOrders.length <= 4 ? "featured" : "tiled";
   const orderedReady = useMemo(
     () => [...readyOrders].sort((a, b) => a.orderNo - b.orderNo),
@@ -644,6 +648,7 @@ export default function OrderDisplayPage() {
         <section
           className={[
             "order-display-panel order-display-panel-unready",
+            ghostOrders.length ? "has-ghost-orders" : "",
             showUnreadyBird ? "has-bird" : "no-bird",
           ].join(" ")}
         >
@@ -685,6 +690,7 @@ export default function OrderDisplayPage() {
               調理中の注文はありません
             </div>
           )}
+          <AbsentOrderPanel orders={ghostOrders} />
         </section>
 
         <section className="order-display-panel order-display-panel-ready">

@@ -14,7 +14,7 @@ export async function serveDineInItem(db: DbClient, params: { actorId: string; o
   await db.$queryRaw`SELECT id FROM "Order" WHERE id = ${initial.orderId} FOR UPDATE`;
   await resetExpiredReadyStock(db, [initial.menuId]);
   const item = await db.orderItem.findUniqueOrThrow({ where: { id: params.orderItemId }, include: { order: true } });
-  assert(item.status === "QUEUED", 409, "ITEM_CONFLICT", "Item state changed");
+  assert(item.status === "QUEUED" || item.status === "GHOSTED", 409, "ITEM_CONFLICT", "Item state changed");
   assert(item.order.confirmedAt && !["FAILED", "CANCELED", "COMPLETED"].includes(item.order.orderStatus), 409, "ORDER_FAILED", "Order unavailable");
   const lastServed = await db.orderItem.findFirst({ where: { orderId: item.orderId, status: "SERVED" }, orderBy: { servedAt: "desc" } });
   const lastCallAt = item.order.lastCalledAt ?? (await db.orderCall.findFirst({ where: { orderId: item.orderId }, orderBy: { id: "desc" } }))?.calledAt ?? null;
@@ -48,14 +48,14 @@ export async function serveCounterOrder(db: DbClient, params: BulkServeInput) {
     assert(duplicate.orderId === params.orderId && (duplicate.beforeJson as {requestSignature?: string})?.requestSignature === requestSignature, 409, "IDEMPOTENCY_CONFLICT", "再送された提供操作の内容が一致しません");
     return { ...(duplicate.afterJson as { orderId: string; servedItemCount: number; partial: boolean }), alreadyProcessed: true };
   }
-  const initial = await db.orderItem.findMany({ where: { orderId: params.orderId, status: "QUEUED" }, orderBy: { id: "asc" } });
+  const initial = await db.orderItem.findMany({ where: { orderId: params.orderId }, orderBy: { id: "asc" } });
   const menuIds = [...new Set(initial.map(item=>item.menuId))].sort();
   for (const menuId of menuIds) await db.$queryRaw`SELECT id FROM "Menu" WHERE id = ${menuId} FOR UPDATE`;
   await db.$queryRaw`SELECT id FROM "Order" WHERE id = ${params.orderId} FOR UPDATE`;
   await resetExpiredReadyStock(db, menuIds);
   const order = await db.order.findUnique({ where: { id: params.orderId }, include: { items: { orderBy: { id: "asc" } } } });
   assert(order?.confirmedAt && !["FAILED", "CANCELED", "COMPLETED"].includes(order.orderStatus), 409, "ORDER_FAILED", "提供できないオーダーです");
-  assert(order.items.filter(item=>item.status === "QUEUED").every(item=>menuIds.includes(item.menuId)), 409, "STOCK_CHANGED", "注文内容が変わりました。更新後にもう一度確認してください");
+  assert(order.items.filter(item=>item.status === "QUEUED" || item.status === "GHOSTED").every(item=>menuIds.includes(item.menuId)), 409, "STOCK_CHANGED", "注文内容が変わりました。更新後にもう一度確認してください");
   const stock = await db.menuStock.findMany({ where: { menuId: { in: menuIds } } });
   const pool = new Map(stock.map(s=>[s.menuId,s.readyCount]));
   const plan = counterServingPlan(order.items,pool);

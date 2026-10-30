@@ -4,7 +4,7 @@ type Group = { name: string; count: number };
 export type CounterServingPlan = { menuId: string; name: string; waitingCount: number; servableCount: number };
 export function counterServingPlan(items: Item[], stock: ReadonlyMap<string, number>): CounterServingPlan[] {
   const groups = new Map<string, CounterServingPlan>();
-  for (const item of items) if (item.status === "QUEUED") {
+  for (const item of items) if (item.status === "QUEUED" || item.status === "GHOSTED") {
     const group = groups.get(item.menuId) ?? { menuId: item.menuId, name: item.itemNameSnapshot, waitingCount: 0, servableCount: 0 };
     group.waitingCount++; groups.set(item.menuId, group);
   }
@@ -15,7 +15,7 @@ export function partialServingMessage(plan: CounterServingPlan[]) {
   return plan.filter(group=>group.servableCount < group.waitingCount).map(group=>`${group.name}は調理済の数が足りないため、${group.waitingCount}個のうち${group.servableCount}個のみ提供済にします。`).join("\n");
 }
 
-// Demand includes every unserved item, even when its menu has no ready stock.
+// Active demand excludes absent items, even when their menu has ready stock.
 export function projectCounterStock(
   menus: Array<{ id: string; name: string; shortName: string | null; isActive: boolean }>,
   stocks: Array<{ menuId: string; readyCount: number }>,
@@ -40,10 +40,11 @@ export function projectCounterItems(items: Item[], stock: ReadonlyMap<string, nu
   const servedItemGroups: Group[] = [];
   for (const item of items) {
     const count = remaining.get(item.menuId) ?? 0;
-    if (item.status === "QUEUED" && count > 0) {
+    const unserved = item.status === "QUEUED" || item.status === "GHOSTED";
+    if (unserved && count > 0) {
       readyItems.push({ id: item.id, name: item.itemNameSnapshot });
       remaining.set(item.menuId, count - 1);
-    } else if (item.status === "QUEUED" || item.status === "SERVED") {
+    } else if (unserved || item.status === "SERVED") {
       const groups = item.status === "SERVED" ? servedItemGroups : unreadyItemGroups;
       const group = groups.find(g => g.name === item.itemNameSnapshot);
       if (group) group.count++;

@@ -13,6 +13,7 @@ export async function updateOrderCall(db: Prisma.TransactionClient, params: {
   await db.$queryRaw`SELECT id FROM "Order" WHERE id = ${params.orderId} FOR UPDATE`;
   const order = await db.order.findUnique({ where: { id: params.orderId } });
   assert(order?.confirmedAt && !["FAILED", "CANCELED"].includes(order.orderStatus), 409, "ORDER_FAILED", "呼び出しできないオーダーです");
+  assert(!order.ghostedAt, 409, "ORDER_GHOSTED", "不在注文は呼び出せません");
   const duplicate = await db.auditLog.findFirst({ where: {
     actorId: params.actorId,
     actionType: { in: ["ORDER_CALLED", "ORDER_CALL_CANCELED"] },

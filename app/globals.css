@@ -1644,6 +1644,36 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   border: 1px solid rgba(15, 23, 42, 0.12);
 }
 
+.order-display-panel-unready.has-ghost-orders {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.order-display-absent {
+  border-top: 1px solid var(--line);
+  padding: clamp(12px, 2vh, 24px) clamp(16px, 2vw, 30px);
+  color: #64748b;
+  background: #f1f5f9;
+}
+
+.order-display-absent h2 {
+  margin: 0 0 .35em;
+  font-size: clamp(18px, 1.7vw, 30px);
+}
+
+.order-display-absent-viewport {
+  max-height: 14vh;
+  overflow: hidden;
+}
+
+.order-display-absent-numbers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .2em .65em;
+  font-size: clamp(24px, 2.5vw, 48px);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
 .order-display-panel-ready {
   color: #0f172a;
   background:

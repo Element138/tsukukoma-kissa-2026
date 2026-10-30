@@ -42,6 +42,7 @@ type OrderRow = {
   createdAt: string;
   confirmedAt: string | null;
   lastCalledAt: string | null;
+  ghostedAt: string | null;
   completedAt: string | null;
   fulfillmentType: "DINE_IN" | "TAKEOUT";
   tableNo: number | null;
@@ -721,7 +722,7 @@ export default function OrderBookPage() {
                   )}
                   {order.confirmedAt && ["PAID","SKIPPED"].includes(order.paymentStatus) && !["COMPLETED","FAILED","CANCELED"].includes(order.orderStatus) && order.items.length>0 && order.items.every(item=>item.status!=="CANCELED") && <button type="button" className="ghost-btn" disabled={closing} onClick={()=>void manualClose(order)}>手動完了</button>}
                   {session.actor.actorType === "WAITER" && order.confirmedAt && !["FAILED", "CANCELED"].includes(order.orderStatus) && (
-                    <button type="button" className="order-call-btn" aria-pressed={Boolean(order.lastCalledAt)} onClick={async () => {
+                    <button type="button" className="order-call-btn" disabled={Boolean(order.ghostedAt)} aria-pressed={Boolean(order.lastCalledAt)} onClick={async () => {
                       const cancel = Boolean(order.lastCalledAt);
                       if (!window.confirm(`オーダー #${order.orderNo} ${cancel ? "の呼び出しを解除しますか？" : "を呼び出しますか？"}`)) return;
                       try {
@@ -731,7 +732,7 @@ export default function OrderBookPage() {
                       } catch (e) {
                         notify({ level: "error", message: e instanceof Error ? e.message : "呼び出しに失敗しました" });
                       }
-                    }}>{order.lastCalledAt ? "呼び出し解除" : "呼び出す"}</button>
+                    }}>{order.ghostedAt ? "不在" : order.lastCalledAt ? "呼び出し解除" : "呼び出す"}</button>
                   )}
                   <button
                     type="button"
