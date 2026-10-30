@@ -5,7 +5,6 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -143,7 +142,8 @@ export function ReceiptPrintDialog({
       }}
     >
       <DialogContent className="receipt-print-dialog">
-        <DialogHeader className="receipt-print-header">
+        <DialogHeader className={`receipt-print-header${target?.refundId ? " receipt-print-header-refund" : ""}`}>
+          {target?.refundId && <span className="receipt-print-refund-badge">返金</span>}
           <DialogTitle>{target?.refundId ? "返金レシート印刷" : "レシート印刷"}</DialogTitle>
           <DialogDescription>
             注文 #{target?.orderNo ?? "-"} の用紙サイズを選択してください。
@@ -160,15 +160,10 @@ export function ReceiptPrintDialog({
           ) : null}
 
           <p className="receipt-print-note">
-            印刷しない場合は閉じて注文画面へ戻れます。再印刷はオーダーブックから行えます。
+            再印刷はオーダーブックから行えます。
           </p>
 
-          <DialogFooter>
-            {additionalAction}
-            <DialogClose asChild>
-              <Button type="button" variant="outline">印刷せず閉じる</Button>
-            </DialogClose>
-          </DialogFooter>
+          {additionalAction ? <DialogFooter>{additionalAction}</DialogFooter> : null}
         </div>
       </DialogContent>
     </Dialog>
