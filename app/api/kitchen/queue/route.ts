@@ -55,6 +55,7 @@ export async function GET(req: NextRequest) {
           menuId: { in: menuIds },
           status: "QUEUED",
           order: {
+            ghostedAt: null,
             confirmedAt: { not: null },
             orderStatus: { notIn: ["COMPLETED", "FAILED", "CANCELED"] },
           },

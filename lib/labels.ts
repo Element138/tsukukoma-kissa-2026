@@ -44,6 +44,7 @@ export const ORDER_STATUS_LABEL: Record<string, string> = {
 
 export const ORDER_ITEM_STATUS_LABEL: Record<string, string> = {
   QUEUED: "未提供",
+  GHOSTED: "不在",
   READY: "提供待ち",
   SERVED: "提供済み",
   CANCELED: "取消",

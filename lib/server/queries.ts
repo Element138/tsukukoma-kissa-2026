@@ -58,6 +58,7 @@ export async function listQueuedItemsOnInactiveKitchens(db: PrismaClient | Prism
         }
       ],
       order: {
+        ghostedAt: null,
         orderStatus: {
           notIn: ["COMPLETED", "FAILED", "CANCELED"]
         }

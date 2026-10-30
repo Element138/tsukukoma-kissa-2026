@@ -11,6 +11,6 @@ export function canCancelCashOrder(order: {
     Boolean(order.confirmedAt) &&
     ["PREPARING", "AWAITING_SERVING"].includes(order.orderStatus) &&
     order.items.length > 0 &&
-    order.items.every(item => item.status === "QUEUED" || item.status === "READY")
+    order.items.every(item => item.status === "QUEUED" || item.status === "READY" || item.status === "GHOSTED")
   );
 }

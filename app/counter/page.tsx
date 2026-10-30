@@ -22,6 +22,7 @@ type CounterOrder = {
   fulfillmentType: "DINE_IN" | "TAKEOUT";
   specialNote: string | null;
   lastCalledAt: string | null;
+  ghostedAt: string | null;
   readyItems: Array<{ id: string; name: string }>;
   servedItemGroups: Array<{ name: string; count: number }>;
   unreadyItemGroups: Array<{ name: string; count: number }>;
@@ -33,6 +34,8 @@ export default function CounterPage() {
   const { notify } = useToast();
   useWakeLock(Boolean(session));
   const [orders, setOrders] = useState<CounterOrder[]>([]);
+  const [ghostOrders, setGhostOrders] = useState<CounterOrder[]>([]);
+  const [showGhostOrders, setShowGhostOrders] = useState(false);
   const [stock, setStock] = useState<Stock[]>([]);
   const footerRef = useRef<HTMLDivElement>(null);
   const [footerHeight, setFooterHeight] = useState(110);
@@ -48,9 +51,9 @@ export default function CounterPage() {
     reloadInFlight.current = true;
     const requestDay=tokyoDateKey();
     try {
-      const data = await apiFetch<{ orders: CounterOrder[]; stock: Stock[] }>("/api/counter/targets");
+      const data = await apiFetch<{ orders: CounterOrder[]; ghostOrders: CounterOrder[]; stock: Stock[] }>("/api/counter/targets");
       if(requestDay!==tokyoDateKey()){reloadQueued.current=true;return;}
-      setOrders(data.orders); setStock(data.stock); setLoadedAt(Date.now());
+      setOrders(data.orders); setGhostOrders(data.ghostOrders ?? []); setStock(data.stock); setLoadedAt(Date.now());
     } catch (e) { notify({ level: "error", message: e instanceof Error ? e.message : "更新に失敗しました" }); }
     finally { reloadInFlight.current = false; if (reloadQueued.current) { reloadQueued.current = false; void reload(); } }
   };
@@ -86,6 +89,13 @@ export default function CounterPage() {
     void perform(async () => {
       await apiFetch("/api/counter/call", { method: "POST", body: JSON.stringify({ orderId: order.id, action: cancel ? "cancel" : "call", confirm: true, idempotencyKey: crypto.randomUUID() }) });
       notify({ level: "success", message: `オーダー #${order.orderNo} ${cancel ? "の呼び出しを解除しました" : "を呼び出しました"}` });
+    });
+  };
+  const markAbsent = (order: CounterOrder) => {
+    if (!window.confirm(`注文 #${order.orderNo} を不在注文にしますか？`)) return;
+    void perform(async () => {
+      await apiFetch("/api/counter/absent", { method: "POST", body: JSON.stringify({ orderId: order.id, confirm: true, idempotencyKey: crypto.randomUUID() }) });
+      notify({ level: "success", message: `注文 #${order.orderNo} を不在にしました` });
     });
   };
   const serve = (item: { id: string; name: string }) => {
@@ -125,6 +135,7 @@ export default function CounterPage() {
   };
   if (loading || !session) return <LoadingScreen />;
   const actionsDisabled = busy || !ageAudio.enabled;
+  const visibleOrders = showGhostOrders ? ghostOrders : orders;
   return <>
     <Dialog open={!ageAudio.enabled}>
       <DialogContent showCloseButton={false} className="w-[calc(100%-2rem)] max-w-sm" onEscapeKeyDown={event => event.preventDefault()} onInteractOutside={event => event.preventDefault()}>
@@ -139,19 +150,19 @@ export default function CounterPage() {
     <TerminalBanner actorId={session.actor.actorId} actorType={session.actor.actorType} actorLabel={session.actor.label} offlineActors={session.offlineActors} />
     <DashboardShell title="カウンター" hideHeader>
       <Card className="card counter-panel" style={{ marginBottom: footerHeight + 24 }}>
-        <div className="row between wrap" style={{ marginBottom: 10 }}><h2 className="section-title text-base font-semibold">カウンタービュー</h2><button type="button" className="ghost-btn" disabled={actionsDisabled} onClick={undo}>取り消し</button></div>
+        <div className="row between wrap" style={{ marginBottom: 10 }}><div className="row wrap"><button type="button" className="ghost-btn" aria-pressed={showGhostOrders} onClick={() => setShowGhostOrders(value => !value)}>{showGhostOrders ? "通常注文" : `不在注文${ghostOrders.length ? ` (${ghostOrders.length})` : ""}`}</button><h2 className="section-title text-base font-semibold">{showGhostOrders ? "不在注文" : "カウンタービュー"}</h2></div><button type="button" className="ghost-btn" disabled={actionsDisabled} onClick={undo}>取り消し</button></div>
         {ageAudio.speaking && <p role="status" className="muted text-sm mb-3">{ageAudio.speaking}</p>}
         {(["DINE_IN", "TAKEOUT"] as const).map(type => <section key={type}>
           <h3 style={{ margin: "14px 0 10px" }}>{type === "DINE_IN" ? "店内" : "持ち帰り"}</h3>
           <div className="counter-tile-grid">
-            {!orders.some(o => o.fulfillmentType === type) && <div className="muted">提供可能なオーダーはありません</div>}
-            {orders.filter(o => o.fulfillmentType === type).map(order => {
+            {!visibleOrders.some(o => o.fulfillmentType === type) && <div className="muted">{showGhostOrders ? "不在注文はありません" : "提供可能なオーダーはありません"}</div>}
+            {visibleOrders.filter(o => o.fulfillmentType === type).map(order => {
               const seconds = Math.max(0, Math.floor((tickNow - new Date(order.createdAt).getTime()) / 1000));
               const tone = orderAgeTone(seconds);
               return <article key={order.id} className={`counter-tile ${tone}`}>
                 <div className="counter-tile-head">
                   <div className="counter-major"><span className="counter-major-label">注文番号</span><span className="counter-major-value">{order.orderNo}</span></div>
-                  <button type="button" className="order-call-btn" aria-pressed={Boolean(order.lastCalledAt)} disabled={actionsDisabled} onClick={() => call(order)}>{order.lastCalledAt ? "呼び出し解除" : "呼び出す"}</button>
+                  {!order.ghostedAt && <div className="row wrap"><button type="button" className="ghost-btn" disabled={actionsDisabled} onClick={() => markAbsent(order)}>不在</button><button type="button" className="order-call-btn" aria-pressed={Boolean(order.lastCalledAt)} disabled={actionsDisabled} onClick={() => call(order)}>{order.lastCalledAt ? "呼び出し解除" : "呼び出す"}</button></div>}
                 </div>
                 <div className="muted counter-tile-elapsed">注文から {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")}</div>
                 <div className="list counter-ready-list">
@@ -159,7 +170,7 @@ export default function CounterPage() {
                     <span>{item.name}</span><button type="button" className="ghost-btn counter-serve-btn" disabled={actionsDisabled} onClick={() => serve(item)}>提供</button>
                   </div>)}
                   {order.servedItemGroups.map(group => <div key={`served-${group.name}`} className="list-item counter-item-muted" style={{ padding: "8px 10px" }}><span>{group.count > 1 ? `${group.count} × ` : ""}{group.name}</span><span className="badge served">提供済</span></div>)}
-                  {order.unreadyItemGroups.map(group => <div key={`unready-${group.name}`} className="list-item counter-item-muted" style={{ padding: "8px 10px" }}><span>{group.count > 1 ? `${group.count} × ` : ""}{group.name}</span><span className="badge queued">調理中</span></div>)}
+                  {order.unreadyItemGroups.map(group => <div key={`unready-${group.name}`} className="list-item counter-item-muted" style={{ padding: "8px 10px" }}><span>{group.count > 1 ? `${group.count} × ` : ""}{group.name}</span><span className="badge queued">{order.ghostedAt ? "不在" : "調理中"}</span></div>)}
                 </div>
                 {order.specialNote && <div className="notice" style={{ marginTop: 8 }}>{order.specialNote}</div>}
                 {order.readyItems.length > 1 && order.servingPlan && <button type="button" className="counter-serve-all" disabled={actionsDisabled} onClick={()=>serveAll(order)}>全て提供</button>}

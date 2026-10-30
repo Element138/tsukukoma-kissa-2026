@@ -55,6 +55,7 @@ enum OrderStatus {
 enum OrderItemStatus {
   QUEUED
   READY
+  GHOSTED
   SERVED
   CANCELED
 }
@@ -209,6 +210,7 @@ model Order {
   idempotencyKey         String?               @unique
   confirmedAt            DateTime?
   lastCalledAt           DateTime?
+  ghostedAt              DateTime?
   calls                  OrderCall[]
   canceledAt             DateTime?
   fulfillmentType        FulfillmentType
