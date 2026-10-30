@@ -653,7 +653,7 @@ export default function OrderDisplayPage() {
           ].join(" ")}
         >
           <header className="order-display-panel-header">
-            <span>調理中です</span>
+            <span>未完了</span>
           </header>
           {hasUnready ? (
             <div
@@ -687,7 +687,7 @@ export default function OrderDisplayPage() {
             </div>
           ) : (
             <div className="order-display-panel-empty">
-              調理中の注文はありません
+              未完了の注文はありません
             </div>
           )}
           <AbsentOrderPanel orders={ghostOrders} />
