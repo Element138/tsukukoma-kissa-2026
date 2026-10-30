@@ -5,7 +5,6 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -20,7 +19,7 @@ import type {
   ReceiptPrintTarget,
 } from "@/lib/receipt/types";
 
-function NativePrintOption({ orderId, size }: { orderId: string; size: ReceiptPaperSize }) {
+function NativePrintOption({ orderId, size, refundId }: { orderId: string; size: ReceiptPaperSize; refundId?: string }) {
   const paper = RECEIPT_PAPER[size];
   const appName = size === "large" ? "TM Print Assistant" : "SII URL Print Agent";
   const [href, setHref] = useState<string | null>(null);
@@ -34,7 +33,7 @@ function NativePrintOption({ orderId, size }: { orderId: string; size: ReceiptPa
     setLaunched(false);
     async function prepare() {
       try {
-        const response = await fetch(receiptPdfPath(orderId, size), {
+        const response = await fetch(receiptPdfPath(orderId, size, refundId), {
           credentials: "same-origin", cache: "no-store", signal: controller.signal,
         });
         if (!response.ok) {
@@ -55,7 +54,7 @@ function NativePrintOption({ orderId, size }: { orderId: string; size: ReceiptPa
     }
     void prepare();
     return () => controller.abort();
-  }, [orderId, size, attempt]);
+  }, [orderId, size, refundId, attempt]);
 
   return (
     <div className="grid gap-2">
@@ -81,7 +80,7 @@ function NativePrintOption({ orderId, size }: { orderId: string; size: ReceiptPa
             : "初回はiPadとMP-B20をBluetoothでペアリングし、SII URL Print Agentでプリンターを選択してください。印刷後は紙を手で切り取ります。")}
       </p>
       {error ? <Button variant="outline" onClick={() => setAttempt(value => value + 1)}>再試行</Button> : null}
-      <a className="text-sm underline" href={receiptPdfPath(orderId, size)} target="_blank" rel="noopener noreferrer">PDFをプレビュー（{size === "large" ? "大" : "小"}）</a>
+      <a className="text-sm underline" href={receiptPdfPath(orderId, size, refundId)} target="_blank" rel="noopener noreferrer">PDFをプレビュー（{size === "large" ? "大" : "小"}）</a>
     </div>
   );
 }
@@ -89,9 +88,11 @@ function NativePrintOption({ orderId, size }: { orderId: string; size: ReceiptPa
 function PrintOption({
   orderId,
   size,
+  refundId,
 }: {
   orderId: string;
   size: ReceiptPaperSize;
+  refundId?: string;
 }) {
   const paper = RECEIPT_PAPER[size];
   const [appleMobile, setAppleMobile] = useState<boolean | null>(null);
@@ -101,12 +102,12 @@ function PrintOption({
   if (appleMobile === null) {
     return <Button size="lg" className="receipt-print-option" disabled>{paper.label}を準備中…</Button>;
   }
-  if (appleMobile) return <NativePrintOption key={`${orderId}-${size}`} orderId={orderId} size={size} />;
+  if (appleMobile) return <NativePrintOption key={`${orderId}-${refundId ?? "sale"}-${size}`} orderId={orderId} size={size} refundId={refundId} />;
 
   return (
     <Button asChild size="lg" className="receipt-print-option">
       <a
-        href={receiptPdfPath(orderId, size)}
+        href={receiptPdfPath(orderId, size, refundId)}
         target="_blank"
         rel="noopener noreferrer"
       >
@@ -141,8 +142,8 @@ export function ReceiptPrintDialog({
       }}
     >
       <DialogContent className="receipt-print-dialog">
-        <DialogHeader className="receipt-print-header">
-          <DialogTitle>レシート印刷</DialogTitle>
+        <DialogHeader className={`receipt-print-header${target?.refundId ? " receipt-print-header-refund" : ""}`}>
+          <DialogTitle>{target?.refundId ? "返金レシート印刷" : "レシート印刷"}</DialogTitle>
           <DialogDescription>
             注文 #{target?.orderNo ?? "-"} の用紙サイズを選択してください。
             iPad/iPhoneでは各プリンター用アプリ、PCではPDFを開きます。
@@ -152,21 +153,16 @@ export function ReceiptPrintDialog({
         <div className="receipt-print-body">
           {target ? (
             <div className="receipt-print-options">
-              <PrintOption orderId={target.id} size="large" />
-              <PrintOption orderId={target.id} size="small" />
+              <PrintOption orderId={target.id} refundId={target.refundId} size="large" />
+              <PrintOption orderId={target.id} refundId={target.refundId} size="small" />
             </div>
           ) : null}
 
           <p className="receipt-print-note">
-            印刷しない場合は閉じて注文画面へ戻れます。再印刷はオーダーブックから行えます。
+            再印刷はオーダーブックから行えます。
           </p>
 
-          <DialogFooter>
-            {additionalAction}
-            <DialogClose asChild>
-              <Button type="button" variant="outline">印刷せず閉じる</Button>
-            </DialogClose>
-          </DialogFooter>
+          {additionalAction ? <DialogFooter>{additionalAction}</DialogFooter> : null}
         </div>
       </DialogContent>
     </Dialog>

@@ -51,6 +51,7 @@ async function handle(req: NextRequest) {
     const incidents = await prisma.paymentIncident.findMany({
       where: {
         dismissedAt: null,
+        order: { createdByActorId: actor.actorId },
       },
       select: {
         id: true,

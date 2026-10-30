@@ -8,7 +8,7 @@ export function CashierPhotoViewer({ orderId, status }: { orderId: string; statu
   const [url, setUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  if (!status) return null;
+  if (!status) return <p className="mt-3 text-sm text-slate-500">会計者画像：保存なし</p>;
   if (status === "WAIVED") return <p className="mt-3 text-sm text-slate-500">会計者画像：保存なし（管理者承認）</p>;
   return <div className="mt-3">
     <Button variant="outline" size="sm" disabled={busy} onClick={async () => {

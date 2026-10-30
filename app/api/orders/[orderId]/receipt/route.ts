@@ -15,6 +15,7 @@ export const maxDuration = 60;
 
 const querySchema = z.object({
   size: z.enum(["large", "small"]).default("large"),
+  refundId: z.string().min(1).max(128).optional(),
 });
 
 const fontBytesPromise = Promise.all([
@@ -98,10 +99,13 @@ export async function GET(
     if (!order) {
       throw new AppError(404, "ORDER_NOT_FOUND", "Order not found");
     }
+    const refund = query.refundId ? await prisma.orderRefund.findFirst({ where: { id: query.refundId, orderId }, include: { items: true } }) : null;
+    if(query.refundId && !refund) throw new AppError(404,"REFUND_NOT_FOUND","返金記録が見つかりません");
     if (
+      !refund && (
       (order.paymentStatus !== "PAID" && order.paymentStatus !== "SKIPPED") ||
       order.orderStatus === "FAILED" ||
-      order.orderStatus === "CANCELED"
+      order.orderStatus === "CANCELED")
     ) {
       throw new AppError(
         409,
@@ -121,19 +125,20 @@ export async function GET(
       data: {
         orderNo: order.orderNo,
         transactionAt: order.confirmedAt ?? order.createdAt,
+        ...(refund ? { isRefund:true, refundConfirmedAt:refund.confirmedAt } : {}),
         fulfillmentType: order.fulfillmentType,
         tableNo: order.tableNo,
-        paymentMethod: order.paymentMethod,
+        paymentMethod: refund ? "CASH" : order.paymentMethod,
         paymentStatus: order.paymentStatus,
-        totalPriceJpy: order.totalPriceJpy,
-        items: bundleOrderItems(order.items),
+        totalPriceJpy: refund ? -refund.amountJpy : order.totalPriceJpy,
+        items: bundleOrderItems(refund ? refund.items.map(item=>({itemNameSnapshot:item.name,unitPriceJpy:-item.unitPriceJpy})) : order.items),
       },
     });
 
     return new Response(Buffer.from(pdfBytes), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="receipt-${order.orderNo}-${query.size}.pdf"`,
+        "Content-Disposition": `inline; filename="${refund ? "refund" : "receipt"}-${order.orderNo}-${query.size}.pdf"`,
         "Cache-Control": "private, no-store, max-age=0",
         "X-Content-Type-Options": "nosniff",
       },

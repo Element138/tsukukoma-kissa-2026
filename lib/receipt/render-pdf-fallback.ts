@@ -27,7 +27,7 @@ type RuleCommand = {
 type LayoutCommand = TextCommand | RuleCommand | { kind: "logo"; top: number; width: number; height: number } | { kind: "badge"; top: number; text: string; width: number; height: number; inverted: boolean; size: number; align?: "right"; fontWeight?: FontWeight };
 
 function formatYen(value: number) {
-  return `¥${value.toLocaleString("ja-JP")}`;
+  return `${value < 0 ? "-" : ""}¥${Math.abs(value).toLocaleString("ja-JP")}`;
 }
 
 function wrapText(
@@ -233,7 +233,9 @@ export async function renderReceiptPdfFallback(params: {
   const headerX = logoWidth + mmToPoints(3);
   const headerWidth = contentWidth - headerX;
   const badgeSize = size === "small" ? 10 : 12;
-  if (data.fulfillmentType === "TAKEOUT") {
+  if (data.isRefund) {
+    commands.push({kind:"badge",top:cursor,text:"返金",width:headerWidth,height:badgeSize*1.8,inverted:true,size:badgeSize,align:"right"});
+  } else if (data.fulfillmentType === "TAKEOUT") {
     commands.push({ kind: "badge", top: cursor, text: "持ち帰り", width: headerWidth, height: badgeSize * 1.8, inverted: true, size: badgeSize, align: "right" });
   } else if (data.fulfillmentType === "DINE_IN") {
     commands.push({ kind: "badge", top: cursor, text: "店内", width: headerWidth, height: badgeSize * 1.8, inverted: false, size: badgeSize, align: "right" });
@@ -245,10 +247,11 @@ export async function renderReceiptPdfFallback(params: {
     addRow("テーブル", String(data.tableNo));
   }
   addRow("会計日時", formatTokyo(data.transactionAt));
-  addRow("決済", labelOf(PAYMENT_METHOD_LABEL, data.paymentMethod));
+  if(data.refundConfirmedAt) addRow("返金確定日時",formatTokyo(data.refundConfirmedAt));
+  addRow(data.isRefund ? "返金方法" : "決済", labelOf(PAYMENT_METHOD_LABEL, data.paymentMethod));
   addRule();
 
-  addText("ご注文内容", { fontWeight: "bold" });
+  addText(data.isRefund ? "ご返金内容" : "ご注文内容", { fontWeight: "bold" });
   cursor += mmToPoints(0.8);
 
   for (const item of data.items) {
@@ -283,7 +286,7 @@ export async function renderReceiptPdfFallback(params: {
     fontWeight: "bold",
     align: "center",
   });
-  addText("受け取り時にお見せください", {
+  if(!data.isRefund) addText("受け取り時にお見せください", {
     size: bodySize * 0.82,
     align: "center",
   });

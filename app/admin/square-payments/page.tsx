@@ -42,7 +42,7 @@ function ReconciliationCard({ order, onResult }: { order: PendingOrder; onResult
     } catch (error) { setMessage(error instanceof Error ? error.message : "照合に失敗しました"); }
     finally { setAction(null); }
   };
-  const disabled = busy || !attested || reason.trim().length < 10;
+  const disabled = busy || !attested || reason.trim().length === 0;
   return <Card className="overflow-hidden border-slate-200 bg-white/95">
     <CardHeader className="border-b border-slate-100 bg-slate-50/70 p-5 sm:px-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -63,7 +63,7 @@ function ReconciliationCard({ order, onResult }: { order: PendingOrder; onResult
       </details>
       <label className="block space-y-2 text-sm font-medium"><span>確認内容</span>
         <textarea value={reason} onChange={event => setReason(event.target.value)} maxLength={500} disabled={busy} rows={2}
-          placeholder="確認した店舗・金額・取引時刻など（10文字以上）" className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-normal shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50" />
+          placeholder="確認した店舗・金額・取引時刻など" className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-normal shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50" />
       </label>
       <label className="flex cursor-pointer items-start gap-2.5 rounded-lg bg-slate-50 p-3 text-sm leading-relaxed">
         <input type="checkbox" className="mt-1 h-4 w-4 shrink-0 accent-teal-700" checked={attested} disabled={busy} onChange={event => setAttested(event.target.checked)} />
@@ -80,7 +80,7 @@ function ReconciliationCard({ order, onResult }: { order: PendingOrder; onResult
 }
 
 export default function SquarePaymentsPage() {
-  const { loading, session } = useSession(["ADMIN"]);
+  const { loading, session } = useSession(["ADMIN", "POS"]);
   const { notify } = useToast();
   const [orders, setOrders] = useState<PendingOrder[]>([]);
   const [incidents, setIncidents] = useState<Incident[]>([]);
@@ -112,7 +112,7 @@ export default function SquarePaymentsPage() {
   return <><TerminalBanner actorId={session.actor.actorId} actorType={session.actor.actorType} actorLabel={session.actor.label} offlineActors={session.offlineActors} />
     <DashboardShell className="admin-shell square-review-shell" title="Square決済の照合"
       actions={<Button variant="outline" size="sm" disabled={refreshing} onClick={() => void reload()} className="gap-2"><RefreshCw className="h-4 w-4" aria-hidden="true" />更新</Button>}>
-      <Link href="/admin" className="mb-5 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" aria-hidden="true" />管理者パネル</Link>
+      <Link href={session.actor.actorType==="POS"?"/pos":"/admin"} className="mb-5 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" aria-hidden="true" />{session.actor.actorType==="POS"?"POSに戻る":"管理者パネル"}</Link>
       {error && <p role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</p>}
       {otherIncidents.length > 0 && <Card className="mb-5 border-amber-200 bg-amber-50/80"><CardHeader><CardTitle className="text-base">確認が必要な取引</CardTitle></CardHeader><CardContent className="space-y-3">
         {otherIncidents.map(incident => <div key={incident.id} className="text-sm leading-relaxed"><strong>注文 #{incident.order.orderNo}</strong><p className="mt-1 text-amber-950">{incident.messageJa}</p></div>)}

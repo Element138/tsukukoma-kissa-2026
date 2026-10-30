@@ -8,7 +8,7 @@ import { createSquareAppSwitchRequest, squareConfig } from "@/lib/domain/square"
 import { writeAuditLog } from "@/lib/domain/audit";
 import { parseJson } from "@/lib/server/http";
 import { squareBrowserFailure } from "@/lib/server/square-browser";
-import { attachCashierPhoto, requirePhotoStorageAvailable } from "@/lib/domain/cashier-photos";
+import { attachCashierPhoto, attachCashierPhotoBestEffort, requirePhotoStorageAvailable } from "@/lib/domain/cashier-photos";
 
 export async function POST(req: NextRequest) {
   const isJson = req.headers.get("content-type")?.includes("application/json");
@@ -16,8 +16,9 @@ export async function POST(req: NextRequest) {
     const actor = await requireSession(req, { actorTypes: ["POS"] });
     squareConfig(req.nextUrl.origin);
     assert(req.headers.get("origin") === req.nextUrl.origin, 403, "FORBIDDEN", "同一サイトから操作してください");
-    const body = isJson ? await parseJson(req, z.object({ orderId: z.string().min(1).max(128) })) : await req.formData();
+    const body = isJson ? await parseJson(req, z.object({ orderId: z.string().min(1).max(128), cashierPhotoBestEffort: z.boolean().optional() })) : await req.formData();
     const orderId = body instanceof FormData ? body.get("orderId") : body.orderId;
+    const bestEffortPhoto = body instanceof FormData ? body.get("cashierPhotoBestEffort") === "true" : body.cashierPhotoBestEffort === true;
     assert(typeof orderId === "string", 400, "ORDER_ID_REQUIRED", "注文IDが必要です");
     const deepLink = await prisma.$transaction(async tx => {
       await tx.$queryRaw`SELECT id FROM "Order" WHERE id = ${orderId} FOR UPDATE`;
@@ -25,9 +26,9 @@ export async function POST(req: NextRequest) {
       assert(attempt && attempt.order.createdByActorId === actor.actorId, 404, "ORDER_NOT_FOUND", "注文が見つかりません");
       assert(!attempt.launchedAt && !attempt.resolvedAt && attempt.order.paymentStatus === "AWAITING", 409,
         "SQUARE_ALREADY_LAUNCHED", "決済開始済みです。Squareアプリに手動で戻り、元の決済を確認してください。再決済しないでください");
-      await requirePhotoStorageAvailable(tx);
+      if (!bestEffortPhoto) await requirePhotoStorageAvailable(tx);
       assert(attempt.order.idempotencyKey, 409, "CASHIER_PHOTO_REQUIRED", "この注文の会計者画像を撮影できません");
-      await attachCashierPhoto(tx, { checkoutKey: attempt.order.idempotencyKey, actorId: actor.actorId, orderId });
+      await (bestEffortPhoto ? attachCashierPhotoBestEffort : attachCashierPhoto)(tx, { checkoutKey: attempt.order.idempotencyKey, actorId: actor.actorId, orderId });
       const link = createSquareAppSwitchRequest({
         orderId, orderNo: attempt.order.orderNo, amountJpy: attempt.order.totalPriceJpy,
         appId: attempt.appId, locationId: attempt.locationId, callbackUrl: attempt.callbackUrl, state: attempt.stateToken,

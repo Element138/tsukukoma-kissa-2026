@@ -20,6 +20,7 @@ export const orderCreateSchema = z
     ageRanges: z.array(z.string().min(1).max(32)).min(1),
     specialNote: z.string().max(500).optional(),
     paymentMethod: z.enum(["CASH", "SQUARE", "PAYMENT_SKIPPED"]),
+      cashierPhotoBestEffort: z.boolean().optional(),
     paymentSkipReasonType: z.enum(["TEST", "DEVICE_ERROR", "NETWORK_ERROR", "OTHER"]).nullable().optional(),
     paymentSkipReasonText: z.string().max(300).nullable().optional(),
     items: z.array(orderItemInputSchema).min(1).max(80),

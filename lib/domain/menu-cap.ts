@@ -134,10 +134,10 @@ export async function releaseMenuDailyCountsForOrder(db: DbClient, orderId: stri
     // Same lock order as reset: daily counter first, reservation second.
     await db.$queryRaw`SELECT "menuId" FROM "MenuDailyCount" WHERE "menuId" = ${reservation.menuId} AND "jstDate" = ${reservation.jstDate} FOR UPDATE`;
     const claimed = await db.orderMenuCapReservation.updateMany({
-      where: { orderId, menuId: reservation.menuId, releasedAt: null }, data: { releasedAt: new Date() },
+      where: { orderId, menuId: reservation.menuId, releasedAt: null }, data: { releasedAt: new Date(), releasedQuantity: reservation.quantity },
     });
     if (!claimed.count) continue;
-    await db.$executeRaw`UPDATE "MenuDailyCount" SET "count" = GREATEST(0, "count" - ${reservation.quantity}), "updatedAt" = CURRENT_TIMESTAMP
+    await db.$executeRaw`UPDATE "MenuDailyCount" SET "count" = GREATEST(0, "count" - ${reservation.quantity - (reservation.releasedQuantity ?? 0)}), "updatedAt" = CURRENT_TIMESTAMP
       WHERE "menuId" = ${reservation.menuId} AND "jstDate" = ${reservation.jstDate}`;
   }
 }

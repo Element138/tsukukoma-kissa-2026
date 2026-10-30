@@ -31,6 +31,8 @@ export async function GET(req: NextRequest) {
             select: {
               itemNameSnapshot: true,
               servedAt: true,
+              status: true,
+              unitPriceJpy: true,
             },
           },
         },
@@ -54,6 +56,7 @@ export async function GET(req: NextRequest) {
     }
     for (const order of orders) {
       for (const item of order.items) {
+        if(item.status === "CANCELED") continue;
         menuLabelSet.add(normalizeMenuLabel(item.itemNameSnapshot));
       }
     }
@@ -90,6 +93,7 @@ export async function GET(req: NextRequest) {
       const ageCounts = parseAgeRangesToCounts(order.ageRangesJson);
       const menuCounts = new Map<string, number>();
       for (const item of order.items) {
+        if(item.status === "CANCELED") continue;
         const label = normalizeMenuLabel(item.itemNameSnapshot);
         menuCounts.set(label, (menuCounts.get(label) ?? 0) + 1);
       }
@@ -117,8 +121,8 @@ export async function GET(req: NextRequest) {
           order.paymentMethod,
           order.paymentStatus,
           order.orderStatus,
-          order.totalPriceJpy,
-          order.items.length,
+          order.items.filter(item=>item.status!=="CANCELED").reduce((sum,item)=>sum+item.unitPriceJpy,0),
+          order.items.filter(item=>item.status!=="CANCELED").length,
           ...AGE_GROUPS.map((group) => ageCounts[group.key]),
           order.specialNote ?? "",
           ...menuColumns.map((menuLabel) => menuCounts.get(menuLabel) ?? 0),

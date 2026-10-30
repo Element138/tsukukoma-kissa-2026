@@ -48,6 +48,7 @@ enum OrderStatus {
   PREPARING
   AWAITING_SERVING
   COMPLETED
+  PARTIALLY_CANCELED
   FAILED
   CANCELED
 }
@@ -237,6 +238,7 @@ model Order {
   squareAttempt          SquarePaymentAttempt?
   capReservations        OrderMenuCapReservation[]
   cashierPhoto           CashierPhoto?
+  refunds                OrderRefund[]
 
   @@index([createdAt])
   @@index([orderStatus, createdAt])
@@ -249,6 +251,7 @@ model OrderMenuCapReservation {
   menuId String
   jstDate String @db.VarChar(10)
   quantity Int
+  releasedQuantity Int @default(0)
   releasedAt DateTime?
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
   menu Menu @relation(fields: [menuId], references: [id], onDelete: Cascade)
@@ -306,10 +309,37 @@ model OrderItem {
   menu                    Menu            @relation(fields: [menuId], references: [id])
   kitchenActor            Actor?          @relation("KitchenActorOrderItems", fields: [kitchenId], references: [id], onDelete: SetNull)
   servedBy                Actor?          @relation("OrderItemServedBy", fields: [servedByActorId], references: [id])
+  refundItem              OrderRefundItem?
 
   @@index([orderId, status])
   @@index([kitchenId, status])
   @@index([readyAt])
+}
+
+model OrderRefund {
+  id String @id @default(cuid())
+  orderId String
+  actorId String @db.VarChar(64)
+  idempotencyKey String @unique @db.VarChar(64)
+  requestHash String @db.VarChar(64)
+  reasonText String @db.VarChar(500)
+  amountJpy Int
+  confirmedAt DateTime @default(now())
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  items OrderRefundItem[]
+  @@index([orderId, confirmedAt])
+}
+
+model OrderRefundItem {
+  id String @id @default(cuid())
+  refundId String
+  orderItemId String @unique
+  name String
+  unitPriceJpy Int
+  previousStatus OrderItemStatus
+  refund OrderRefund @relation(fields: [refundId], references: [id], onDelete: Cascade)
+  orderItem OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  @@index([refundId])
 }
 
 model UndoOperation {

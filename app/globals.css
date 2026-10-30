@@ -3393,6 +3393,14 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   overflow-wrap: anywhere;
 }
 
+.receipt-print-header-refund {
+  border-left: 4px solid #be123c;
+  border-radius: 10px;
+  background: #fff1f2;
+  padding: 14px 52px 14px 14px;
+  color: #881337;
+}
+
 .receipt-print-body {
   min-width: 0;
   min-height: 0;
