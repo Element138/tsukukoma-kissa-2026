@@ -38,7 +38,8 @@ export default function CounterPage() {
   const [showGhostOrders, setShowGhostOrders] = useState(false);
   const [stock, setStock] = useState<Stock[]>([]);
   const footerRef = useRef<HTMLDivElement>(null);
-  const [footerHeight, setFooterHeight] = useState(110);
+  const [footerHeight, setFooterHeight] = useState(56);
+  const [stockExpanded, setStockExpanded] = useState(false);
   const [tickNow, setTickNow] = useState(Date.now());
   const [busy, setBusy] = useState(false);
   const [loadedAt, setLoadedAt] = useState(0);
@@ -150,7 +151,7 @@ export default function CounterPage() {
     <TerminalBanner actorId={session.actor.actorId} actorType={session.actor.actorType} actorLabel={session.actor.label} offlineActors={session.offlineActors} />
     <DashboardShell title="カウンター" hideHeader>
       <Card className="card counter-panel" style={{ marginBottom: footerHeight + 24 }}>
-        <div className="row between wrap" style={{ marginBottom: 10 }}><div className="row wrap"><button type="button" className="ghost-btn" aria-pressed={showGhostOrders} onClick={() => setShowGhostOrders(value => !value)}>{showGhostOrders ? "通常注文" : `不在注文${ghostOrders.length ? ` (${ghostOrders.length})` : ""}`}</button><h2 className="section-title text-base font-semibold">{showGhostOrders ? "不在注文" : "カウンタービュー"}</h2></div><button type="button" className="ghost-btn" disabled={actionsDisabled} onClick={undo}>取り消し</button></div>
+        <div className="row between wrap" style={{ marginBottom: 10 }}><div className="row wrap"><h2 className="section-title counter-panel-heading text-base font-semibold">{showGhostOrders ? "不在注文" : "注文"}</h2><button type="button" className="ghost-btn" aria-pressed={showGhostOrders} onClick={() => setShowGhostOrders(value => !value)}>{showGhostOrders ? "通常注文" : `不在注文${ghostOrders.length ? ` (${ghostOrders.length})` : ""}`}</button></div><button type="button" className="ghost-btn" disabled={actionsDisabled} onClick={undo}>取り消し</button></div>
         {ageAudio.speaking && <p role="status" className="muted text-sm mb-3">{ageAudio.speaking}</p>}
         {(["DINE_IN", "TAKEOUT"] as const).map(type => <section key={type}>
           <h3 style={{ margin: "14px 0 10px" }}>{type === "DINE_IN" ? "店内" : "持ち帰り"}</h3>
@@ -180,8 +181,14 @@ export default function CounterPage() {
         </section>)}
       </Card>
     </DashboardShell>
-    <div ref={footerRef} className="counter-stock-bar is-visible" aria-label="メニュー別の提供待ち数と調理済み数">
-      <strong>提供待ち / 調理済:</strong>{stock.map(s => <span key={s.menuId}>{s.name} <b>{s.waitingCount}/{s.count}</b>個</span>)}
+    <div ref={footerRef} className={`counter-stock-bar is-visible${stockExpanded ? " is-expanded" : ""}`} aria-label="メニュー別の提供待ち数と調理済み数">
+      <button type="button" className="ghost-btn counter-stock-toggle" aria-expanded={stockExpanded} aria-controls="counter-stock-details" onClick={() => setStockExpanded(value => !value)}>
+        <strong>提供待ち / 調理済</strong>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="m6 15 6-6 6 6" /></svg>
+      </button>
+      <div id="counter-stock-details" className="counter-stock-details" hidden={!stockExpanded}>
+        {stock.map(s => <span key={s.menuId}>{s.name} <b>{s.waitingCount}/{s.count}</b>個</span>)}
+      </div>
     </div>
   </>;
 }

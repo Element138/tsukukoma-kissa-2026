@@ -7,7 +7,7 @@ Served items, payments, prices and daily order caps are unchanged. Repeated
 requests are idempotent. Call and serving operations serialize with this action.
 
 The normal counter and kitchen demand exclude absent items. 不在注文, to the
-left of the counter heading, opens the separate list. That list retains single
+right of the counter heading, opens the separate list. That list retains single
 and bulk service from shared ready stock, and undo. Calls are unavailable both
 in the UI (including the order book) and the API. Absent orders remain visible
 in this list when stock is reduced or expires; they do not request replacement
@@ -17,6 +17,8 @@ items removes the order from the active absent list.
 The customer order display separates absent numbers from waiting and called
 orders in a compact ご不在 panel below the waiting list. Long absent lists scroll
 automatically. Counter age announcements also exclude absent orders.
+The counter's 提供待ち / 調理済 footer starts collapsed; its button expands or
+collapses the menu counts, and the order-list spacing tracks its current height.
 
 This requires the additive `20261030120000_absent_orders` migration. Preview
 builds do not apply migrations: the feature Preview uses the dedicated
