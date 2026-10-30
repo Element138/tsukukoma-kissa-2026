@@ -1,18 +1,19 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { apiFetch } from "@/lib/client";
 import { useToast } from "@/components/toast";
 import { Button } from "@/components/ui/button";
 import { useRealtimeSubscription } from "@/components/use-realtime-subscription";
+import { coalesceRefresh } from "@/lib/client/coalesce-refresh";
 
 export function PhotoStorageBanner() {
   const [state, setState] = useState<{ failed: boolean; ignoreActive: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
   const { notify } = useToast();
-  const reload = useCallback(async () => {
+  const reload = useMemo(() => coalesceRefresh(async () => {
     try { setState(await apiFetch("/api/admin/photo-storage", { retry: 1 })); } catch { /* Keep the last confirmed state. */ }
-  }, []);
+  }), []);
   useEffect(() => {
     void reload();
     const refresh = () => { if (document.visibilityState === "visible") void reload(); };

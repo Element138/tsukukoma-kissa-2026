@@ -71,11 +71,16 @@ export async function GET(req: NextRequest) {
       bounds.oldestId !== null &&
       initialCursor < bounds.oldestId - 1;
 
+    let cancelStream: (() => void) | undefined;
     const stream = new ReadableStream({
       start(controller) {
         const encoder = new TextEncoder();
         let closed = false;
-        let lastId = cursorTooOld ? bounds.latestId ?? initialCursor : initialCursor;
+        // A fresh subscriber already fetches a snapshot. Replaying the retained
+        // day of invalidations starts hundreds of duplicate API requests.
+        let lastId = initialCursor === 0 || cursorTooOld
+          ? bounds.latestId ?? initialCursor
+          : initialCursor;
         let pollBusy = false;
 
         const write = (chunk: string) => {
@@ -110,9 +115,9 @@ export async function GET(req: NextRequest) {
 
         write(`retry: ${RETRY_MS}\n\n`);
 
-        if (cursorTooOld) {
+        if (initialCursor === 0 || cursorTooOld) {
           for (const channel of channels) {
-            write(encodeSyntheticEvent(channel, "cursor_too_old"));
+            write(encodeSyntheticEvent(channel, cursorTooOld ? "cursor_too_old" : "stream_started"));
           }
         }
 
@@ -151,11 +156,12 @@ export async function GET(req: NextRequest) {
           clearTimeout(rotationTimer);
           req.signal.removeEventListener("abort", onAbort);
         };
+        cancelStream = cleanup;
 
         req.signal.addEventListener("abort", onAbort);
       },
       cancel() {
-        // noop: timers are cleaned in abort/rotation path above
+        cancelStream?.();
       }
     });
 
