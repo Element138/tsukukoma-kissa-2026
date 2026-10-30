@@ -225,10 +225,12 @@ export default function PosPage() {
   const [lastCashOrder, setLastCashOrder] = useState<{ id: string; orderNo: number; totalPriceJpy: number; canceled?: boolean } | null>(null);
   const notifiedIncidentIdsRef = useRef<Set<string>>(new Set());
 
-  const handleCashCanceled = () => {
-    setReceiptPrintTarget(null);
-    setLastCashOrder(previous => previous ? { ...previous, canceled: true } : null);
-    notify({ level: "success", message: "現金注文を取り消しました。必要な場合は新しく注文してください。" });
+  const handleCashCanceled = (target: ReceiptPrintTarget) => {
+    setReceiptPrintTarget(target);
+    void apiFetch<{order:{items:Array<{status:string}>}}>(`/api/orders/${target.id}/refunds`).then(({order}) => {
+      setLastCashOrder(previous => previous?.id === target.id ? { ...previous, canceled: order.items.every(item => item.status === "CANCELED") } : previous);
+    }).catch(() => undefined);
+    notify({ level: "success", message: "取消・現金返金を記録しました。" });
     void loadMenus().catch(() => undefined);
   };
 
@@ -832,7 +834,7 @@ export default function PosPage() {
             {incidents.length > 0 && (
               <div className="notice error" style={{ marginBottom: 12 }}>
                 決済異常通知あり: {incidents.length}
-                件（詳細はオーダーブック上部）
+                件 · <a href="/admin/square-payments" className="underline">決済の復旧・照合</a>
               </div>
             )}
 
@@ -1089,7 +1091,7 @@ export default function PosPage() {
                     } catch (e) { notify({ level: "error", message: e instanceof Error ? e.message : "決済状態を確認できません" }); }
                     finally { setBusy(false); }
                   }}>決済状態を確認</Button>
-                  <a href="/admin/square-payments">管理者による照合</a>
+                  <a href="/admin/square-payments">決済の復旧・照合</a>
 
                 </div>
               </div>

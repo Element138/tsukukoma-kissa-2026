@@ -393,7 +393,7 @@ export async function GET(req: NextRequest) {
         orderCount: validOrders.length,
         itemCount: menus.reduce((total, menu) => total + menu.count, 0),
         salesJpy: validOrders.reduce(
-          (total, order) => total + order.totalPriceJpy,
+          (total, order) => total + order.items.filter(item=>item.status!=="CANCELED").reduce((sum,item)=>sum+item.unitPriceJpy,0),
           0,
         ),
         failedOrCanceledCount: orders.filter(

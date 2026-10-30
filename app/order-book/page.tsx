@@ -31,7 +31,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CancelCashOrder } from "@/components/cancel-cash-order";
-import { canCancelCashOrder } from "@/lib/domain/cash-cancel-eligibility";
 import { ReceiptPrintDialog } from "@/components/receipt-print-dialog";
 import type { ReceiptPrintTarget } from "@/lib/receipt/types";
 
@@ -54,6 +53,7 @@ type OrderRow = {
   failureReasonType: string | null;
   failureReasonText: string | null;
   totalPriceJpy: number;
+  refunds: Array<{id:string;amountJpy:number;confirmedAt:string}>;
   specialNote: string | null;
   lastMutationVersion: number;
   items: Array<{
@@ -119,6 +119,7 @@ function orderStatusClass(orderStatus: string) {
     case "FAILED":
       return "order-status-failed";
     case "CANCELED":
+    case "PARTIALLY_CANCELED":
       return "order-status-canceled";
     default:
       return "";
@@ -132,6 +133,7 @@ function orderAgeClass(
 ) {
   if (
     orderStatus === "COMPLETED" ||
+    orderStatus === "PARTIALLY_CANCELED" ||
     orderStatus === "FAILED" ||
     orderStatus === "CANCELED"
   ) {
@@ -238,6 +240,7 @@ export default function OrderBookPage() {
   const [status, setStatus] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
   const [qOrderNo, setQOrderNo] = useState("");
+  const [qNote, setQNote] = useState("");
   const [selectedDate, setSelectedDate] = useState(() => tokyoDateKey());
   const [tickNow, setTickNow] = useState(Date.now());
   const [receiptPrintTarget, setReceiptPrintTarget] =
@@ -261,9 +264,9 @@ export default function OrderBookPage() {
       if (status) params.set("status", status);
       if (paymentMethod) params.set("paymentMethod", paymentMethod);
       if (qOrderNo) params.set("orderNo", qOrderNo);
+      if (qNote.trim()) params.set("note", qNote.trim());
       const range = tokyoDayRangeIso(selectedDate);
-      params.set("from", range.from);
-      params.set("to", range.to);
+      if (!qNote.trim()) { params.set("from", range.from); params.set("to", range.to); }
 
       const data = await apiFetch<{
         orders: OrderRow[];
@@ -299,7 +302,7 @@ export default function OrderBookPage() {
   useEffect(() => {
     if (!session) return;
     void reload();
-  }, [session, status, paymentMethod, qOrderNo, selectedDate]);
+  }, [session, status, paymentMethod, qOrderNo, qNote, selectedDate]);
 
   useEffect(() => {
     const timer = setInterval(() => setTickNow(Date.now()), 1000);
@@ -384,7 +387,7 @@ export default function OrderBookPage() {
         failureReason,
         bundledItems: bundleItems(order.items),
         elapsedLabel:
-          order.orderStatus === "COMPLETED"
+          ["COMPLETED","PARTIALLY_CANCELED"].includes(order.orderStatus)
             ? `注文確定時刻 ${confirmedLabel}`
             : order.orderStatus === "FAILED"
               ? `失敗時刻 ${failedLabel}`
@@ -448,6 +451,7 @@ export default function OrderBookPage() {
                 onChange={(e) => setQOrderNo(e.target.value)}
                 style={{ maxWidth: 120 }}
               />
+              <Input placeholder="備考（全期間）" aria-label="備考で検索" value={qNote} maxLength={500} onChange={e=>setQNote(e.target.value)} style={{maxWidth:260}} />
               <div style={{ maxWidth: 220, width: "100%" }}>
                 <Select
                   value={statusSelectValue}
@@ -466,13 +470,14 @@ export default function OrderBookPage() {
                     <SelectItem value="PREPARING">
                       {labelOf(ORDER_STATUS_LABEL, "PREPARING")}
                     </SelectItem>
+                    <SelectItem value="PARTIALLY_CANCELED">一部取消</SelectItem>
                     <SelectItem value="AWAITING_SERVING">
                       {labelOf(ORDER_STATUS_LABEL, "AWAITING_SERVING")}
                     </SelectItem>
                     <SelectItem value="COMPLETED">
                       {labelOf(ORDER_STATUS_LABEL, "COMPLETED")}
                     </SelectItem>
-                    <SelectItem value="CANCELED">取消</SelectItem>
+                    <SelectItem value="CANCELED">全部取消</SelectItem>
                     <SelectItem value="FAILED">
                       {labelOf(ORDER_STATUS_LABEL, "FAILED")}
                     </SelectItem>
@@ -512,7 +517,7 @@ export default function OrderBookPage() {
             <div className="row between wrap" style={{ marginBottom: 8 }}>
               <div>
                 <strong>メニュー別 日別集計</strong>
-                <div className="muted">{formatDateLabel(selectedDate)}</div>
+                <div className="muted">{qNote.trim() ? "全期間（備考検索）" : formatDateLabel(selectedDate)}</div>
               </div>
               <div className="order-book-day-switcher">
                 <button
@@ -713,14 +718,15 @@ export default function OrderBookPage() {
                 </div>
 
                 <div className="row wrap" style={{ marginTop: 10 }}>
-                  {canEditNote && canCancelCashOrder(order) && (
-                    <CancelCashOrder order={order} onCanceled={() => {
-                      setReceiptPrintTarget(null);
-                      notify({ level: "success", message: `注文 #${order.orderNo} を取り消しました` });
+                  {canEditNote && order.confirmedAt && order.paymentStatus==="PAID" && ["CASH","SQUARE"].includes(order.paymentMethod) && order.items.some(item=>item.status!=="CANCELED") && (
+                    <CancelCashOrder order={order} onCanceled={(target) => {
+                      setReceiptPrintTarget(target);
+                      notify({ level: "success", message: `注文 #${order.orderNo} の取消・現金返金を記録しました` });
                       void reload();
                     }} />
                   )}
-                  {order.confirmedAt && ["PAID","SKIPPED"].includes(order.paymentStatus) && !["COMPLETED","FAILED","CANCELED"].includes(order.orderStatus) && order.items.length>0 && order.items.every(item=>item.status!=="CANCELED") && <button type="button" className="ghost-btn" disabled={closing} onClick={()=>void manualClose(order)}>手動完了</button>}
+                  {order.refunds?.map(refund=><button key={refund.id} type="button" className="ghost-btn" onClick={()=>setReceiptPrintTarget({id:order.id,orderNo:order.orderNo,refundId:refund.id})}>返金レシート {fmtJpy(refund.amountJpy)} · {new Date(refund.confirmedAt).toLocaleTimeString("ja-JP",{timeZone:"Asia/Tokyo"})}</button>)}
+                  {order.confirmedAt && ["PAID","SKIPPED"].includes(order.paymentStatus) && !["COMPLETED","PARTIALLY_CANCELED","FAILED","CANCELED"].includes(order.orderStatus) && order.items.some(item=>!["SERVED","CANCELED"].includes(item.status)) && <button type="button" className="ghost-btn" disabled={closing} onClick={()=>void manualClose(order)}>手動完了</button>}
                   {session.actor.actorType === "WAITER" && order.confirmedAt && !["FAILED", "CANCELED"].includes(order.orderStatus) && (
                     <button type="button" className="order-call-btn" disabled={Boolean(order.ghostedAt)} aria-pressed={Boolean(order.lastCalledAt)} onClick={async () => {
                       const cancel = Boolean(order.lastCalledAt);

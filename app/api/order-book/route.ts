@@ -9,6 +9,7 @@ import { deriveOrderProcessingTrace } from "@/lib/domain/order-processing-trace"
 
 const querySchema = z.object({
   orderNo: z.string().optional(),
+  note: z.string().max(500).optional(),
   menuId: z.string().uuid().optional(),
   minItems: z.string().optional(),
   maxItems: z.string().optional(),
@@ -32,6 +33,7 @@ export async function GET(req: NextRequest) {
     const orders = await prisma.order.findMany({
       where: {
         ...(query.orderNo ? { orderNo: Number(query.orderNo) } : {}),
+        ...(query.note?.trim() ? { specialNote: { contains: query.note.trim(), mode: "insensitive" as const } } : {}),
         ...(query.paymentMethod ? { paymentMethod: query.paymentMethod as any } : {}),
         ...(query.fulfillmentType ? { fulfillmentType: query.fulfillmentType as any } : {}),
         ...(query.status ? { orderStatus: query.status as any } : {}),
@@ -46,6 +48,7 @@ export async function GET(req: NextRequest) {
       },
       include: {
         cashierPhoto: { select: { storedAt: true, waivedAt: true } },
+        refunds: { select: { id:true, amountJpy:true, confirmedAt:true }, orderBy: { confirmedAt:"desc" } },
         items: {
           include: {
             kitchenActor: {
@@ -57,13 +60,13 @@ export async function GET(req: NextRequest) {
           }
         }
       },
-      take: 500,
       orderBy: {
         createdAt: query.sort === "old" ? "asc" : "desc"
       }
     });
 
     const filtered = orders.filter((order) => {
+      const netTotal = order.items.filter(item => item.status !== "CANCELED").reduce((sum,item) => sum + item.unitPriceJpy,0);
       const count = order.items.length;
       if (query.minItems && count < Number(query.minItems)) {
         return false;
@@ -71,10 +74,10 @@ export async function GET(req: NextRequest) {
       if (query.maxItems && count > Number(query.maxItems)) {
         return false;
       }
-      if (query.minTotal && order.totalPriceJpy < Number(query.minTotal)) {
+      if (query.minTotal && netTotal < Number(query.minTotal)) {
         return false;
       }
-      if (query.maxTotal && order.totalPriceJpy > Number(query.maxTotal)) {
+      if (query.maxTotal && netTotal > Number(query.maxTotal)) {
         return false;
       }
       if (query.menuId && !order.items.some((item) => item.menuId === query.menuId)) {
@@ -84,8 +87,8 @@ export async function GET(req: NextRequest) {
     });
 
     filtered.sort((a, b) => {
-      const aOpen = a.orderStatus !== "COMPLETED" && a.orderStatus !== "FAILED" && a.orderStatus !== "CANCELED";
-      const bOpen = b.orderStatus !== "COMPLETED" && b.orderStatus !== "FAILED" && b.orderStatus !== "CANCELED";
+      const aOpen = !["COMPLETED","PARTIALLY_CANCELED","FAILED","CANCELED"].includes(a.orderStatus);
+      const bOpen = !["COMPLETED","PARTIALLY_CANCELED","FAILED","CANCELED"].includes(b.orderStatus);
       if (aOpen !== bOpen) {
         return aOpen ? -1 : 1;
       }
@@ -127,7 +130,9 @@ export async function GET(req: NextRequest) {
         failedAt: trace.failedAt,
         failureReasonType: trace.failureReasonType,
         failureReasonText: trace.failureReasonText,
-        totalPriceJpy: order.totalPriceJpy,
+        originalTotalPriceJpy: order.totalPriceJpy,
+        totalPriceJpy: order.items.filter(item=>item.status!=="CANCELED").reduce((sum,item)=>sum+item.unitPriceJpy,0),
+        refunds: order.refunds,
         specialNote: order.specialNote,
         lastMutationVersion: order.lastMutationVersion,
         items: order.items.map((item) => ({

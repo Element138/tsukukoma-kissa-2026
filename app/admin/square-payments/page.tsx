@@ -80,7 +80,7 @@ function ReconciliationCard({ order, onResult }: { order: PendingOrder; onResult
 }
 
 export default function SquarePaymentsPage() {
-  const { loading, session } = useSession(["ADMIN"]);
+  const { loading, session } = useSession(["ADMIN", "POS"]);
   const { notify } = useToast();
   const [orders, setOrders] = useState<PendingOrder[]>([]);
   const [incidents, setIncidents] = useState<Incident[]>([]);
@@ -112,7 +112,7 @@ export default function SquarePaymentsPage() {
   return <><TerminalBanner actorId={session.actor.actorId} actorType={session.actor.actorType} actorLabel={session.actor.label} offlineActors={session.offlineActors} />
     <DashboardShell className="admin-shell square-review-shell" title="Square決済の照合"
       actions={<Button variant="outline" size="sm" disabled={refreshing} onClick={() => void reload()} className="gap-2"><RefreshCw className="h-4 w-4" aria-hidden="true" />更新</Button>}>
-      <Link href="/admin" className="mb-5 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" aria-hidden="true" />管理者パネル</Link>
+      <Link href={session.actor.actorType==="POS"?"/pos":"/admin"} className="mb-5 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" aria-hidden="true" />{session.actor.actorType==="POS"?"POSに戻る":"管理者パネル"}</Link>
       {error && <p role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</p>}
       {otherIncidents.length > 0 && <Card className="mb-5 border-amber-200 bg-amber-50/80"><CardHeader><CardTitle className="text-base">確認が必要な取引</CardTitle></CardHeader><CardContent className="space-y-3">
         {otherIncidents.map(incident => <div key={incident.id} className="text-sm leading-relaxed"><strong>注文 #{incident.order.orderNo}</strong><p className="mt-1 text-amber-950">{incident.messageJa}</p></div>)}

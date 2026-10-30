@@ -91,7 +91,7 @@ export async function recalcAndPersistOrderStatus(db: DbClient, orderId: string,
     where: { id: orderId },
     data: {
       orderStatus: nextStatus,
-      ...(nextStatus === "COMPLETED" ? { lastCalledAt: null } : {}),
+      ...(["COMPLETED", "PARTIALLY_CANCELED", "CANCELED"].includes(nextStatus) ? { lastCalledAt: null } : {}),
       ...(incrementVersion
         ? {
             lastMutationVersion: {

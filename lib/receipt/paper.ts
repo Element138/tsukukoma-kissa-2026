@@ -39,7 +39,8 @@ export const RECEIPT_PAPER = {
   },
 } as const satisfies Record<ReceiptPaperSize, object>;
 
-export function receiptPdfPath(orderId: string, size: ReceiptPaperSize) {
+export function receiptPdfPath(orderId: string, size: ReceiptPaperSize, refundId?: string) {
   const params = new URLSearchParams({ size });
+  if (refundId) params.set("refundId", refundId);
   return `/api/orders/${encodeURIComponent(orderId)}/receipt?${params}`;
 }

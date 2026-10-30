@@ -1,4 +1,4 @@
-import { PrismaClient, Prisma } from "@prisma/client";
+import { PrismaClient, Prisma, ActorType } from "@prisma/client";
 import { AppError, assert } from "@/lib/errors";
 import { verifySquareTransaction } from "@/lib/domain/square-verification";
 import { appendOrderEvent, confirmOrderPayment } from "@/lib/domain/orders";
@@ -9,7 +9,7 @@ import { deriveOrderProcessingTrace } from "@/lib/domain/order-processing-trace"
 
 // Claim briefly in a transaction; never hold a DB connection open during Square I/O.
 export async function reconcileSquarePayment(db: PrismaClient, orderId: string, options: {
-  manual?: boolean; actorId?: string; reason?: string;
+  manual?: boolean; actorId?: string; actorType?: ActorType; reason?: string;
 } = {}) {
   const claim = await db.$transaction(async tx => {
     await tx.$queryRaw`SELECT id FROM "Order" WHERE id = ${orderId} FOR UPDATE`;
@@ -51,7 +51,7 @@ export async function reconcileSquarePayment(db: PrismaClient, orderId: string, 
       await tx.squarePaymentAttempt.update({ where: { id: attempt.id }, data: { resolvedAt: new Date(), lastError: null } });
       await tx.paymentIncident.updateMany({ where: { orderId, incidentType: "SQUARE_RESULT_MISSING", dismissedAt: null },
         data: { dismissedAt: new Date() } });
-      await writeAuditLog(tx, { actorId: options.actorId ?? null, actorType: options.actorId ? "ADMIN" : null,
+      await writeAuditLog(tx, { actorId: options.actorId ?? null, actorType: options.actorId ? options.actorType ?? "ADMIN" : null,
         actionType: "SQUARE_SERVER_VERIFIED", entityType: "order", entityId: orderId, orderId,
         afterJson: { paymentId: verified.paymentId, transactionId: attempt.transactionId }, reasonText: options.reason, result: "SUCCESS" });
       const channels = confirmed.items.map(item => item.kitchenId).filter((id): id is string => Boolean(id)).map(kitchenChannel);

@@ -126,6 +126,8 @@ export function failureReasonLabel(reasonType: string | null): string {
       return "失敗コールバック";
     case "CASH_ORDER_VOID":
       return "現金注文取消";
+    case "CASH_REFUND_CONFIRMED":
+      return "現金返金";
     case "MANUAL_CANCEL":
       return "手動キャンセル";
     case "MANUAL_FAILURE":

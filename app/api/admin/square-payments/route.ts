@@ -15,19 +15,20 @@ import { inspectSquareBeforeClosing } from "@/lib/domain/square-unpaid";
 export const maxDuration = 60;
 export async function GET(req: NextRequest) {
   try {
-    await requireSession(req, { actorTypes: ["ADMIN"] });
+    const actor = await requireSession(req, { actorTypes: ["ADMIN", "POS"] });
+    const scope = actor.actorType === "POS" ? { order: { createdByActorId: actor.actorId } } : {};
     if (req.nextUrl.searchParams.get("summary") === "1") {
-      return ok({ incidentCount: await prisma.paymentIncident.count({ where: { dismissedAt: null } }) },
+      return ok({ incidentCount: await prisma.paymentIncident.count({ where: { dismissedAt: null, ...scope } }) },
         { headers: { "Cache-Control": "no-store" } });
     }
-    const orders = await prisma.order.findMany({ where: { paymentMethod: "SQUARE", paymentStatus: "AWAITING" },
+    const orders = await prisma.order.findMany({ where: { paymentMethod: "SQUARE", paymentStatus: "AWAITING", ...(actor.actorType==="POS"?{createdByActorId:actor.actorId}:{}) },
       orderBy: { createdAt: "asc" }, take: 100, select: {
         id: true, orderNo: true, totalPriceJpy: true, createdAt: true, createdByActorId: true,
         squareAttempt: { select: { launchedAt: true, transactionId: true, verifyAttempts: true, verifyAfter: true, lastError: true } },
       } });
     const [incidentCount, incidents] = await Promise.all([
-      prisma.paymentIncident.count({ where: { dismissedAt: null } }),
-      prisma.paymentIncident.findMany({ where: { dismissedAt: null }, orderBy: { createdAt: "desc" }, take: 100,
+      prisma.paymentIncident.count({ where: { dismissedAt: null, ...scope } }),
+      prisma.paymentIncident.findMany({ where: { dismissedAt: null, ...scope }, orderBy: { createdAt: "desc" }, take: 100,
         select: { id: true, orderId: true, messageJa: true, incidentType: true, createdAt: true,
           order: { select: { orderNo: true, paymentStatus: true } } } }),
     ]);
@@ -38,11 +39,12 @@ const schema = z.object({ orderId: z.string().min(1).max(128), action: z.enum(["
   transactionId: z.string().min(1).max(192).optional(), reason: z.string().trim().min(1).max(500), attested: z.literal(true) });
 export async function POST(req: NextRequest) {
   try {
-    const actor = await requireSession(req, { actorTypes: ["ADMIN"] });
+    const actor = await requireSession(req, { actorTypes: ["ADMIN", "POS"] });
     assert(req.headers.get("origin") === req.nextUrl.origin, 403, "FORBIDDEN", "同一サイトから操作してください");
     const body = await parseJson(req, schema);
     const order = await prisma.order.findUnique({ where: { id: body.orderId }, include: { squareAttempt: true } });
     assert(order?.paymentMethod === "SQUARE", 404, "ORDER_NOT_FOUND", "注文が見つかりません");
+    assert(actor.actorType === "ADMIN" || order.createdByActorId === actor.actorId,404,"ORDER_NOT_FOUND","注文が見つかりません");
     const attempt = order.squareAttempt;
     const callbackUrl = attempt?.callbackUrl ?? process.env.SQUARE_CALLBACK_URL;
     assert(callbackUrl && new URL(callbackUrl).origin === req.nextUrl.origin, 403, "FORBIDDEN", "登録済みの本番URLから操作してください");
@@ -70,7 +72,7 @@ export async function POST(req: NextRequest) {
       await verifySquareTransaction(transactionId, { orderId: order.id, amountJpy: order.totalPriceJpy,
         locationId: attempt.locationId, launchedAt: attempt.launchedAt, allowUnmarked: true });
       assert(await recordSquareTransaction(prisma, order.id, transactionId), 409, "SQUARE_CONFLICT", "異なるSquare取引が対応しています。決済異常を確認してください");
-      const result = await reconcileSquarePayment(prisma, order.id, { manual: true, actorId: actor.actorId, reason: body.reason });
+      const result = await reconcileSquarePayment(prisma, order.id, { manual: true, actorId: actor.actorId, actorType:actor.actorType, reason: body.reason });
       return ok({ ...result, paymentFound: body.action === "NO_CHARGE" && result.verified });
     }
     const outcome = await prisma.$transaction(async tx => {
@@ -81,12 +83,12 @@ export async function POST(req: NextRequest) {
       assert(current.squareAttempt?.transactionId === attempt?.transactionId && current.squareAttempt?.launchedAt?.getTime() === attempt?.launchedAt?.getTime(),
         409, "SQUARE_CONFLICT", "照合中に決済情報が変更されました。もう一度確認してください");
       await confirmOrderPayment(tx, { orderId: order.id, result: "FAILED", actorId: actor.actorId, actorType: actor.actorType,
-        reasonType: "ADMIN_NO_CHARGE_VERIFIED", reasonText: body.reason });
+        reasonType: actor.actorType==="POS"?"POS_NO_CHARGE_VERIFIED":"ADMIN_NO_CHARGE_VERIFIED", reasonText: body.reason });
       if (current.squareAttempt) await tx.squarePaymentAttempt.update({ where: { id: current.squareAttempt.id }, data: {
-        resolvedAt: new Date(), lastError: "管理者が未決済を確認して終了しました。Square側の決済取消・返金を実行したものではありません。",
+        resolvedAt: new Date(), lastError: "担当者が未決済を確認して終了しました。Square側の決済取消・返金を実行したものではありません。",
       } });
       await tx.paymentIncident.updateMany({ where: { orderId: order.id, incidentType: "SQUARE_RESULT_MISSING", dismissedAt: null }, data: { dismissedAt: new Date() } });
-      await writeAuditLog(tx, { actorId: actor.actorId, actorType: actor.actorType, actionType: "SQUARE_ADMIN_NO_CHARGE",
+      await writeAuditLog(tx, { actorId: actor.actorId, actorType: actor.actorType, actionType: actor.actorType==="POS"?"SQUARE_POS_NO_CHARGE":"SQUARE_ADMIN_NO_CHARGE",
         entityType: "order", entityId: order.id, orderId: order.id, reasonText: body.reason, result: "SUCCESS" });
       await broadcastInvalidation(tx, CHANNEL_GROUPS.ORDER_FLOW, "orders", "square_reconciled");
       return { closed: true };

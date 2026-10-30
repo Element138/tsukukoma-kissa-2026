@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
       const stock = await tx.menuStock.findMany();
       const menus = await tx.menu.findMany({ select: { id: true, name: true, shortName: true, isActive: true }, orderBy: [{ displayOrder: "asc" }, { name: "asc" }, { id: "asc" }] });
       const orders = await tx.order.findMany({
-        where: { confirmedAt: { not: null }, orderStatus: { notIn: ["COMPLETED", "FAILED", "CANCELED"] }, items: { some: { status: { in: ["QUEUED", "GHOSTED"] } } } },
+        where: { confirmedAt: { not: null }, orderStatus: { notIn: ["COMPLETED", "PARTIALLY_CANCELED", "FAILED", "CANCELED"] }, items: { some: { status: { in: ["QUEUED", "GHOSTED"] } } } },
         include: { items: { orderBy: { id: "asc" } } }, orderBy: { orderNo: "asc" }
       });
       const readyByMenu = new Map(stock.map(s => [s.menuId, s.readyCount]));

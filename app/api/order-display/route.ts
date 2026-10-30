@@ -8,10 +8,10 @@ export async function GET(req: NextRequest) {
     const cursorText = req.nextUrl.searchParams.get("afterCallId");
     const afterCallId = cursorText != null && /^\d+$/.test(cursorText) ? Number(cursorText) : null;
     const data = await prisma.$transaction(async tx => {
-      const orders = await tx.order.findMany({ where: { confirmedAt: { not: null }, orderStatus: { notIn: ["COMPLETED", "FAILED", "CANCELED"] } }, include: { items: true }, orderBy: { orderNo: "asc" } });
+      const orders = await tx.order.findMany({ where: { confirmedAt: { not: null }, orderStatus: { notIn: ["COMPLETED", "PARTIALLY_CANCELED", "FAILED", "CANCELED"] } }, include: { items: true }, orderBy: { orderNo: "asc" } });
       const latest = await tx.orderCall.findFirst({ orderBy: { id: "desc" } });
       const cursor = latest?.id ?? 0;
-      const calls = afterCallId == null ? [] : await tx.orderCall.findMany({ where: { id: { gt: afterCallId, lte: cursor }, order: { ghostedAt: null, lastCalledAt: { not: null }, orderStatus: { notIn: ["COMPLETED", "FAILED", "CANCELED"] } } }, include: { order: { select: { id: true, orderNo: true, createdAt: true } } }, orderBy: { id: "asc" } });
+      const calls = afterCallId == null ? [] : await tx.orderCall.findMany({ where: { id: { gt: afterCallId, lte: cursor }, order: { ghostedAt: null, lastCalledAt: { not: null }, orderStatus: { notIn: ["COMPLETED", "PARTIALLY_CANCELED", "FAILED", "CANCELED"] } } }, include: { order: { select: { id: true, orderNo: true, createdAt: true } } }, orderBy: { id: "asc" } });
       const history = calls.length === 0 ? [] : await tx.orderCall.findMany({ where: { orderId: { in: [...new Set(calls.map(c => c.orderId))] }, id: { lte: cursor } }, select: { id: true, orderId: true }, orderBy: { id: "asc" } });
       const countsByOrder = new Map<string, number>();
       const countsByCall = new Map<number, number>();
