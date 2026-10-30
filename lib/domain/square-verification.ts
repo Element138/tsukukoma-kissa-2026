@@ -36,15 +36,36 @@ export async function squareGet(path: string) {
   return response.json();
 }
 
+// Square retains failed tender attempts alongside the eventual successful one.
+// Read authoritative Payment records instead of treating tender count as charges.
+export async function readSquareOrderPayments(transactionId: string, tenders: unknown): Promise<SquarePayment[]> {
+  assert(Array.isArray(tenders) && tenders.length > 0 && tenders.length <= 10,
+    409, "SQUARE_UNVERIFIED", "Squareの決済記録を確認できません。管理者が取引履歴を確認してください");
+  const ids = tenders.map((tender: { payment_id?: unknown } | null) => tender?.payment_id);
+  assert(ids.every((id): id is string => typeof id === "string" && id.length > 0),
+    409, "SQUARE_UNVERIFIED", "Squareの決済IDが未確定です");
+  assert(new Set(ids).size === ids.length, 409, "SQUARE_CONFLICT", "Squareの決済IDが重複しています");
+  return Promise.all(ids.map(async paymentId => {
+    const { payment } = await squareGet(`payments/${encodeURIComponent(paymentId)}`);
+    assert(payment?.id === paymentId && payment.order_id === transactionId,
+      409, "SQUARE_MISMATCH", "Squareの決済IDが一致しません");
+    return payment as SquarePayment;
+  }));
+}
+
 export async function verifySquareTransaction(transactionId: string, expected: Expected) {
   const { order } = await squareGet(`orders/${encodeURIComponent(transactionId)}`);
   assert(order?.id === transactionId && order.location_id === expected.locationId && order.state === "COMPLETED" &&
-    order.total_money?.amount === expected.amountJpy && order.total_money.currency === "JPY" && order.tenders?.length === 1,
+    order.total_money?.amount === expected.amountJpy && order.total_money.currency === "JPY",
     409, "SQUARE_MISMATCH", "Squareの注文内容が一致しません。管理者に確認してください");
-  const paymentId = order.tenders[0].payment_id;
-  assert(typeof paymentId === "string" && paymentId, 409, "SQUARE_UNVERIFIED", "Squareの決済IDが未確定です");
-  const { payment } = await squareGet(`payments/${encodeURIComponent(paymentId)}`);
-  assert(payment?.id === paymentId && payment.order_id === transactionId, 409, "SQUARE_MISMATCH", "Squareの決済IDが一致しません");
+  const payments = await readSquareOrderPayments(transactionId, order.tenders);
+  const completed = payments.filter(payment => payment.status === "COMPLETED");
+  assert(completed.length <= 1, 409, "SQUARE_CONFLICT", "複数の入金が見つかりました。重複決済を確認してください");
+  assert(payments.every(payment => ["COMPLETED", "FAILED", "CANCELED"].includes(payment.status ?? "")),
+    409, "SQUARE_STILL_PENDING", "Squareで処理中の決済があります。管理者が取引履歴を確認してください");
+  assert(completed.length === 1, 409, "SQUARE_UNVERIFIED", "Squareでの支払い完了をまだ確認できません");
+  const payment = completed[0];
+  const paymentId = payment.id;
   validateSquarePayment(payment, expected);
   // POS notes can appear in the payment note or the Square order's line item.
   const marker = `[KISSa:${expected.orderId}]`;

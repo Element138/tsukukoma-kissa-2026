@@ -10,7 +10,7 @@ import { AppError, assert } from "@/lib/errors";
 import { aggregateOrderPrice, deriveOrderStatus } from "@/lib/domain/order-status";
 import { assignUnassignedItemsForOrder } from "@/lib/domain/kitchen-assignment";
 import { writeAuditLog } from "@/lib/domain/audit";
-import { attachCashierPhoto, requirePhotoStorageAvailable } from "@/lib/domain/cashier-photos";
+import { attachCashierPhoto, attachCashierPhotoBestEffort, requirePhotoStorageAvailable } from "@/lib/domain/cashier-photos";
 import { reserveMenuDailyCountsForOrder, releaseMenuDailyCountsForOrder } from "@/lib/domain/menu-cap";
 import { now, secondsFromNow, tokyoDateKey } from "@/lib/time";
 
@@ -145,6 +145,7 @@ export async function createOrderAtPaymentStart(
       ageRanges: string[];
       specialNote?: string;
       paymentMethod: PaymentMethod;
+      cashierPhotoBestEffort?: boolean;
       paymentSkipReasonType?: "TEST" | "DEVICE_ERROR" | "NETWORK_ERROR" | "OTHER" | null;
       paymentSkipReasonText?: string | null;
       items: Array<{ menuId: string; quantity: number }>;
@@ -168,7 +169,7 @@ export async function createOrderAtPaymentStart(
     return { order: duplicate, duplicated: true };
   }
 
-  await requirePhotoStorageAvailable(db);
+  if (!params.payload.cashierPhotoBestEffort) await requirePhotoStorageAvailable(db);
 
   const awaiting = await findOpenSquareAwaitingOrderForPos(db, params.actorId);
   if (awaiting) {
@@ -285,7 +286,7 @@ export async function createOrderAtPaymentStart(
     }
   });
 
-  if (shouldAutoConfirm) await attachCashierPhoto(db, {
+  if (shouldAutoConfirm) await (params.payload.cashierPhotoBestEffort ? attachCashierPhotoBestEffort : attachCashierPhoto)(db, {
     checkoutKey: params.payload.idempotencyKey, actorId: params.actorId, orderId: order.id,
   });
 
