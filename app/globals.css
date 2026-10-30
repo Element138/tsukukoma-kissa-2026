@@ -3401,17 +3401,6 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   color: #881337;
 }
 
-.receipt-print-refund-badge {
-  align-self: flex-start;
-  border-radius: 5px;
-  background: #be123c;
-  padding: 3px 10px;
-  color: #fff;
-  font-size: 0.85rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-}
-
 .receipt-print-body {
   min-width: 0;
   min-height: 0;

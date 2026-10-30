@@ -143,7 +143,6 @@ export function ReceiptPrintDialog({
     >
       <DialogContent className="receipt-print-dialog">
         <DialogHeader className={`receipt-print-header${target?.refundId ? " receipt-print-header-refund" : ""}`}>
-          {target?.refundId && <span className="receipt-print-refund-badge">返金</span>}
           <DialogTitle>{target?.refundId ? "返金レシート印刷" : "レシート印刷"}</DialogTitle>
           <DialogDescription>
             注文 #{target?.orderNo ?? "-"} の用紙サイズを選択してください。
