@@ -45,8 +45,10 @@ try{
   await page.goto(`${origin}/display#display`);await page.getByRole("region",{name:"ご不在",exact:true}).waitFor();
   for(const [width,height]of [[1920,1080],[2160,3840],[1133,744]]){
     await page.setViewportSize({width,height});
+    await page.waitForTimeout(1500); // Let the existing panel transitions settle before measuring.
     const absentBox=await page.locator(".order-display-absent").boundingBox(),waiting=await page.locator(".order-display-unready-viewport").boundingBox();
     assert(absentBox.y>=waiting.y+waiting.height-2);assert(absentBox.height<height*.3);
+    assert(absentBox.x>=0&&absentBox.x+absentBox.width<=width+1);
     assert.equal(await page.locator(".order-display-absent-numbers").innerText(),"208");
     assert(!(await page.locator(".order-display-unready-grid").innerText()).includes("208"));
     await page.screenshot({path:`tmp/absent-order-check/display-${width}.png`});
