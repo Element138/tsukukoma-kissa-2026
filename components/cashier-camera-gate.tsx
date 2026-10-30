@@ -6,11 +6,11 @@ import { Button } from "@/components/ui/button";
 export function CashierCameraGate({ videoRef, ready, connecting, error, onConnect }: {
   videoRef: RefObject<HTMLVideoElement | null>; ready: boolean; connecting: boolean; error: string | null; onConnect: () => void;
 }) {
-  return <div className={ready ? "pointer-events-none fixed bottom-0 left-0 h-px w-px overflow-hidden opacity-0" : "fixed inset-0 z-[90] flex items-center justify-center bg-slate-50/95 px-5"}>
-    <section role={ready ? undefined : "dialog"} aria-modal={ready ? undefined : true} aria-labelledby="cashier-camera-title" className={ready ? "" : "w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"}>
-      {!ready && <><Camera className="mb-4 h-6 w-6 text-slate-600" aria-hidden="true" /><h1 id="cashier-camera-title" className="text-xl font-semibold tracking-tight">カメラを接続してください</h1><p className="mt-2 text-sm text-slate-600">POSの利用には前面カメラの許可が必要です。</p></>}
+  return <div className={ready ? "pointer-events-none fixed bottom-0 left-0 h-px w-px overflow-hidden opacity-0" : "mx-auto mt-3 max-w-5xl px-4"}>
+    <section role={ready ? undefined : "status"} aria-labelledby="cashier-camera-title" className={ready ? "" : "flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm"}>
+      {!ready && <><Camera className="h-5 w-5 text-slate-600" aria-hidden="true" /><div className="flex-1"><p id="cashier-camera-title" className="font-semibold">会計者画像の撮影は任意です</p><p className="text-slate-600">カメラを利用できなくても会計・Square決済を続行できます。</p></div></>}
       <video ref={videoRef} muted playsInline autoPlay aria-hidden="true" className="pointer-events-none absolute h-px w-px opacity-0" />
-      {!ready && <>{error && <p role="alert" className="mt-3 text-sm text-rose-700">{error}</p>}<Button className="mt-5 w-full" disabled={connecting} onClick={onConnect}>{connecting ? "カメラを確認中…" : "カメラを接続"}</Button></>}
+      {!ready && <>{error && <p className="w-full text-slate-600">{error}</p>}<Button variant="outline" disabled={connecting} onClick={onConnect}>{connecting ? "カメラを確認中…" : "カメラを接続（任意）"}</Button></>}
     </section>
   </div>;
 }

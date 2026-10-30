@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/lib/client";
 import { CASHIER_PHOTO_MAX_BYTES } from "@/lib/cashier-photo-policy";
+import { CAMERA_CONNECT_TIMEOUT_MS, CAMERA_PREPARE_TIMEOUT_MS, checkCameraAbort, withCameraTimeout } from "@/lib/client/camera-timeout";
 
 async function freshFrame(video: HTMLVideoElement) {
   const track = (video.srcObject as MediaStream | null)?.getVideoTracks()[0];
@@ -18,19 +19,38 @@ async function freshFrame(video: HTMLVideoElement) {
   throw new Error("カメラの映像を確認できません。再接続してください");
 }
 
-async function pendingFrame(key: string, image?: Blob): Promise<Blob | null> {
+async function pendingFrame(key: string, image?: Blob, signal?: AbortSignal): Promise<Blob | null> {
   return new Promise((resolve, reject) => {
+    let settled = false;
+    let db: IDBDatabase | undefined;
+    let tx: IDBTransaction | undefined;
+    const finish = (error?: unknown, result: Blob | null = null) => {
+      if (settled) return;
+      settled = true;
+      signal?.removeEventListener("abort", onAbort);
+      db?.close();
+      if (error) reject(error); else resolve(result);
+    };
+    const onAbort = () => {
+      try { tx?.abort(); } catch { /* Already completed. */ }
+      finish(new Error("画像キャッシュを中断しました"));
+    };
+    if (signal?.aborted) { onAbort(); return; }
+    signal?.addEventListener("abort", onAbort, { once: true });
     const open = indexedDB.open("kissa.cashier-frames.v1", 1);
     open.onupgradeneeded = () => open.result.createObjectStore("frames");
-    open.onerror = () => reject(open.error);
+    open.onerror = () => finish(open.error ?? new Error("画像キャッシュを開けません"));
+    open.onblocked = () => finish(new Error("画像キャッシュが使用中です"));
     open.onsuccess = () => {
-      const db = open.result;
-      const tx = db.transaction("frames", image ? "readwrite" : "readonly");
+      db = open.result;
+      if (settled) { db.close(); return; }
+      tx = db.transaction("frames", image ? "readwrite" : "readonly");
       const request = image ? tx.objectStore("frames").put(image, key) : tx.objectStore("frames").get(key);
       let result: Blob | null = null;
       request.onsuccess = () => { result = image ?? request.result ?? null; };
-      tx.oncomplete = () => { db.close(); resolve(result); };
-      tx.onerror = () => { db.close(); reject(tx.error); };
+      tx.oncomplete = () => finish(undefined, result);
+      tx.onerror = () => finish(tx?.error ?? new Error("画像キャッシュを使用できません"));
+      tx.onabort = () => finish(tx?.error ?? new Error("画像キャッシュを中断しました"));
     };
   });
 }
@@ -72,24 +92,28 @@ export function useCashierCamera(enabled: boolean, actorId?: string) {
     try {
       if (!navigator.mediaDevices?.getUserMedia) throw new Error("このブラウザではカメラを使用できません");
       // A preference (ideal) can silently choose the rear camera; require user-facing.
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: {
-        facingMode: { exact: "user" }, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 10 },
-      } });
-      if (!mounted.current || generation.current !== request || document.visibilityState !== "visible") {
-        stream.getTracks().forEach(track => track.stop());
-        return;
-      }
-      streamRef.current = stream;
-      const video = videoRef.current;
-      if (!video) throw new Error("カメラを接続できません");
-      const track = stream.getVideoTracks()[0];
-      track.onended = () => setReady(false);
-      track.onmute = () => setReady(false);
-      track.onunmute = () => { void freshFrame(video).then(() => { if (streamRef.current === stream) setReady(true); }).catch(() => setReady(false)); };
-      video.srcObject = stream;
-      await video.play();
-      await freshFrame(video);
-      if (mounted.current && generation.current === request) setReady(true);
+      await withCameraTimeout(async signal => {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: {
+          facingMode: { exact: "user" }, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 10 },
+        } });
+        if (signal.aborted || !mounted.current || generation.current !== request || document.visibilityState !== "visible") {
+          stream.getTracks().forEach(track => track.stop());
+          return;
+        }
+        streamRef.current = stream;
+        const video = videoRef.current;
+        if (!video) throw new Error("カメラを接続できません");
+        const track = stream.getVideoTracks()[0];
+        track.onended = () => setReady(false);
+        track.onmute = () => setReady(false);
+        track.onunmute = () => { void freshFrame(video).then(() => { if (streamRef.current === stream) setReady(true); }).catch(() => setReady(false)); };
+        video.srcObject = stream;
+        await video.play();
+        checkCameraAbort(signal);
+        await freshFrame(video);
+        checkCameraAbort(signal);
+        if (mounted.current && generation.current === request) setReady(true);
+      }, CAMERA_CONNECT_TIMEOUT_MS);
     } catch (cause) {
       if (mounted.current && generation.current === request) {
         streamRef.current?.getTracks().forEach(track => track.stop());
@@ -123,11 +147,12 @@ export function useCashierCamera(enabled: boolean, actorId?: string) {
     return () => { mounted.current = false; document.removeEventListener("visibilitychange", onVisible); clearInterval(timer); stop(); };
   }, [enabled, start, stop]);
 
-  const capture = async () => {
+  const capture = async (signal: AbortSignal) => {
     const video = videoRef.current;
     if (!ready || !video) throw new Error("前面カメラを接続してください");
     try { await freshFrame(video); }
     catch (cause) { setReady(false); throw cause; }
+    checkCameraAbort(signal);
     const scale = Math.min(640 / video.videoWidth, 480 / video.videoHeight, 1);
     const canvas = document.createElement("canvas");
     canvas.width = Math.round(video.videoWidth * scale);
@@ -137,36 +162,48 @@ export function useCashierCamera(enabled: boolean, actorId?: string) {
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
     for (const quality of [0.8, 0.65, 0.5, 0.35, 0.2]) {
       const image = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/jpeg", quality));
+      checkCameraAbort(signal);
       if (image && image.size > 0 && image.size <= CASHIER_PHOTO_MAX_BYTES) return image;
     }
     throw new Error("撮影画像を100 KB以下にできません。もう一度撮影してください");
   };
 
   const prepare = async (checkoutKey: string) => {
-    // Check a live frame even when recovering an already uploaded image.
-    if (!videoRef.current || !ready) throw new Error("前面カメラを接続してください");
-    await freshFrame(videoRef.current);
-    const challenge = await apiFetch<{ photoId: string; stored: boolean }>("/api/pos/cashier-photos", {
-      method: "POST", body: JSON.stringify({ checkoutKey }),
-    });
-    if (challenge.stored) return;
-    const cacheKey = `${actorId}:${checkoutKey}`;
-    let image = frames.current.get(cacheKey) ?? await pendingFrame(cacheKey).catch(() => null);
-    if (!image) {
-      image = await capture();
-      frames.current.set(cacheKey, image);
-      await pendingFrame(cacheKey, image).catch(() => undefined);
+    const video = videoRef.current;
+    if (!video || !ready) return false;
+    try {
+      await withCameraTimeout(async signal => {
+        await freshFrame(video);
+        checkCameraAbort(signal);
+        const challenge = await apiFetch<{ photoId: string; stored: boolean }>("/api/pos/cashier-photos", {
+          method: "POST", body: JSON.stringify({ checkoutKey }), retry: 1, signal,
+        });
+        if (challenge.stored) return;
+        const cacheKey = `${actorId}:${checkoutKey}`;
+        let image = frames.current.get(cacheKey) ?? await pendingFrame(cacheKey, undefined, signal).catch(() => null);
+        checkCameraAbort(signal);
+        if (!image) {
+          image = await capture(signal);
+          frames.current.set(cacheKey, image);
+          await pendingFrame(cacheKey, image, signal).catch(() => undefined);
+        }
+        checkCameraAbort(signal);
+        const result = await apiFetch<{ stored: boolean; ignoreAllowed: boolean }>(`/api/pos/cashier-photos/${challenge.photoId}`, {
+          method: "POST", headers: { "Content-Type": "image/jpeg" }, body: image, retry: 1, signal,
+        });
+        if (!result.stored) throw new Error("画像を保存できません。画像なしで会計を続行できます");
+      }, CAMERA_PREPARE_TIMEOUT_MS);
+      return true;
+    } catch {
+      if (mounted.current) setError("撮影・保存を完了できなかったため、画像なしで会計を続行します");
+      return false;
     }
-    const result = await apiFetch<{ stored: boolean; ignoreAllowed: boolean }>(`/api/pos/cashier-photos/${challenge.photoId}`, {
-      method: "POST", headers: { "Content-Type": "image/jpeg" }, body: image, timeoutMs: 30_000,
-    });
-    if (!result.stored && !result.ignoreAllowed) throw new Error("画像を保存できないため新規会計を停止しています。管理者に確認してください");
   };
 
   const forget = (key: string) => {
     const cacheKey = `${actorId}:${key}`;
     frames.current.delete(cacheKey);
-    void forgetCashierFrame(cacheKey);
+    void forgetCashierFrame(cacheKey).catch(() => undefined);
   };
   return { videoRef, ready, connecting, error, start, prepare, forget };
 }

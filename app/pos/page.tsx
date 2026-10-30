@@ -567,7 +567,7 @@ export default function PosPage() {
   };
 
   const submitOrder = async () => {
-    if (submitInFlight.current || recoveryPayload || !paymentStateReady || !camera.ready) return;
+    if (submitInFlight.current || recoveryPayload || !paymentStateReady) return;
     if (awaitingOrder) {
       notify({
         level: "warning",
@@ -604,6 +604,7 @@ export default function PosPage() {
         ageRanges,
         specialNote: specialNote || undefined,
         paymentMethod,
+        cashierPhotoBestEffort: true,
         paymentSkipReasonType:
           paymentMethod === "PAYMENT_SKIPPED" ? skipReasonType : null,
         paymentSkipReasonText:
@@ -686,7 +687,7 @@ export default function PosPage() {
   return (
     <>
       <CashierCameraGate videoRef={camera.videoRef} ready={camera.ready} connecting={camera.connecting} error={camera.error} onConnect={() => void camera.start()} />
-      <div inert={!camera.ready} aria-hidden={!camera.ready}>
+      <div>
       <TerminalBanner
         actorId={session.actor.actorId}
         actorType={session.actor.actorType}
@@ -1024,7 +1025,7 @@ export default function PosPage() {
                 try {
                   if (recoveryPayload.paymentMethod !== "SQUARE") await camera.prepare(String(recoveryPayload.idempotencyKey));
                   const data = await apiFetch<{ order: { id: string; orderNo: number; totalPriceJpy: number; orderStatus: string; paymentStatus: string; paymentMethod: string } }>("/api/orders", {
-                    method: "POST", body: JSON.stringify(recoveryPayload), timeoutMs: 25_000,
+                    method: "POST", body: JSON.stringify({ ...recoveryPayload, cashierPhotoBestEffort: true }), timeoutMs: 25_000,
                   });
                   forgetRequest();
                   if (data.order.paymentMethod === "SQUARE") { rememberPending(data.order.id); setPendingSquareOrderId(data.order.id); }
@@ -1057,7 +1058,7 @@ export default function PosPage() {
                 <div className="row wrap" style={{ marginTop: 8 }}>
                   {awaitingOrder.launchAvailable && (
                     <form action="/api/square/launch" method="post" onSubmit={event => {
-                      if (launchInFlight.current || !navigator.onLine || !camera.ready || preparedSquareOrderId !== awaitingOrder.id) {
+                      if (launchInFlight.current || !navigator.onLine || preparedSquareOrderId !== awaitingOrder.id) {
                         event.preventDefault();
                         if (!navigator.onLine) notify({ level: "error", message: "オフライン決済は利用できません" });
                         return;
@@ -1066,17 +1067,18 @@ export default function PosPage() {
                       rememberPending(awaitingOrder.id);
                     }}>
                       <input type="hidden" name="orderId" value={awaitingOrder.id} />
+                      <input type="hidden" name="cashierPhotoBestEffort" value="true" />
                       {preparedSquareOrderId === awaitingOrder.id
-                        ? <Button type="submit" disabled={busy}>Squareを開く</Button>
-                        : <Button type="button" disabled={busy} onClick={async () => {
+                        ? <Button key="square-launch" type="submit" disabled={busy}>Squareを開く</Button>
+                        : <Button key="square-prepare" type="button" disabled={busy} onClick={async event => {
+                          event.preventDefault();
                           setBusy(true);
                           try {
-                            if (!awaitingOrder.checkoutKey) throw new Error("この注文の撮影情報がありません。管理者に確認してください");
-                            await camera.prepare(awaitingOrder.checkoutKey);
+                            if (awaitingOrder.checkoutKey) await camera.prepare(awaitingOrder.checkoutKey);
                             setPreparedSquareOrderId(awaitingOrder.id);
                           } catch (error) { notify({ level: "error", message: error instanceof Error ? error.message : "撮影できません" }); }
                           finally { setBusy(false); }
-                        }}>撮影してSquare決済へ</Button>}
+                        }}>{busy ? "Square決済を準備中…" : "Square決済を準備"}</Button>}
                     </form>
                   )}
                   <Button variant="outline" disabled={busy} onClick={async () => {
