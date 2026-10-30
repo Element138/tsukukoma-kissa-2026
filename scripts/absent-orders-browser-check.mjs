@@ -21,7 +21,7 @@ let absent=false;const actions=[];
 const server=createServer(async(req,res)=>{
   if(!req.url.startsWith("/api/")){res.setHeader("Content-Type","text/html; charset=utf-8");res.end(html);return;}
   let data;
-  if(req.url==="/api/counter/targets")data={orders:absent?[]:[fixture],ghostOrders:absent?[{...fixture,ghostedAt:new Date().toISOString()}]:[],stock:[]};
+  if(req.url==="/api/counter/targets")data={orders:absent?[]:[fixture],ghostOrders:absent?[{...fixture,ghostedAt:new Date().toISOString()}]:[],stock:[{menuId:"food",name:"ホットドッグ",waitingCount:3,count:2},{menuId:"tea",name:"紅茶",waitingCount:2,count:1}]};
   else if(req.url==="/api/counter/absent"){let raw="";for await(const chunk of req)raw+=chunk;actions.push(JSON.parse(raw));absent=true;data={};}
   else if(req.url.startsWith("/api/order-display"))data={callCursor:1,calls:[],readyOrders:[{id:"ready",orderNo:207,createdAt:fixture.createdAt}],unreadyOrders:[{id:"waiting",orderNo:209,createdAt:fixture.createdAt,queuedItemCount:1}],ghostOrders:absent?[fixture]:[]};
   else if(req.url==="/api/admin/menu-display-settings")data={settings:{orderDisplayMarqueeText:"",orderDisplayMarqueeSpeedSeconds:24,orderCallVolume:0}};
@@ -34,6 +34,14 @@ const browser=await chromium.launch({executablePath:"C:/Program Files/Google/Chr
 try{
   const page=await browser.newPage({viewport:{width:1133,height:744}});const errors=[];page.on("pageerror",e=>errors.push(e.message));page.on("dialog",dialog=>dialog.accept());
   await page.goto(origin);await page.getByRole("button",{name:"不在",exact:true}).waitFor();
+  const normalTitle=await page.getByRole("heading",{name:"注文",exact:true}).boundingBox(),absentButton=await page.getByRole("button",{name:"不在注文",exact:true}).boundingBox();assert(absentButton.x>normalTitle.x+normalTitle.width);
+  const footerToggle=page.getByRole("button",{name:"提供待ち / 調理済",exact:true});
+  assert.equal(await footerToggle.getAttribute("aria-expanded"),"false");assert(!(await page.locator("#counter-stock-details").isVisible()));
+  const compactHeight=(await page.locator(".counter-stock-bar").boundingBox()).height;assert(compactHeight<65);
+  await footerToggle.click();assert.equal(await footerToggle.getAttribute("aria-expanded"),"true");assert(await page.locator("#counter-stock-details").isVisible());
+  assert((await page.locator(".counter-stock-bar").boundingBox()).height>compactHeight);
+  await page.waitForFunction(()=>parseFloat(getComputedStyle(document.querySelector(".counter-panel")).marginBottom)>=document.querySelector(".counter-stock-bar").getBoundingClientRect().height+23);
+  await footerToggle.click();assert(!(await page.locator("#counter-stock-details").isVisible()));
   await page.getByRole("button",{name:"不在",exact:true}).click();
   await page.getByRole("button",{name:"不在注文 (1)",exact:true}).waitFor();
   assert.equal(await page.locator(".counter-tile").count(),0);assert.equal(actions.length,1);assert.equal(actions[0].orderId,"absent");
@@ -41,7 +49,7 @@ try{
   await page.locator(".counter-tile").waitFor();assert.equal(await page.getByRole("button",{name:/呼び出/}).count(),0);
   assert.equal(await page.getByRole("button",{name:"提供",exact:true}).count(),2);assert(await page.getByRole("button",{name:"全て提供",exact:true}).isVisible());
   await page.screenshot({path:"tmp/absent-order-check/counter-ipad.png"});
-  const ghostButton=await page.getByRole("button",{name:"通常注文",exact:true}).boundingBox(),heading=await page.getByRole("heading",{name:"不在注文",exact:true}).boundingBox();assert(ghostButton.x<heading.x);
+  const ghostButton=await page.getByRole("button",{name:"通常注文",exact:true}).boundingBox(),heading=await page.getByRole("heading",{name:"不在注文",exact:true}).boundingBox();assert(ghostButton.x>heading.x+heading.width);
   await page.goto(`${origin}/display#display`);await page.getByRole("region",{name:"ご不在",exact:true}).waitFor();
   for(const [width,height]of [[1920,1080],[2160,3840],[1133,744]]){
     await page.setViewportSize({width,height});
@@ -50,6 +58,7 @@ try{
     assert(absentBox.y>=waiting.y+waiting.height-2);assert(absentBox.height<height*.3);
     assert(absentBox.x>=0&&absentBox.x+absentBox.width<=width+1);
     assert.equal(await page.locator(".order-display-absent-numbers").innerText(),"208");
+    assert.equal(await page.locator(".order-display-absent h2").evaluate(el=>getComputedStyle(el).fontWeight),"800");
     assert(!(await page.locator(".order-display-unready-grid").innerText()).includes("208"));
     await page.screenshot({path:`tmp/absent-order-check/display-${width}.png`});
   }

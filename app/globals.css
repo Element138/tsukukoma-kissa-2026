@@ -1658,6 +1658,7 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
 .order-display-absent h2 {
   margin: 0 0 .35em;
   font-size: clamp(18px, 1.7vw, 30px);
+  font-weight: 800;
 }
 
 .order-display-absent-viewport {
@@ -3565,9 +3566,14 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
 }
 
 .counter-panel { margin-bottom: 110px; }
-.counter-stock-bar { position: fixed; bottom: 0; left: 0; right: 0; z-index: 45; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; padding: 18px 24px max(18px, env(safe-area-inset-bottom)); border-top: 1px solid #b5c9bb; background: rgba(248, 253, 249, .97); box-shadow: none; transform: translateY(110%); visibility: hidden; transition: transform .25s ease, visibility .25s; }
+.counter-panel-heading { margin: 0; }
+.counter-stock-bar { position: fixed; bottom: 0; left: 0; right: 0; z-index: 45; display: grid; gap: 10px; padding: 8px 24px max(8px, env(safe-area-inset-bottom)); border-top: 1px solid #b5c9bb; background: rgba(248, 253, 249, .97); box-shadow: none; transform: translateY(110%); visibility: hidden; transition: transform .25s ease, visibility .25s; }
 .counter-stock-bar.is-visible { transform: translateY(0); visibility: visible; }
 .counter-stock-bar { max-height: 35vh; overflow-y: auto; }
+.counter-stock-toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 32px; padding: 4px 0; border: 0; background: transparent; color: inherit; cursor: pointer; }
+.counter-stock-bar.is-expanded .counter-stock-toggle svg { transform: rotate(180deg); }
+.counter-stock-details { display: flex; flex-wrap: wrap; gap: 10px 24px; padding-bottom: 4px; }
+.counter-stock-details[hidden] { display: none; }
 @media (prefers-reduced-motion: reduce) { .counter-stock-bar { transition: none; } }
 
 /* Portrait signage uses the full panel, including outside browser fullscreen. */
