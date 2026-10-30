@@ -42,7 +42,7 @@ function ReconciliationCard({ order, onResult }: { order: PendingOrder; onResult
     } catch (error) { setMessage(error instanceof Error ? error.message : "照合に失敗しました"); }
     finally { setAction(null); }
   };
-  const disabled = busy || !attested || reason.trim().length < 10;
+  const disabled = busy || !attested || reason.trim().length === 0;
   return <Card className="overflow-hidden border-slate-200 bg-white/95">
     <CardHeader className="border-b border-slate-100 bg-slate-50/70 p-5 sm:px-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -63,7 +63,7 @@ function ReconciliationCard({ order, onResult }: { order: PendingOrder; onResult
       </details>
       <label className="block space-y-2 text-sm font-medium"><span>確認内容</span>
         <textarea value={reason} onChange={event => setReason(event.target.value)} maxLength={500} disabled={busy} rows={2}
-          placeholder="確認した店舗・金額・取引時刻など（10文字以上）" className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-normal shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50" />
+          placeholder="確認した店舗・金額・取引時刻など" className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-normal shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50" />
       </label>
       <label className="flex cursor-pointer items-start gap-2.5 rounded-lg bg-slate-50 p-3 text-sm leading-relaxed">
         <input type="checkbox" className="mt-1 h-4 w-4 shrink-0 accent-teal-700" checked={attested} disabled={busy} onChange={event => setAttested(event.target.checked)} />

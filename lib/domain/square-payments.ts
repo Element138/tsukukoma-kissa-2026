@@ -26,7 +26,7 @@ export async function reconcileSquarePayment(db: PrismaClient, orderId: string, 
   try {
     const verified = await verifySquareTransaction(claim.transactionId!, {
       orderId, amountJpy: claim.order.totalPriceJpy, locationId: claim.locationId, launchedAt: claim.launchedAt!,
-      allowUnmarked: Boolean(options.manual && options.reason && options.reason.trim().length >= 10),
+      allowUnmarked: Boolean(options.manual && options.reason && options.reason.trim().length > 0),
     });
     return await db.$transaction(async tx => {
       await tx.$queryRaw`SELECT id FROM "Order" WHERE id = ${orderId} FOR UPDATE`;

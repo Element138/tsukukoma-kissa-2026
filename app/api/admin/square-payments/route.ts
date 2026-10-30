@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
   } catch (error) { return fail(error); }
 }
 const schema = z.object({ orderId: z.string().min(1).max(128), action: z.enum(["VERIFY", "NO_CHARGE"]),
-  transactionId: z.string().min(1).max(192).optional(), reason: z.string().trim().min(10).max(500), attested: z.literal(true) });
+  transactionId: z.string().min(1).max(192).optional(), reason: z.string().trim().min(1).max(500), attested: z.literal(true) });
 export async function POST(req: NextRequest) {
   try {
     const actor = await requireSession(req, { actorTypes: ["ADMIN"] });
