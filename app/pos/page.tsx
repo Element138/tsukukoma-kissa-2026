@@ -1,7 +1,8 @@
 ﻿"use client";
 
 import { CSSProperties, Fragment, ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { ApiError, apiFetch, fmtJpy } from "@/lib/client";
+import { apiFetch, fmtJpy } from "@/lib/client";
+import { isDefinitiveOrderRejection } from "@/lib/client/order-recovery";
 import { useSession } from "@/components/use-session";
 import { TerminalBanner } from "@/components/terminal-banner";
 import { DashboardShell } from "@/components/dashboard-shell";
@@ -651,7 +652,7 @@ export default function PosPage() {
         });
       }
     } catch (e) {
-      if (e instanceof ApiError && [400, 403, 404].includes(e.status)) forgetRequest();
+      if (isDefinitiveOrderRejection(e)) forgetRequest();
       const errorMessage =
         e instanceof Error ? e.message : "注文登録に失敗しました";
       notify({
@@ -1036,7 +1037,7 @@ export default function PosPage() {
                   }
                   await refreshPaymentState(data.order.id);
                 } catch (e) {
-                  if (e instanceof ApiError && [400, 403, 404].includes(e.status)) forgetRequest();
+                  if (isDefinitiveOrderRejection(e)) forgetRequest();
                   notify({ level: "error", message: e instanceof Error ? e.message : "送信結果を確認できません" });
                 } finally { setBusy(false); }
               }}>元の注文送信を安全に再試行</Button>
