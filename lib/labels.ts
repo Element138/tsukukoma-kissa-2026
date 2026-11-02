@@ -1,4 +1,4 @@
-﻿export const ACTOR_TYPE_LABEL: Record<string, string> = {
+export const ACTOR_TYPE_LABEL: Record<string, string> = {
   POS: "POS",
   KITCHEN: "キッチン",
   WAITER: "カウンター",
@@ -35,11 +35,12 @@ export const PAYMENT_STATUS_LABEL: Record<string, string> = {
 
 export const ORDER_STATUS_LABEL: Record<string, string> = {
   PENDING: "保留",
-  PREPARING: "調理中",
+  PREPARING: "未完了",
   AWAITING_SERVING: "受け取り待ち",
   COMPLETED: "完了",
+  PARTIALLY_CANCELED: "一部取消",
   FAILED: "失敗",
-  CANCELED: "取消",
+  CANCELED: "全部取消",
 };
 
 export const ORDER_ITEM_STATUS_LABEL: Record<string, string> = {

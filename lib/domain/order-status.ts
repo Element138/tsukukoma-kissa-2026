@@ -24,6 +24,9 @@ export function deriveOrderStatus(params: {
     return "PENDING";
   }
 
+  const canceled = params.items.filter(i => i.status === "CANCELED").length;
+  if (canceled === params.items.length) return "CANCELED";
+  if (canceled > 0 && params.items.every(i => i.status === "SERVED" || i.status === "CANCELED")) return "PARTIALLY_CANCELED";
   const allServed = params.items.every((i) => i.status === "SERVED");
   if (allServed) {
     return "COMPLETED";

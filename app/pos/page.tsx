@@ -1,9 +1,11 @@
-﻿"use client";
+"use client";
 
 import { CSSProperties, Fragment, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch, fmtJpy } from "@/lib/client";
 import { isDefinitiveOrderRejection } from "@/lib/client/order-recovery";
+import { paymentResultNotification } from "@/lib/client/payment-notification";
 import { useSession } from "@/components/use-session";
+import { posDefaultOnSession } from "@/lib/domain/pos-default";
 import { TerminalBanner } from "@/components/terminal-banner";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { ConfirmSlider } from "@/components/confirm-slider";
@@ -225,10 +227,12 @@ export default function PosPage() {
   const [lastCashOrder, setLastCashOrder] = useState<{ id: string; orderNo: number; totalPriceJpy: number; canceled?: boolean } | null>(null);
   const notifiedIncidentIdsRef = useRef<Set<string>>(new Set());
 
-  const handleCashCanceled = () => {
-    setReceiptPrintTarget(null);
-    setLastCashOrder(previous => previous ? { ...previous, canceled: true } : null);
-    notify({ level: "success", message: "現金注文を取り消しました。必要な場合は新しく注文してください。" });
+  const handleCashCanceled = (target: ReceiptPrintTarget) => {
+    setReceiptPrintTarget(target);
+    void apiFetch<{order:{items:Array<{status:string}>}}>(`/api/orders/${target.id}/refunds`).then(({order}) => {
+      setLastCashOrder(previous => previous?.id === target.id ? { ...previous, canceled: order.items.every(item => item.status === "CANCELED") } : previous);
+    }).catch(() => undefined);
+    notify({ level: "success", message: "取消・現金返金を記録しました。" });
     void loadMenus().catch(() => undefined);
   };
 
@@ -237,7 +241,28 @@ export default function PosPage() {
     setMenus(data);
   };
 
+  const releaseRejectedRequest = async (error: unknown) => {
+    if (!isDefinitiveOrderRejection(error)) return;
+    // The server rejected creation: allow editing instead of replaying a frozen request.
+    forgetRequest();
+    await loadMenus().catch(() => undefined);
+  };
+
+  const defaultFulfillmentType = session?.actor.defaultFulfillmentType ?? "DINE_IN";
+  const posActorId = session?.actor.actorId;
+  const appliedFulfillmentDefault = useRef<string | null>(null);
+  const latestFulfillmentDefault = useRef(defaultFulfillmentType);
+  useEffect(() => {
+    latestFulfillmentDefault.current = defaultFulfillmentType;
+    if (!posActorId) return;
+    const hasDraft = Object.keys(cart).length > 0 || busy || Boolean(awaitingOrder || pendingSquareOrderId || recoveryPayload || specialNote);
+    const next = posDefaultOnSession(appliedFulfillmentDefault.current, posActorId, defaultFulfillmentType, hasDraft);
+    appliedFulfillmentDefault.current = `${posActorId}:${defaultFulfillmentType}`;
+    if (next) setFulfillmentType(next);
+  }, [posActorId, defaultFulfillmentType, cart, busy, awaitingOrder, pendingSquareOrderId, recoveryPayload, specialNote]);
+
   const resetInputsToDefault = () => {
+    setFulfillmentType(latestFulfillmentDefault.current);
     setCart({});
     setCashEntryVersion((version) => version + 1);
     setAgeGroupCounts(createEmptyAgeGroupCounts());
@@ -316,7 +341,7 @@ export default function PosPage() {
         });
         notify({
           level: "success",
-          message: `注文 #${data.trackedOrder.orderNo} のSquare決済完了を確認しました`,
+          message: paymentResultNotification(data.trackedOrder.orderNo, data.trackedOrder.paymentMethod, "PAID"),
         });
         return;
       }
@@ -328,7 +353,7 @@ export default function PosPage() {
         setPendingSquareOrderId(null);
         notify({
           level: "warning",
-          message: `注文 #${data.trackedOrder.orderNo} のSquare決済失敗を確認しました`,
+          message: paymentResultNotification(data.trackedOrder.orderNo, data.trackedOrder.paymentMethod, "FAILED"),
           durationMs: 9000,
         });
       }
@@ -567,7 +592,7 @@ export default function PosPage() {
   };
 
   const submitOrder = async () => {
-    if (submitInFlight.current || recoveryPayload || !paymentStateReady || !camera.ready) return;
+    if (submitInFlight.current || recoveryPayload || !paymentStateReady) return;
     if (awaitingOrder) {
       notify({
         level: "warning",
@@ -604,6 +629,7 @@ export default function PosPage() {
         ageRanges,
         specialNote: specialNote || undefined,
         paymentMethod,
+        cashierPhotoBestEffort: true,
         paymentSkipReasonType:
           paymentMethod === "PAYMENT_SKIPPED" ? skipReasonType : null,
         paymentSkipReasonText:
@@ -652,7 +678,7 @@ export default function PosPage() {
         });
       }
     } catch (e) {
-      if (isDefinitiveOrderRejection(e)) forgetRequest();
+      await releaseRejectedRequest(e);
       const errorMessage =
         e instanceof Error ? e.message : "注文登録に失敗しました";
       notify({
@@ -686,7 +712,7 @@ export default function PosPage() {
   return (
     <>
       <CashierCameraGate videoRef={camera.videoRef} ready={camera.ready} connecting={camera.connecting} error={camera.error} onConnect={() => void camera.start()} />
-      <div inert={!camera.ready} aria-hidden={!camera.ready}>
+      <div>
       <TerminalBanner
         actorId={session.actor.actorId}
         actorType={session.actor.actorType}
@@ -831,7 +857,7 @@ export default function PosPage() {
             {incidents.length > 0 && (
               <div className="notice error" style={{ marginBottom: 12 }}>
                 決済異常通知あり: {incidents.length}
-                件（詳細はオーダーブック上部）
+                件 · <a href="/admin/square-payments" className="underline">決済の復旧・照合</a>
               </div>
             )}
 
@@ -1024,7 +1050,7 @@ export default function PosPage() {
                 try {
                   if (recoveryPayload.paymentMethod !== "SQUARE") await camera.prepare(String(recoveryPayload.idempotencyKey));
                   const data = await apiFetch<{ order: { id: string; orderNo: number; totalPriceJpy: number; orderStatus: string; paymentStatus: string; paymentMethod: string } }>("/api/orders", {
-                    method: "POST", body: JSON.stringify(recoveryPayload), timeoutMs: 25_000,
+                    method: "POST", body: JSON.stringify({ ...recoveryPayload, cashierPhotoBestEffort: true }), timeoutMs: 25_000,
                   });
                   forgetRequest();
                   if (data.order.paymentMethod === "SQUARE") { rememberPending(data.order.id); setPendingSquareOrderId(data.order.id); }
@@ -1037,10 +1063,10 @@ export default function PosPage() {
                   }
                   await refreshPaymentState(data.order.id);
                 } catch (e) {
-                  if (isDefinitiveOrderRejection(e)) forgetRequest();
+                  await releaseRejectedRequest(e);
                   notify({ level: "error", message: e instanceof Error ? e.message : "送信結果を確認できません" });
                 } finally { setBusy(false); }
-              }}>元の注文送信を安全に再試行</Button>
+              }}>元の注文を確認・再送</Button>
             </div>}
             {isAwaitingLocked && awaitingOrder && (
               <div className="notice error" style={{ marginTop: 12 }}>
@@ -1057,7 +1083,7 @@ export default function PosPage() {
                 <div className="row wrap" style={{ marginTop: 8 }}>
                   {awaitingOrder.launchAvailable && (
                     <form action="/api/square/launch" method="post" onSubmit={event => {
-                      if (launchInFlight.current || !navigator.onLine || !camera.ready || preparedSquareOrderId !== awaitingOrder.id) {
+                      if (launchInFlight.current || !navigator.onLine || preparedSquareOrderId !== awaitingOrder.id) {
                         event.preventDefault();
                         if (!navigator.onLine) notify({ level: "error", message: "オフライン決済は利用できません" });
                         return;
@@ -1066,17 +1092,18 @@ export default function PosPage() {
                       rememberPending(awaitingOrder.id);
                     }}>
                       <input type="hidden" name="orderId" value={awaitingOrder.id} />
+                      <input type="hidden" name="cashierPhotoBestEffort" value="true" />
                       {preparedSquareOrderId === awaitingOrder.id
-                        ? <Button type="submit" disabled={busy}>Squareを開く</Button>
-                        : <Button type="button" disabled={busy} onClick={async () => {
+                        ? <Button key="square-launch" type="submit" disabled={busy}>Squareを開く</Button>
+                        : <Button key="square-prepare" type="button" disabled={busy} onClick={async event => {
+                          event.preventDefault();
                           setBusy(true);
                           try {
-                            if (!awaitingOrder.checkoutKey) throw new Error("この注文の撮影情報がありません。管理者に確認してください");
-                            await camera.prepare(awaitingOrder.checkoutKey);
+                            if (awaitingOrder.checkoutKey) await camera.prepare(awaitingOrder.checkoutKey);
                             setPreparedSquareOrderId(awaitingOrder.id);
                           } catch (error) { notify({ level: "error", message: error instanceof Error ? error.message : "撮影できません" }); }
                           finally { setBusy(false); }
-                        }}>撮影してSquare決済へ</Button>}
+                        }}>{busy ? "Square決済を準備中…" : "Square決済を準備"}</Button>}
                     </form>
                   )}
                   <Button variant="outline" disabled={busy} onClick={async () => {
@@ -1087,7 +1114,7 @@ export default function PosPage() {
                     } catch (e) { notify({ level: "error", message: e instanceof Error ? e.message : "決済状態を確認できません" }); }
                     finally { setBusy(false); }
                   }}>決済状態を確認</Button>
-                  <a href="/admin/square-payments">管理者による照合</a>
+                  <a href="/admin/square-payments">決済の復旧・照合</a>
 
                 </div>
               </div>

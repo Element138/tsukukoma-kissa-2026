@@ -38,6 +38,25 @@ test("receipt text is escaped before Adobe's web kit executes", async () => {
   assert.ok(html.includes("jzl2tov"));
 });
 
+for (const size of ["small", "large"] as const) {
+  test(`${size}: cash refund receipt has negative selected lines, refund time/badge and no pickup instruction`, async () => {
+    const params=await receipt(size);
+    params.data={...params.data,isRefund:true,refundConfirmedAt:new Date("2026-10-30T02:00:00Z"),totalPriceJpy:-200,
+      items:[{name:"取消した商品",quantity:2,unitPriceJpy:-100}]};
+    const html=receiptHtml(params);
+    assert.match(html,/>返金<\/div>/);assert.match(html,/fulfillment takeout/);
+    assert.match(html,/ご返金内容/);assert.doesNotMatch(html,/ご注文内容/);
+    assert.match(html,/-¥100/);assert.match(html,/-¥200/);
+    assert(html.indexOf("返金確定日時")>html.indexOf("会計日時"));
+    assert(html.indexOf("返金確定日時")<html.indexOf("返金方法"));
+    assert.match(html,/ありがとうございました<\/p><\/footer>/);
+    assert.doesNotMatch(html,/受け取り時にお見せください/);
+    const pdf=Buffer.from(await renderReceiptPdf(params,async()=>{throw Error("Offline refund receipt test");}));
+    assert.equal(pdf.subarray(0,5).toString(),"%PDF-");
+    assert.equal([...pdf.toString("latin1").matchAll(/\/Type\s*\/Page\b/g)].length,1);
+  });
+}
+
 test("small HTML uses the MP-B20 print-area canvas without changing vertical padding", async () => {
   const html = receiptHtml(await receipt("small"));
   assert.ok(html.includes("width: 48mm"));

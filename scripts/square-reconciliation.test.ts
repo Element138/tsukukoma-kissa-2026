@@ -12,7 +12,7 @@ function fixture() {
   const attempt: any = { id: "attempt1", orderId: order.id, transactionId: "transaction1", locationId: "location1",
     launchedAt: new Date(Date.now()-10_000), verifyAttempts: 0, verifyAfter: null, resolvedAt: null, lastError: null };
   const incidents: any[] = [], audits: any[] = [], broadcasts: any[] = [];
-  let reads=0, mismatch=false, fail=false;
+  let reads=0, mismatch=false, fail=false, unmarked=false;
   const apiFetch = async (input: string | URL | Request) => {
     reads++;
     if (fail) throw new Error("network");
@@ -22,7 +22,7 @@ function fixture() {
       tenders: [{ payment_id: "payment1" }],
     } } : { payment: { id: "payment1", order_id: "transaction1", location_id: "location1", status: "COMPLETED", source_type: "CARD",
       amount_money: { amount: mismatch ? 421 : 420, currency: "JPY" }, total_money: { amount: 420, currency: "JPY" },
-      created_at: new Date().toISOString(), note: "[KISSa:order1]" } });
+      created_at: new Date().toISOString(), note: unmarked ? "" : "[KISSa:order1]" } });
   };
   const apply = (target: any, data: any) => { for (const [key, value] of Object.entries(data)) {
     if (value && typeof value === "object" && "increment" in value) target[key] += (value as any).increment;
@@ -57,7 +57,7 @@ function fixture() {
     realtimeEvent: {createMany: async ({data}: any) => {broadcasts.push(...data);return {count:data.length};}},
   };
   return {db: db as PrismaClient,order,attempt,incidents,audits,broadcasts,apiFetch,
-    get reads(){return reads;},set mismatch(v:boolean){mismatch=v;},set fail(v:boolean){fail=v;}};
+    get reads(){return reads;},set mismatch(v:boolean){mismatch=v;},set fail(v:boolean){fail=v;},set unmarked(v:boolean){unmarked=v;}};
 }
 async function usingApi<T>(f: ReturnType<typeof fixture>, fn: () => Promise<T>) {
   const saved=global.fetch, token=process.env.SQUARE_ACCESS_TOKEN;
@@ -76,6 +76,23 @@ test("simultaneous callback and notification share a verification lease", async 
   const f=fixture();await usingApi(f,async()=>{
     await Promise.all([reconcileSquarePayment(f.db,"order1"),reconcileSquarePayment(f.db,"order1")]);
     assert.equal(f.reads,2);assert.equal(f.attempt.verifyAttempts,1);assert.equal(f.order.paymentStatus,"PAID");
+  });
+});
+
+test("manual reconciliation accepts a short non-empty reason throughout verification", async () => {
+  const f=fixture();f.unmarked=true;
+  await usingApi(f,async()=>{
+    assert.equal((await reconcileSquarePayment(f.db,"order1",{manual:true,actorId:"admin",reason:"照合済"})).verified,true);
+    assert.equal(f.order.paymentStatus,"PAID");
+    assert.equal(f.audits.find(a=>a.actionType==="SQUARE_SERVER_VERIFIED")?.reasonText,"照合済");
+  });
+});
+
+test("empty reasons do not enable unmarked-payment reconciliation", async () => {
+  const f=fixture();f.unmarked=true;
+  await usingApi(f,async()=>{
+    assert.equal((await reconcileSquarePayment(f.db,"order1",{manual:true,actorId:"admin",reason:"   "})).verified,false);
+    assert.equal(f.order.paymentStatus,"AWAITING");
   });
 });
 test("mismatched amount never confirms or notifies the kitchen", async () => {

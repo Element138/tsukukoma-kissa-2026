@@ -1353,6 +1353,22 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   background: #a71f1f;
 }
 
+.ready-action-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  padding-inline: 16.6667%;
+}
+
+.ready-action-split .ready-action-submit {
+  padding: 6px 3px;
+  font-size: 13px;
+  line-height: 1.4;
+  min-height: 56px;
+}
+
+.ready-action-submit-uncook { background: #a54c0a; border-left: 1px solid #fff; }
+.ready-action-submit-uncook:hover { background: #843b07; }
+
 .ready-action-submit:disabled,
 .ready-edge-control:disabled,
 .kitchen-order-ready-btn:disabled {
@@ -3392,6 +3408,14 @@ button:not(.inline-flex):not([data-state]):not(.confirm-slider-thumb):not(
   min-width: 0;
   padding-right: 52px;
   overflow-wrap: anywhere;
+}
+
+.receipt-print-header-refund {
+  border-left: 4px solid #be123c;
+  border-radius: 10px;
+  background: #fff1f2;
+  padding: 14px 52px 14px 14px;
+  color: #881337;
 }
 
 .receipt-print-body {

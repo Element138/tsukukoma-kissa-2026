@@ -19,7 +19,7 @@ export async function markOrderAbsent(db: Prisma.TransactionClient, params: {
     return duplicate.afterJson;
   }
   const order = await db.order.findUnique({ where: { id: params.orderId }, include: { items: true } });
-  assert(order?.confirmedAt && !["COMPLETED", "FAILED", "CANCELED"].includes(order.orderStatus), 409, "ORDER_FAILED", "不在にできない注文です");
+  assert(order?.confirmedAt && !["COMPLETED", "PARTIALLY_CANCELED", "FAILED", "CANCELED"].includes(order.orderStatus), 409, "ORDER_FAILED", "不在にできない注文です");
   if (order.ghostedAt) return { orderId: order.id, ghostedAt: order.ghostedAt, alreadyProcessed: true };
   assert(order.items.every(item => menuIds.includes(item.menuId)), 409, "STOCK_CHANGED", "注文内容が変わりました。更新してください");
   await resetExpiredReadyStock(db, menuIds);

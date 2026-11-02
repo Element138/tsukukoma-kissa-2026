@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
           order: {
             ghostedAt: null,
             confirmedAt: { not: null },
-            orderStatus: { notIn: ["COMPLETED", "FAILED", "CANCELED"] },
+            orderStatus: { notIn: ["COMPLETED", "PARTIALLY_CANCELED", "FAILED", "CANCELED"] },
           },
         },
         select: {

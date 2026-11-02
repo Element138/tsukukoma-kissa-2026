@@ -9,6 +9,8 @@ export type ReceiptLineItem = {
 export type ReceiptData = {
   orderNo: number;
   transactionAt: Date;
+  refundConfirmedAt?: Date;
+  isRefund?: boolean;
   fulfillmentType: string;
   tableNo: number | null;
   paymentMethod: string;
@@ -20,4 +22,5 @@ export type ReceiptData = {
 export type ReceiptPrintTarget = {
   id: string;
   orderNo: number;
+  refundId?: string;
 };

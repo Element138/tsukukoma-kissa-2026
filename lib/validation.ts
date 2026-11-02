@@ -20,6 +20,7 @@ export const orderCreateSchema = z
     ageRanges: z.array(z.string().min(1).max(32)).min(1),
     specialNote: z.string().max(500).optional(),
     paymentMethod: z.enum(["CASH", "SQUARE", "PAYMENT_SKIPPED"]),
+      cashierPhotoBestEffort: z.boolean().optional(),
     paymentSkipReasonType: z.enum(["TEST", "DEVICE_ERROR", "NETWORK_ERROR", "OTHER"]).nullable().optional(),
     paymentSkipReasonText: z.string().max(300).nullable().optional(),
     items: z.array(orderItemInputSchema).min(1).max(80),
@@ -64,12 +65,14 @@ export const kitchenMenuReadySchema = z.object({
   menuId: z.string().uuid(),
   quantity: z.number().int().min(-999).max(999).refine(value => value !== 0, "数量に0は指定できません"),
   idempotencyKey: z.string().min(8).max(160),
-  confirmOverCap: z.boolean().optional()
+  confirmOverCap: z.boolean().optional(),
+  correctionType: z.enum(["DISCARD", "UNCOOK"]).optional(),
 });
 
 export const kitchenMenuCapUpdateSchema = z.object({
   menuId: z.string().uuid(),
-  dailyOrderCap: z.number().int().min(1).max(100000).nullable(),
+  dailyOrderCap: z.number().int().min(0).max(100000).nullable(),
+  expectedDailyOrderCap: z.number().int().min(0).max(100000).nullable().optional(),
 });
 
 export const serveItemSchema = z.object({
@@ -106,11 +109,15 @@ export const actorCreateSchema = z
     actorType: actorTypeSchema,
     label: z.string().min(1).max(120),
     secret: z.string().min(4).max(128),
+    defaultFulfillmentType: z.enum(["DINE_IN", "TAKEOUT"]).optional(),
     kitchenEnabled: z.boolean().optional(),
     kitchenDisplayOrder: z.number().int().min(0).max(999).optional()
   })
   .strict()
   .superRefine((v, ctx) => {
+    if (v.actorType !== "POS" && v.defaultFulfillmentType !== undefined) {
+      ctx.addIssue({code: z.ZodIssueCode.custom, message: "初期の注文種別はPOSのみ指定できます", path: ["defaultFulfillmentType"]});
+    }
     const hasKitchenFields = typeof v.kitchenEnabled === "boolean" || typeof v.kitchenDisplayOrder === "number";
     if (v.actorType !== "KITCHEN" && hasKitchenFields) {
       ctx.addIssue({
@@ -126,6 +133,7 @@ export const actorUpdateSchema = z
     id: z.string().min(1).max(64),
     label: z.string().min(1).max(120).optional(),
     secret: z.string().min(4).max(128).optional(),
+    defaultFulfillmentType: z.enum(["DINE_IN", "TAKEOUT"]).optional(),
     kitchenEnabled: z.boolean().optional(),
     kitchenDisplayOrder: z.number().int().min(0).max(999).optional()
   })
@@ -156,7 +164,7 @@ export const menuCreateSchema = z.object({
   priceJpy: z.number().int().min(0).max(100000),
   availability: z.enum(["AVAILABLE", "INCREASED_WAIT", "PAUSED", "SOLD_OUT"]),
   workloadSeconds: z.number().finite().min(0.1).max(7200),
-  dailyOrderCap: z.number().int().min(1).max(100000).nullable().optional(),
+  dailyOrderCap: z.number().int().min(0).max(100000).nullable().optional(),
   lowStockBadgeEnabled: z.boolean().optional(),
   lowStockBadgeThreshold: z.number().int().min(0).max(100000).optional(),
   displayOrder: z.number().int().min(0).max(999),
@@ -178,7 +186,8 @@ export const menuUpdateSchema = z.object({
   priceJpy: z.number().int().min(0).max(100000).optional(),
   availability: z.enum(["AVAILABLE", "INCREASED_WAIT", "PAUSED", "SOLD_OUT"]).optional(),
   workloadSeconds: z.number().finite().min(0.1).max(7200).optional(),
-  dailyOrderCap: z.number().int().min(1).max(100000).nullable().optional(),
+  dailyOrderCap: z.number().int().min(0).max(100000).nullable().optional(),
+  expectedDailyOrderCap: z.number().int().min(0).max(100000).nullable().optional(),
   lowStockBadgeEnabled: z.boolean().optional(),
   lowStockBadgeThreshold: z.number().int().min(0).max(100000).optional(),
   displayOrder: z.number().int().min(0).max(999).optional(),

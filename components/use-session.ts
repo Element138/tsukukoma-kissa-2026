@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -9,6 +9,7 @@ type SessionPayload = {
     actorId: string;
     actorType: "POS" | "KITCHEN" | "WAITER" | "MENU_DISPLAY" | "ORDER_DISPLAY" | "ADMIN";
     label: string;
+    defaultFulfillmentType?: "DINE_IN" | "TAKEOUT";
   };
   offlineActors: Array<{ actorId: string; actorType: string; label: string }>;
 };

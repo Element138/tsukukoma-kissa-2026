@@ -24,7 +24,8 @@ test('negative kitchen button stays red against the full global CSS cascade', as
     assert.equal((await style('#reduce')).image, 'none');
     await page.locator('#ready').hover();
     assert.equal((await style('#reduce')).background, 'rgb(198, 40, 40)');
-    assert.match(fs.readFileSync('app/kitchen/page.tsx', 'utf8'), /readyQuantity < 0 && "ready-action-submit-negative"/);
+    assert.match(fs.readFileSync('app/kitchen/page.tsx', 'utf8'), /ready-action-split/);
+    assert.match(fs.readFileSync('app/kitchen/page.tsx', 'utf8'), /ready-action-submit-uncook/);
   } finally {
     await browser.close();
   }

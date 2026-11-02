@@ -16,7 +16,7 @@ export type ReceiptRenderParams = {
 const escapeHtml = (value: string | number) => String(value).replace(/[&<>"']/g, c => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
 }[c]!));
-const yen = (value: number) => `¥${value.toLocaleString("ja-JP")}`;
+const yen = (value: number) => `${value < 0 ? "-" : ""}¥${Math.abs(value).toLocaleString("ja-JP")}`;
 
 export function receiptHtml(params: ReceiptRenderParams) {
   const { data, size } = params;
@@ -57,14 +57,14 @@ footer { text-align: center; margin-top: 4mm; }
 .instruction { font-size: ${paper.bodyFontPt * .82}pt; }
 </style></head><body><main>
 <header><img class="logo" alt="" src="data:image/png;base64,${Buffer.from(params.logoBytes).toString("base64")}"><div class="brand">
-<div class="fulfillment ${data.fulfillmentType === "TAKEOUT" ? "takeout" : ""}">${data.fulfillmentType === "TAKEOUT" ? "持ち帰り" : "店内"}</div>
+<div class="fulfillment ${data.isRefund || data.fulfillmentType === "TAKEOUT" ? "takeout" : ""}">${data.isRefund ? "返金" : data.fulfillmentType === "TAKEOUT" ? "持ち帰り" : "店内"}</div>
 <div><div class="shop-name">筑駒75期喫茶</div><div class="shop-reading">かわせみ</div></div></div></header>
 ${data.tableNo == null ? "" : row("テーブル", String(data.tableNo))}
-${row("会計日時", formatTokyo(data.transactionAt))}${row("決済", labelOf(PAYMENT_METHOD_LABEL, data.paymentMethod))}<hr>
-<h2>ご注文内容</h2>${data.items.map(item => `<section class="item"><p class="item-name">${escapeHtml(item.name)}</p>${row(`${item.quantity} × ${yen(item.unitPriceJpy)}`, yen(item.quantity * item.unitPriceJpy))}</section>`).join("")}
+${row("会計日時", formatTokyo(data.transactionAt))}${data.refundConfirmedAt ? row("返金確定日時", formatTokyo(data.refundConfirmedAt)) : ""}${row(data.isRefund ? "返金方法" : "決済", labelOf(PAYMENT_METHOD_LABEL, data.paymentMethod))}<hr>
+<h2>${data.isRefund ? "ご返金内容" : "ご注文内容"}</h2>${data.items.map(item => `<section class="item"><p class="item-name">${escapeHtml(item.name)}</p>${row(`${item.quantity} × ${yen(item.unitPriceJpy)}`, yen(item.quantity * item.unitPriceJpy))}</section>`).join("")}
 <hr>${row("合計", yen(data.totalPriceJpy), "total")}
 <div class="order-number"><p>ご注文番号</p><p class="number-badge">${escapeHtml(data.orderNo)}</p></div>
-<footer><p class="thanks">ありがとうございました</p><p class="instruction">受け取り時にお見せください</p></footer>
+<footer><p class="thanks">ありがとうございました</p>${data.isRefund ? "" : '<p class="instruction">受け取り時にお見せください</p>'}</footer>
 </main><script>
 // The font kit is hosted by Adobe; no Adobe font files are stored on our server.
 window.receiptFonts = "loading";

@@ -1,4 +1,4 @@
-﻿import { ActorType, Prisma, Session } from "@prisma/client";
+import { ActorType, FulfillmentType, Prisma, Session } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { AppError, assert } from "@/lib/errors";
@@ -16,6 +16,7 @@ type SessionActor = {
   label: string;
   isActive: boolean;
   lastSeenAt: Date | null;
+  defaultFulfillmentType: FulfillmentType;
 };
 
 export type AuthenticatedActor = {
@@ -23,6 +24,7 @@ export type AuthenticatedActor = {
   actorType: ActorType;
   label: string;
   sessionId: string;
+  defaultFulfillmentType?: FulfillmentType;
 };
 
 type SessionFailureCode =
@@ -100,7 +102,8 @@ async function loadSession(req: NextRequest): Promise<SessionLoadResult> {
           actorType: true,
           label: true,
           isActive: true,
-          lastSeenAt: true
+          lastSeenAt: true,
+          defaultFulfillmentType: true
         }
       }
     }
@@ -186,7 +189,8 @@ export async function requireSession(
     actorId: loaded.session.actor.id,
     actorType: loaded.session.actor.actorType,
     label: loaded.session.actor.label,
-    sessionId: loaded.session.sessionId
+    sessionId: loaded.session.sessionId,
+    defaultFulfillmentType: loaded.session.actor.defaultFulfillmentType
   };
 }
 

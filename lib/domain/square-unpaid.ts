@@ -1,5 +1,5 @@
 import { assert } from "@/lib/errors";
-import { squareGet, type SquarePayment } from "@/lib/domain/square-verification";
+import { readSquareOrderPayments, squareGet, type SquarePayment } from "@/lib/domain/square-verification";
 
 type SearchInput = { orderId: string; locationId: string; amountJpy: number; launchedAt: Date; transactionId?: string | null };
 export type PaymentInspection = { kind: "completed"; transactionId: string } | { kind: "unpaid" };
@@ -12,14 +12,7 @@ export async function inspectSquareBeforeClosing(input: SearchInput): Promise<Pa
   if (input.transactionId) {
     const { order } = await squareGet(`orders/${encodeURIComponent(input.transactionId)}`);
     assert(order?.id === input.transactionId && order.location_id === input.locationId, 409, "SQUARE_MISMATCH", "Square取引の店舗が一致しません");
-    assert(Array.isArray(order.tenders) && order.tenders.length > 0 && order.tenders.length <= 2,
-      409, "SQUARE_UNVERIFIED", "Squareの決済記録を確認できません。未決済として終了できません");
-    for (const tender of order.tenders) {
-      assert(typeof tender.payment_id === "string", 409, "SQUARE_UNVERIFIED", "Squareの決済IDが未確定です");
-      const { payment } = await squareGet(`payments/${encodeURIComponent(tender.payment_id)}`);
-      assert(payment?.id === tender.payment_id && payment.order_id === input.transactionId, 409, "SQUARE_MISMATCH", "Squareの決済IDが一致しません");
-      matches.push(payment);
-    }
+    matches.push(...await readSquareOrderPayments(input.transactionId, order.tenders));
   } else {
     const parameters = new URLSearchParams({ location_id: input.locationId, begin_time: new Date(input.launchedAt.getTime() - 60_000).toISOString(),
       end_time: new Date().toISOString(), limit: "100", sort_order: "DESC" });

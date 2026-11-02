@@ -13,6 +13,29 @@ export async function requirePhotoStorageAvailable(tx: Prisma.TransactionClient)
   assert(!state.failedAt || photoOverrideActive(state.ignoreUntil), 503, "PHOTO_STORAGE_BLOCKED", "画像を保存できないため新規会計を停止しています。管理者に確認してください");
 }
 
+// Only the authenticated POS checkout/launch paths opt into this policy.
+// Existing callers retain the strict capture and storage checks below.
+export async function attachCashierPhotoBestEffort(tx: Prisma.TransactionClient, input: {
+  checkoutKey: string; actorId: string; orderId: string;
+}) {
+  const photo = await tx.cashierPhoto.findUnique({ where: { checkoutKey: input.checkoutKey } });
+  if (photo?.actorId === input.actorId && photo.capturedAt && photo.sha256 && photo.storedAt) {
+    if (photo.orderId === input.orderId) return photo;
+    if (!photo.orderId) {
+      const bound = await tx.cashierPhoto.updateMany({
+        where: { id: photo.id, orderId: null }, data: { orderId: input.orderId, waivedAt: null },
+      });
+      if (bound.count === 1) return photo;
+    }
+  }
+  await writeAuditLog(tx, {
+    actorId: input.actorId, actorType: "POS", actionType: "CASHIER_PHOTO_SKIPPED", entityType: "order",
+    entityId: input.orderId, orderId: input.orderId, result: "SUCCESS",
+    reasonType: photo?.actorId === input.actorId && photo.failureCode ? photo.failureCode : "PHOTO_NOT_AVAILABLE",
+  });
+  return null;
+}
+
 export async function attachCashierPhoto(tx: Prisma.TransactionClient, input: {
   checkoutKey: string; actorId: string; orderId: string;
 }) {

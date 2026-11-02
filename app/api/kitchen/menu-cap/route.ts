@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
         kitchenId: actor.actorId,
         menuId: body.menuId,
         dailyOrderCap: body.dailyOrderCap,
+        expectedDailyOrderCap: body.expectedDailyOrderCap,
       });
 
       await broadcastInvalidation(

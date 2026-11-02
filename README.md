@@ -1,4 +1,4 @@
-This repository is planned to be released to the general public under the MIT License on November 2, 2026.
+This project is released under the [MIT License](LICENSE) as of November 2, 2026.
 
 # KISSa
 

@@ -14,6 +14,9 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "@/components/ui/dialog";
+import { ReceiptPrintDialog } from "@/components/receipt-print-dialog";
+import type { ReceiptPrintTarget } from "@/lib/receipt/types";
 
 type PendingOrder = {
   id: string; orderNo: number; totalPriceJpy: number; createdAt: string; createdByActorId: string;
@@ -23,26 +26,31 @@ type Incident = { id: string; orderId: string; messageJa: string; incidentType: 
 type Result = { verified?: boolean; deferred?: boolean; error?: string; closed?: boolean; paymentFound?: boolean; lateSuccess?: boolean };
 const dateLabel = (value: string) => new Date(value).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
-function ReconciliationCard({ order, onResult }: { order: PendingOrder; onResult: (result: Result) => Promise<void> }) {
+function ReconciliationCard({ order, onResult }: { order: PendingOrder; onResult: (result: Result, order: PendingOrder, action: "VERIFY" | "NO_CHARGE") => Promise<void> }) {
   const [transactionId, setTransactionId] = useState(order.squareAttempt?.transactionId ?? "");
   const [reason, setReason] = useState("");
   const [attested, setAttested] = useState(false);
   const [action, setAction] = useState<"VERIFY" | "NO_CHARGE" | null>(null);
   const [message, setMessage] = useState("");
+  const [stopOpen, setStopOpen] = useState(false);
+  const [noChargeConfirmed, setNoChargeConfirmed] = useState(false);
   const busy = action !== null;
   const run = async (next: "VERIFY" | "NO_CHARGE") => {
+    if (next === "NO_CHARGE" && !noChargeConfirmed) return;
+    setStopOpen(false);
     setAction(next); setMessage("");
     try {
       const result = await apiFetch<Result>("/api/admin/square-payments", {
         method: "POST", timeoutMs: 60_000,
-        body: JSON.stringify({ orderId: order.id, action: next, transactionId: transactionId.trim() || undefined, reason, attested }),
+        body: JSON.stringify({ orderId: order.id, action: next, transactionId: transactionId.trim() || undefined, reason, attested,
+          ...(next === "NO_CHARGE" ? { noChargeConfirmed: true } : {}) }),
       });
       setMessage(result.error ?? (result.deferred ? "照合処理中です。少し待って再確認してください。" : ""));
-      await onResult(result);
+      await onResult(result, order, next);
     } catch (error) { setMessage(error instanceof Error ? error.message : "照合に失敗しました"); }
     finally { setAction(null); }
   };
-  const disabled = busy || !attested || reason.trim().length < 10;
+  const disabled = busy || !attested || reason.trim().length === 0;
   return <Card className="overflow-hidden border-slate-200 bg-white/95">
     <CardHeader className="border-b border-slate-100 bg-slate-50/70 p-5 sm:px-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -63,7 +71,7 @@ function ReconciliationCard({ order, onResult }: { order: PendingOrder; onResult
       </details>
       <label className="block space-y-2 text-sm font-medium"><span>確認内容</span>
         <textarea value={reason} onChange={event => setReason(event.target.value)} maxLength={500} disabled={busy} rows={2}
-          placeholder="確認した店舗・金額・取引時刻など（10文字以上）" className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-normal shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50" />
+          placeholder="確認した店舗・金額・取引時刻など" className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-normal shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50" />
       </label>
       <label className="flex cursor-pointer items-start gap-2.5 rounded-lg bg-slate-50 p-3 text-sm leading-relaxed">
         <input type="checkbox" className="mt-1 h-4 w-4 shrink-0 accent-teal-700" checked={attested} disabled={busy} onChange={event => setAttested(event.target.checked)} />
@@ -71,22 +79,37 @@ function ReconciliationCard({ order, onResult }: { order: PendingOrder; onResult
       </label>
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
         <Button disabled={disabled} onClick={() => void run("VERIFY")} className="gap-2"><RefreshCw className="h-4 w-4" aria-hidden="true" />{action === "VERIFY" ? "確認中…" : "支払い状況を再確認"}</Button>
-        <Button variant="outline" disabled={disabled} onClick={() => void run("NO_CHARGE")}>{action === "NO_CHARGE" ? "Squareに確認中…" : "未決済を確認して注文を終了"}</Button>
+        <Button variant="outline" disabled={disabled} onClick={() => { setNoChargeConfirmed(false); setStopOpen(true); }}>{action === "NO_CHARGE" ? "注文を確認中…" : "未決済を確認して注文を終了"}</Button>
       </div>
-      <p className="text-xs leading-relaxed text-muted-foreground">終了前にSquareへ再確認します。入金があれば決済済みとして処理します。Square側の取消・返金は行いません。</p>
+      <p className="text-xs leading-relaxed text-muted-foreground">終了時に着金が確認された場合は決済済みとなり、レシートを表示します。照合エラーの場合は担当者の確認に基づいて終了し、確認内容を記録します。Square側の取消・返金は行いません。</p>
       {message && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm leading-relaxed text-red-800">{message}</p>}
+      <Dialog open={stopOpen} onOpenChange={setStopOpen}>
+        <DialogContent role="alertdialog" className="w-[calc(100%-2rem)] border-2 border-red-600 bg-red-50">
+          <DialogTitle className="text-4xl font-black text-red-700">STOP!</DialogTitle>
+          <DialogDescription className="text-base font-semibold text-red-950">注文 #{order.orderNo} を未決済として終了する前に、Squareアプリの取引履歴を確認してください。</DialogDescription>
+          <label className="flex items-start gap-3 rounded-lg border border-red-300 bg-white p-4 text-base font-semibold leading-relaxed text-red-950">
+            <input type="checkbox" className="mt-1 h-5 w-5 shrink-0 accent-red-700" checked={noChargeConfirmed} onChange={event => setNoChargeConfirmed(event.target.checked)} />
+            <span>私はSquareアプリから#{order.orderNo}という名前の着金がないことを確認しました。</span>
+          </label>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setStopOpen(false)}>戻る</Button>
+            <Button className="bg-red-700 text-white hover:bg-red-800" disabled={!noChargeConfirmed || busy} onClick={() => void run("NO_CHARGE")}>確認して注文を終了</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </CardContent>
   </Card>;
 }
 
 export default function SquarePaymentsPage() {
-  const { loading, session } = useSession(["ADMIN"]);
+  const { loading, session } = useSession(["ADMIN", "POS"]);
   const { notify } = useToast();
   const [orders, setOrders] = useState<PendingOrder[]>([]);
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [closureReceipt, setClosureReceipt] = useState<ReceiptPrintTarget | null>(null);
   const generation = useRef(0);
   const reload = useCallback(async () => {
     const request = ++generation.current;
@@ -100,7 +123,8 @@ export default function SquarePaymentsPage() {
   }, []);
   useEffect(() => { if (session) void reload(); }, [session, reload]);
   useRealtimeSubscription({ enabled: Boolean(session), channels: ["orders"], onEvent: () => void reload(), onResync: () => void reload() });
-  const onResult = async (result: Result) => {
+  const onResult = async (result: Result, order: PendingOrder, action: "VERIFY" | "NO_CHARGE") => {
+    if (result.verified && action === "NO_CHARGE") setClosureReceipt({ id: order.id, orderNo: order.orderNo });
     if (result.lateSuccess) notify({ level: "error", message: "終了済みの注文に入金が見つかりました。決済異常を確認してください。" });
     else if (result.paymentFound && result.verified) notify({ level: "success", message: "Squareへの入金を確認したため、注文を決済済みにしました。" });
     else if (result.verified) notify({ level: "success", message: "入金を確認し、注文を決済済みにしました。" });
@@ -112,7 +136,7 @@ export default function SquarePaymentsPage() {
   return <><TerminalBanner actorId={session.actor.actorId} actorType={session.actor.actorType} actorLabel={session.actor.label} offlineActors={session.offlineActors} />
     <DashboardShell className="admin-shell square-review-shell" title="Square決済の照合"
       actions={<Button variant="outline" size="sm" disabled={refreshing} onClick={() => void reload()} className="gap-2"><RefreshCw className="h-4 w-4" aria-hidden="true" />更新</Button>}>
-      <Link href="/admin" className="mb-5 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" aria-hidden="true" />管理者パネル</Link>
+      <Link href={session.actor.actorType==="POS"?"/pos":"/admin"} className="mb-5 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" aria-hidden="true" />{session.actor.actorType==="POS"?"POSに戻る":"管理者パネル"}</Link>
       {error && <p role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</p>}
       {otherIncidents.length > 0 && <Card className="mb-5 border-amber-200 bg-amber-50/80"><CardHeader><CardTitle className="text-base">確認が必要な取引</CardTitle></CardHeader><CardContent className="space-y-3">
         {otherIncidents.map(incident => <div key={incident.id} className="text-sm leading-relaxed"><strong>注文 #{incident.order.orderNo}</strong><p className="mt-1 text-amber-950">{incident.messageJa}</p></div>)}
@@ -121,5 +145,10 @@ export default function SquarePaymentsPage() {
       {!loaded ? <p role="status" className="py-10 text-center text-sm text-muted-foreground">読み込み中…</p> : !error && !orders.length ? <Card><CardContent className="flex flex-col items-center gap-3 px-5 py-14 text-center"><ShieldCheck className="h-9 w-9 text-teal-700" aria-hidden="true" /><p className="font-semibold">照合待ちの注文はありません</p><p className="text-sm text-muted-foreground">支払い状況が未確定の注文があると、ここに表示されます。</p></CardContent></Card> :
         <><div className="mb-3 flex items-center gap-2 text-sm font-semibold"><CreditCard className="h-4 w-4 text-teal-700" aria-hidden="true" />支払い確認待ち<Badge variant="secondary">{orders.length}件</Badge></div>
         <div className="grid items-start gap-4 xl:grid-cols-2">{orders.map(order => <ReconciliationCard key={order.id} order={order} onResult={onResult} />)}</div></>}
-    </DashboardShell></>;
+    </DashboardShell>
+    <ReceiptPrintDialog target={closureReceipt} onClose={() => setClosureReceipt(null)}
+      notice={closureReceipt ? { title: `注文 #${closureReceipt.orderNo} の決済が完了しました`,
+        message: "注文を終了しようとしましたが、Squareへの着金が確認されたため、決済済みとして注文が成立しました。再決済しないでください。" } : undefined}
+      additionalAction={<Button variant="outline" onClick={() => setClosureReceipt(null)}>印刷せず閉じる</Button>} />
+    </>;
 }

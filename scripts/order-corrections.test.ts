@@ -35,6 +35,14 @@ test("all operational staff can manually close; displays cannot; waiter cannot a
   for(const actorType of ["ORDER_DISPLAY","MENU_DISPLAY"] as const){const f=fixture();await assert.rejects(correctOrder(f.db,{actorId:"a",actorType},input),{code:"FORBIDDEN"});assert.equal(f.writes,0);}
   const f=fixture();await assert.rejects(correctOrder(f.db,{actorId:"a",actorType:"WAITER"},{...input,manualClose:false}),{code:"FORBIDDEN"});
 });
+
+test("manual closure after an item refund preserves canceled items and ends as partially canceled",async()=>{
+  const f=fixture();f.order.items[1].status="CANCELED";
+  await correctOrder(f.db,admin,input);
+  assert.equal(f.order.orderStatus,"PARTIALLY_CANCELED");
+  assert.equal(f.order.items[1].status,"CANCELED");assert.equal(f.order.items[2].status,"SERVED");
+  assert.deepEqual(f.audits[0].afterJson.servedItemIds,["new2"]);
+});
 test("stale versions and unresolved/failed/completed orders cannot be manually closed",async()=>{
   const stale=fixture();await assert.rejects(correctOrder(stale.db,admin,{...input,expectedVersion:3}),{code:"ORDER_CHANGED"});assert.equal(stale.writes,0);
   for(const patch of [{paymentStatus:"AWAITING",confirmedAt:null},{paymentStatus:"FAILED"},{orderStatus:"COMPLETED"},{canceledAt:new Date()}]){
