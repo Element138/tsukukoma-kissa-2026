@@ -4,6 +4,12 @@ import { tokyoDateKey } from "@/lib/time";
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
 
+export function assertMenuCapUnchanged(current: number | null, expected: number | null | undefined) {
+  if (expected === undefined || current !== expected) {
+    throw new AppError(409, "MENU_CAP_CHANGED", "上限が別の操作で変更されました。最新の上限を確認し、もう一度設定してください");
+  }
+}
+
 type MenuCapInput = {
   menuId: string;
   dailyOrderCap: number | null;

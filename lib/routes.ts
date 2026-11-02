@@ -1,4 +1,4 @@
-﻿export function routeByActorType(actorType: string) {
+export function routeByActorType(actorType: string) {
   switch (actorType) {
     case "POS":
       return "/pos";

@@ -28,3 +28,12 @@ test("resume cursor survives automatic navigation only for the same actor and a 
     assert.equal(readOrderDisplayResume(invalid, "display", 2_000), null);
   }
 });
+
+test("five-minute refresh remains eligible throughout 09:19–09:20 JST", () => {
+  for (const time of ["2026-10-31T00:19:00Z", "2026-10-31T00:19:59Z", "2026-10-31T00:20:00Z", "2026-10-31T00:20:59Z"]) {
+    assert.equal(canRefreshOrderDisplay({ ...idle, now: Date.parse(time) }), true);
+    assert.equal(canRefreshOrderDisplay({ ...idle, now: Date.parse(time), callInFlight: true }), false);
+  }
+  const now = Date.parse("2026-10-31T00:21:00Z");
+  assert.equal(canRefreshOrderDisplay({ ...idle, now }), true);
+});

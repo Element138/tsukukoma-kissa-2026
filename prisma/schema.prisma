@@ -93,6 +93,7 @@ model Actor {
   isActive            Boolean                 @default(true)
   kitchenEnabled      Boolean                 @default(true)
   kitchenDisplayOrder Int                     @default(0)
+  defaultFulfillmentType FulfillmentType       @default(DINE_IN)
   sessionVersion      Int                     @default(0)
   lastSeenAt          DateTime?
   online              Boolean                 @default(false)
@@ -453,4 +454,12 @@ model PaymentIncident {
 
   @@index([orderId, createdAt])
   @@index([dismissedAt, createdAt])
+}
+
+model PublicWaitTimeSnapshot {
+  id           Int       @id @default(1)
+  payload      Json?
+  computedAt   DateTime?
+  leaseUntil   DateTime?
+  refreshToken String?
 }

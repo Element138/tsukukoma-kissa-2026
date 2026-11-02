@@ -38,6 +38,7 @@ const API_ERROR_LABEL_JA: Record<string, string> = {
   ACTOR_INACTIVE: "アカウントが無効化されています",
   INVALID_JSON: "リクエスト本文の JSON 形式が不正です",
   VALIDATION_ERROR: "入力内容に誤りがあります",
+  MENU_UNAVAILABLE: "注文は登録されていません。販売停止・売り切れの商品を注文から外して、内容を確認してください",
   REQUEST_TIMEOUT: "リクエストがタイムアウトしました",
   NETWORK_ERROR: "通信エラーが発生しました",
   DB_UNAVAILABLE: "データベースに接続できません",

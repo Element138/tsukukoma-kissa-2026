@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, apiFetch } from "@/lib/client";
@@ -106,6 +106,7 @@ export default function KitchenPage() {
   const [capPickerMenuId, setCapPickerMenuId] = useState<string | null>(null);
   const [capDraft, setCapDraft] = useState<number>(1);
   const [capUnlimited, setCapUnlimited] = useState<boolean>(true);
+  const capExpectedRef = useRef<number | null>(null);
 
   const readyInFlightRef = useRef(false);
 
@@ -207,13 +208,13 @@ export default function KitchenPage() {
 
   const orderedMenus = useMemo(() => menus, [menus]);
 
-  const submitReady = async (menuId: string, quantity: number) => {
+  const submitReady = async (menuId: string, quantity: number, correctionType?: "DISCARD" | "UNCOOK") => {
     if (readyInFlightRef.current) return;
     readyInFlightRef.current = true;
     setBusy(true);
     const idempotencyKey = newMutationKey();
-    const submit = (confirmOverCap: boolean) => apiFetch<{ markedReadyCount: number }>("/api/kitchen/menus/ready", {
-      method: "POST", body: JSON.stringify({ menuId, quantity, idempotencyKey, confirmOverCap }),
+    const submit = (confirmOverCap: boolean) => apiFetch<{ markedReadyCount: number; capReduction: number }>("/api/kitchen/menus/ready", {
+      method: "POST", body: JSON.stringify({ menuId, quantity, idempotencyKey, confirmOverCap, correctionType }),
     });
     try {
       let result;
@@ -224,7 +225,9 @@ export default function KitchenPage() {
         result = await submit(true);
       }
       setReadyQuantityByMenuId(prev => ({ ...prev, [menuId]: 1 }));
-      notify({ level: "success", message: result.markedReadyCount < 0 ? `調理済みを ${Math.abs(result.markedReadyCount)} 個減らしました` : `${result.markedReadyCount} 個を調理済みにしました` });
+      notify({ level: "success", message: result.markedReadyCount < 0
+        ? correctionType === "DISCARD" ? `${Math.abs(result.markedReadyCount)} 個を廃棄しました${result.capReduction > 0 ? `（上限を ${result.capReduction} 個減らしました）` : ""}` : `${Math.abs(result.markedReadyCount)} 個を未調理にしました（上限は変更なし）`
+        : `${result.markedReadyCount} 個を調理済みにしました` });
       await reload("menus");
     } catch (e) {
       notify({ level: "error", message: e instanceof Error ? e.message : "調理済みへの更新に失敗しました" });
@@ -333,6 +336,7 @@ export default function KitchenPage() {
   };
 
   const openCapEditor = (menu: KitchenMenuRow) => {
+    capExpectedRef.current = menu.dailyOrderCap;
     setCapPickerMenuId(menu.menuId);
     if (menu.dailyOrderCap == null) {
       setCapUnlimited(true);
@@ -340,7 +344,7 @@ export default function KitchenPage() {
       return;
     }
     setCapUnlimited(false);
-    setCapDraft(Math.max(1, menu.dailyOrderCap));
+    setCapDraft(Math.max(0, menu.dailyOrderCap));
   };
 
   const saveCap = async (menu: KitchenMenuRow) => {
@@ -350,14 +354,15 @@ export default function KitchenPage() {
         method: "POST",
         body: JSON.stringify({
           menuId: menu.menuId,
-          dailyOrderCap: capUnlimited ? null : Math.max(1, capDraft),
+          dailyOrderCap: capUnlimited ? null : Math.max(0, capDraft),
+          expectedDailyOrderCap: capExpectedRef.current,
         }),
       });
       notify({
         level: "success",
         message: capUnlimited
           ? `${menu.menuName} の上限を無制限にしました`
-          : `${menu.menuName} の上限を ${Math.max(1, capDraft)} にしました`,
+          : `${menu.menuName} の上限を ${Math.max(0, capDraft)} にしました`,
       });
       setCapPickerMenuId(null);
       await reload("menus");
@@ -367,6 +372,7 @@ export default function KitchenPage() {
         message:
           e instanceof Error ? e.message : "上限設定の更新に失敗しました",
       });
+      if (e instanceof ApiError && e.code === "MENU_CAP_CHANGED") { setCapPickerMenuId(null); await reload("menus"); }
     } finally {
       setCapBusyMenuId(null);
     }
@@ -468,7 +474,7 @@ export default function KitchenPage() {
                               className="ghost-btn kitchen-cap-inline-btn"
                               onClick={() => {
                                 setCapUnlimited(false);
-                                setCapDraft((prev) => Math.max(1, prev - 1));
+                                setCapDraft((prev) => Math.max(0, prev - 1));
                               }}
                             >
                               -
@@ -594,9 +600,18 @@ export default function KitchenPage() {
                           >
                             <Minus aria-hidden="true" />
                           </button>
-                        <button
+                        {readyQuantity < 0 ? <div className="ready-action-split">
+                          <button type="button" className="ready-action-submit ready-action-submit-negative" disabled={busy}
+                            onClick={() => void submitReady(menu.menuId, readyQuantity, "DISCARD")}>
+                            <span className="inline-block whitespace-nowrap">{Math.abs(readyQuantity)}個</span><span className="inline-block whitespace-nowrap">廃棄する</span>
+                          </button>
+                          <button type="button" className="ready-action-submit ready-action-submit-negative ready-action-submit-uncook" disabled={busy}
+                            onClick={() => void submitReady(menu.menuId, readyQuantity, "UNCOOK")}>
+                            <span className="inline-block whitespace-nowrap">{Math.abs(readyQuantity)}個</span><span className="inline-block whitespace-nowrap">未調理にする</span>
+                          </button>
+                        </div> : <button
                           type="button"
-                          className={cn("ready-action-submit", readyQuantity < 0 && "ready-action-submit-negative")}
+                          className="ready-action-submit"
                           disabled={busy || readyQuantity === 0}
                           onClick={() =>
                             void submitReady(
@@ -606,8 +621,8 @@ export default function KitchenPage() {
                           }
                         >
                           {Math.abs(readyQuantity)}
-                          {readyQuantity < 0 ? "個調理済みを減らす" : "個調理済みにする"}
-                        </button>
+                          個調理済みにする
+                        </button>}
                           <button
                             type="button"
                             className="ready-edge-control ready-edge-control-right"

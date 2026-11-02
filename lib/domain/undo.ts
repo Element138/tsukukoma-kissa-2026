@@ -1,4 +1,4 @@
-﻿import { ActorType, Prisma, PrismaClient } from "@prisma/client";
+import { ActorType, Prisma, PrismaClient } from "@prisma/client";
 import { AppError, assert } from "@/lib/errors";
 import { recalcAndPersistOrderStatus } from "@/lib/domain/orders";
 import { now, tokyoDateKey } from "@/lib/time";
@@ -99,6 +99,9 @@ export async function executeUndo(db: DbClient, params: { actorId: string; actor
     const stock = await db.menuStock.updateMany({ where: { menuId, readyCount: { gte: count } }, data: { readyCount: { decrement: count } } });
     assert(stock.count === 1, 409, "UNDO_CONFLICT", "調理済み在庫が提供されたため取り消せません");
     await db.menuDailyCount.update({ where: { menuId_jstDate: { menuId, jstDate: payload.jstDate } }, data: { cookedCount: { decrement: count } } });
+    const capReduction = Number(payload.capReduction ?? 0);
+    assert(Number.isSafeInteger(capReduction) && capReduction >= 0 && capReduction <= Math.abs(count), 409, "UNDO_TARGET_CHANGED", "廃棄の取り消し情報が不正です");
+    if (capReduction > 0) await db.menu.updateMany({ where: { id: menuId, dailyOrderCap: { not: null } }, data: { dailyOrderCap: { increment: capReduction } } });
   } else if (undo.operationType === "ITEM_SERVED" && payload.sharedStock) {
     assert(params.actorType === "WAITER", 403, "FORBIDDEN", "Undo forbidden");
     assert(undo.orderId, 409, "UNDO_TARGET_CHANGED", "Undo order missing");

@@ -9,9 +9,6 @@ import { useRealtimeSubscription } from "@/components/use-realtime-subscription"
 import { useWakeLock } from "@/components/use-wake-lock";
 import { useToast } from "@/components/toast";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { useCounterAgeAudio } from "@/components/use-counter-age-audio";
 import { useMidnightRefresh } from "@/components/use-midnight-refresh";
 import { orderAgeTone } from "@/lib/order-age";
 import { tokyoDateKey } from "@/lib/time";
@@ -41,8 +38,6 @@ export default function CounterPage() {
   const [footerHeight, setFooterHeight] = useState(110);
   const [tickNow, setTickNow] = useState(Date.now());
   const [busy, setBusy] = useState(false);
-  const [loadedAt, setLoadedAt] = useState(0);
-  const ageAudio = useCounterAgeAudio(orders, session?.actor.actorId, tickNow, loadedAt);
   const actionInFlight = useRef(false);
   const reloadInFlight = useRef(false);
   const reloadQueued = useRef(false);
@@ -53,13 +48,13 @@ export default function CounterPage() {
     try {
       const data = await apiFetch<{ orders: CounterOrder[]; ghostOrders: CounterOrder[]; stock: Stock[] }>("/api/counter/targets");
       if(requestDay!==tokyoDateKey()){reloadQueued.current=true;return;}
-      setOrders(data.orders); setGhostOrders(data.ghostOrders ?? []); setStock(data.stock); setLoadedAt(Date.now());
+      setOrders(data.orders); setGhostOrders(data.ghostOrders ?? []); setStock(data.stock);
     } catch (e) { notify({ level: "error", message: e instanceof Error ? e.message : "更新に失敗しました" }); }
     finally { reloadInFlight.current = false; if (reloadQueued.current) { reloadQueued.current = false; void reload(); } }
   };
   useEffect(() => { if (session) void reload(); }, [session]);
   useMidnightRefresh(Boolean(session),dayChanged=>{
-    if(dayChanged){setOrders([]);setLoadedAt(0);setStock(current=>current.map(row=>({...row,count:0})));}
+    if(dayChanged){setOrders([]);setStock(current=>current.map(row=>({...row,count:0})));}
     void reload();
   });
   useEffect(() => {
@@ -77,7 +72,7 @@ export default function CounterPage() {
   }, [session]);
   useRealtimeSubscription({ enabled: Boolean(session), channels: ["orders", "counter"], onEvent: () => { void reload(); }, onResync: () => { void reload(); }, fallbackIntervalMs: 15000 });
   const perform = async (action: () => Promise<void>) => {
-    if (actionInFlight.current || !ageAudio.enabled) return;
+    if (actionInFlight.current) return;
     actionInFlight.current = true; setBusy(true);
     try { await action(); await reload(); }
     catch (e) { notify({ level: "error", message: e instanceof Error ? e.message : "操作に失敗しました" }); await reload(); }
@@ -134,25 +129,14 @@ export default function CounterPage() {
     });
   };
   if (loading || !session) return <LoadingScreen />;
-  const actionsDisabled = busy || !ageAudio.enabled;
+  const actionsDisabled = busy;
   const visibleOrders = showGhostOrders ? ghostOrders : orders;
   return <>
-    <Dialog open={!ageAudio.enabled}>
-      <DialogContent showCloseButton={false} className="w-[calc(100%-2rem)] max-w-sm" onEscapeKeyDown={event => event.preventDefault()} onInteractOutside={event => event.preventDefault()}>
-        <DialogTitle>カウンターを開始</DialogTitle>
-        <DialogDescription>音声通知を有効にしてください。確認音が鳴ります。メディア音量も確認してください。</DialogDescription>
-        {ageAudio.error && <p className="notice error" role="alert">{ageAudio.error}</p>}
-        <Button type="button" className="min-h-14 w-full text-base" disabled={ageAudio.starting} onClick={() => void ageAudio.enable()}>
-          {ageAudio.starting ? "音声を準備中…" : "音声通知を有効にする"}
-        </Button>
-      </DialogContent>
-    </Dialog>
     <TerminalBanner actorId={session.actor.actorId} actorType={session.actor.actorType} actorLabel={session.actor.label} offlineActors={session.offlineActors} />
     <DashboardShell title="カウンター" hideHeader>
       <Card className="card counter-panel" style={{ marginBottom: footerHeight + 24 }}>
         <div className="row between wrap" style={{ marginBottom: 10 }}><div className="row wrap"><button type="button" className="ghost-btn" aria-pressed={showGhostOrders} onClick={() => setShowGhostOrders(value => !value)}>{showGhostOrders ? "通常注文" : `不在注文${ghostOrders.length ? ` (${ghostOrders.length})` : ""}`}</button><h2 className="section-title text-base font-semibold">{showGhostOrders ? "不在注文" : "カウンタービュー"}</h2></div><button type="button" className="ghost-btn" disabled={actionsDisabled} onClick={undo}>取り消し</button></div>
-        {ageAudio.speaking && <p role="status" className="muted text-sm mb-3">{ageAudio.speaking}</p>}
-        {(["DINE_IN", "TAKEOUT"] as const).map(type => <section key={type}>
+        {(["TAKEOUT", "DINE_IN"] as const).map(type => <section key={type}>
           <h3 style={{ margin: "14px 0 10px" }}>{type === "DINE_IN" ? "店内" : "持ち帰り"}</h3>
           <div className="counter-tile-grid">
             {!visibleOrders.some(o => o.fulfillmentType === type) && <div className="muted">{showGhostOrders ? "不在注文はありません" : "提供可能なオーダーはありません"}</div>}

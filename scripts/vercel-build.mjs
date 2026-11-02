@@ -45,6 +45,10 @@ function normalizeBuildDbUrl(raw) {
   }
 }
 
+// Source listings can be paginated/truncated. Fail before touching the database
+// if a release omits any prerecorded number or customer-announcement clip.
+run(process.execPath, ["scripts/verify-order-audio-assets.cjs"], process.env);
+
 // Preview URLs must not modify a shared production database.
 if (process.env.VERCEL_ENV && process.env.VERCEL_ENV !== "production") {
   run(NPX, ["prisma", "generate"], process.env);

@@ -1,4 +1,4 @@
-﻿import { randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession } from "@/lib/server/auth";
@@ -21,7 +21,8 @@ const actorPublicSelect = {
   online: true,
   lastSeenAt: true,
   kitchenEnabled: true,
-  kitchenDisplayOrder: true
+  kitchenDisplayOrder: true,
+  defaultFulfillmentType: true
 } as const;
 
 function makeActorId(actorType: "POS" | "KITCHEN" | "WAITER" | "MENU_DISPLAY" | "ORDER_DISPLAY" | "ADMIN") {
@@ -104,6 +105,7 @@ export async function POST(req: NextRequest) {
             label: body.label,
             secretHash: hashSecret(body.secret),
             isActive: true,
+            defaultFulfillmentType: body.actorType === "POS" ? (body.defaultFulfillmentType ?? "DINE_IN") : "DINE_IN",
             kitchenEnabled: body.actorType === "KITCHEN" ? (body.kitchenEnabled ?? true) : true,
             kitchenDisplayOrder: body.actorType === "KITCHEN" ? nextKitchenOrder : 0
           },
@@ -120,7 +122,8 @@ export async function POST(req: NextRequest) {
             actorType: created.actorType,
             label: created.label,
             kitchenEnabled: created.kitchenEnabled,
-            kitchenDisplayOrder: created.kitchenDisplayOrder
+            kitchenDisplayOrder: created.kitchenDisplayOrder,
+            defaultFulfillmentType: created.defaultFulfillmentType
           },
           result: "SUCCESS"
         });
@@ -166,7 +169,8 @@ export async function PATCH(req: NextRequest) {
             actorType: true,
             label: true,
             kitchenEnabled: true,
-            kitchenDisplayOrder: true
+            kitchenDisplayOrder: true,
+            defaultFulfillmentType: true
           }
         });
 
@@ -178,13 +182,18 @@ export async function PATCH(req: NextRequest) {
           throw new AppError(400, "INVALID_KITCHEN_FIELD", "Kitchen settings can be changed only for kitchen actors");
         }
 
+        if (before.actorType !== "POS" && body.defaultFulfillmentType !== undefined) {
+          throw new AppError(400, "INVALID_POS_FIELD", "初期の注文種別はPOSのみ変更できます");
+        }
+
         const updated = await tx.actor.update({
           where: { id: body.id },
           data: {
             label: body.label,
             secretHash: body.secret ? hashSecret(body.secret) : undefined,
             kitchenEnabled: body.kitchenEnabled,
-            kitchenDisplayOrder: body.kitchenDisplayOrder
+            kitchenDisplayOrder: body.kitchenDisplayOrder,
+            defaultFulfillmentType: body.defaultFulfillmentType
           },
           select: actorPublicSelect
         });
@@ -198,12 +207,14 @@ export async function PATCH(req: NextRequest) {
           beforeJson: {
             label: before.label,
             kitchenEnabled: before.kitchenEnabled,
-            kitchenDisplayOrder: before.kitchenDisplayOrder
+            kitchenDisplayOrder: before.kitchenDisplayOrder,
+            defaultFulfillmentType: before.defaultFulfillmentType
           },
           afterJson: {
             label: updated.label,
             kitchenEnabled: updated.kitchenEnabled,
             kitchenDisplayOrder: updated.kitchenDisplayOrder,
+            defaultFulfillmentType: updated.defaultFulfillmentType,
             passwordUpdated: Boolean(body.secret)
           },
           result: "SUCCESS"

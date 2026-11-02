@@ -1,8 +1,9 @@
-﻿import { NextRequest } from "next/server";
+import { NextRequest } from "next/server";
 import { requireSession, SESSION_COOKIE, setSessionCookie } from "@/lib/server/auth";
 import { prisma } from "@/lib/db";
 import { fail, ok } from "@/lib/response";
 import { findOfflineActors } from "@/lib/server/queries";
+import { schedulePublicWaitTimeRefresh } from "@/lib/server/public-wait-time-refresh";
 
 export async function GET(req: NextRequest) {
   try {
@@ -20,6 +21,7 @@ export async function GET(req: NextRequest) {
       setSessionCookie(response, token, actor.actorType);
     }
 
+    schedulePublicWaitTimeRefresh();
     return response;
   } catch (error) {
     return fail(error);

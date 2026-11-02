@@ -5,6 +5,7 @@ import { saveUndoOperation } from "@/lib/domain/undo";
 import { writeAuditLog } from "@/lib/domain/audit";
 import { counterServingPlan, partialServingMessage, projectCounterItems } from "@/lib/domain/counter-availability";
 import { resetExpiredReadyStock } from "@/lib/domain/daily-ready-stock";
+import { tokyoDayRangeUtc } from "@/lib/time";
 type DbClient = PrismaClient | Prisma.TransactionClient;
 
 export async function serveDineInItem(db: DbClient, params: { actorId: string; orderItemId: string; confirmUncalled?: boolean }, options: { saveUndo?: boolean; servedAt?: Date } = {}) {
@@ -28,7 +29,20 @@ export async function serveDineInItem(db: DbClient, params: { actorId: string; o
   assert(consumed.count === 1, 409, "STOCK_EMPTY", "提供可能な在庫がなくなりました");
   const servedAt = options.servedAt ?? new Date();
   await db.orderItem.update({ where: { id: item.id }, data: { status: "SERVED", servedAt, servedByActorId: params.actorId } });
-  const updated = await recalcAndPersistOrderStatus(db, item.orderId, true);
+  let updated = await recalcAndPersistOrderStatus(db, item.orderId, true);
+  if (updated.lastCalledAt) {
+    // The customer has collected everything currently servable, even if more is cooking.
+    // Read the same current-day stock used by the counter; retain actual call history.
+    const remainingReady = await db.orderItem.findFirst({
+      where: {
+        orderId: item.orderId,
+        status: { in: ["QUEUED", "GHOSTED"] },
+        menu: { stock: { readyCount: { gt: 0 }, stockResetAt: { gte: tokyoDayRangeUtc().start } } },
+      },
+      select: { id: true },
+    });
+    if (!remainingReady) updated = await db.order.update({ where: { id: item.orderId }, data: { lastCalledAt: null } });
+  }
   if (options.saveUndo !== false) await saveUndoOperation(db, { actorId: params.actorId, operationType: "ITEM_SERVED", targetEntityType: "order_item", targetEntityId: item.id, orderId: item.orderId, expectedOrderVersion: updated.lastMutationVersion, payload: { menuId: item.menuId, sharedStock: true, servedAt: servedAt.toISOString() } });
   await writeAuditLog(db, { actorId: params.actorId, actorType: "WAITER", actionType: "ITEM_SERVED", entityType: "order_item", entityId: item.id, orderId: item.orderId, afterJson: { status: "SERVED", servedAt: servedAt.toISOString() }, result: "SUCCESS" });
   return updated;

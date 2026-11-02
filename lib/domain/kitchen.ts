@@ -4,27 +4,35 @@ import { tokyoDateKey } from "@/lib/time";
 import { saveUndoOperation } from "@/lib/domain/undo";
 import { writeAuditLog } from "@/lib/domain/audit";
 import { reassignQueuedItemsFromKitchen, updateMenusAvailabilityByKitchenCoverage } from "@/lib/domain/kitchen-assignment";
-import { getMenuCapStates } from "@/lib/domain/menu-cap";
+import { assertMenuCapUnchanged, getMenuCapStates } from "@/lib/domain/menu-cap";
 import { resetExpiredReadyStock } from "@/lib/domain/daily-ready-stock";
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
 
 export async function markKitchenMenuItemsReady(
   db: DbClient,
-  params: { actorId: string; kitchenId: string; menuId: string; quantity: number; idempotencyKey: string; confirmOverCap?: boolean }
+  params: { actorId: string; kitchenId: string; menuId: string; quantity: number; idempotencyKey: string; confirmOverCap?: boolean; correctionType?: "DISCARD" | "UNCOOK" }
 ) {
   assert(Number.isSafeInteger(params.quantity) && params.quantity !== 0 && Math.abs(params.quantity) <= 999, 400, "INVALID_READY_QUANTITY", "数量は0以外の-999〜999の整数で指定してください");
+  assert(!params.correctionType || params.quantity < 0, 400, "INVALID_READY_CORRECTION", "廃棄・未調理への変更は数量を減らす場合のみ指定できます");
   // A per-menu lock serializes production, serving, undo and duplicate requests.
   await db.$queryRaw`SELECT id FROM "Menu" WHERE id = ${params.menuId} FOR UPDATE`;
   await resetExpiredReadyStock(db, [params.menuId]);
   const assignment = await db.menuKitchenAssignment.findUnique({ where: { menuId_kitchenId: { menuId: params.menuId, kitchenId: params.kitchenId } } });
   assert(assignment?.enabled, 403, "FORBIDDEN", "担当メニューのみ調理完了にできます");
   const duplicate = await db.auditLog.findFirst({ where: { actorId: params.actorId, actionType: "ITEM_READY_BATCH", correlationId: params.idempotencyKey, result: "SUCCESS" } });
-  if (duplicate) return duplicate.afterJson as { markedReadyCount: number };
+  if (duplicate) {
+    const previous = duplicate.afterJson as { menuId: string; markedReadyCount: number; correctionType?: string };
+    assert(previous.menuId === params.menuId && previous.markedReadyCount === params.quantity && (previous.correctionType ?? "UNCOOK") === (params.correctionType ?? "UNCOOK"),
+      409, "IDEMPOTENCY_CONFLICT", "同じ送信キーの操作内容が一致しません");
+    return previous;
+  }
   const menu = await db.menu.findUniqueOrThrow({ where: { id: params.menuId } });
   const jstDate = tokyoDateKey();
   const daily = await db.menuDailyCount.findUnique({ where: { menuId_jstDate: { menuId: params.menuId, jstDate } } });
   const cooked = daily?.cookedCount ?? 0;
+  const capReduction = params.quantity < 0 && params.correctionType === "DISCARD" && menu.dailyOrderCap != null
+    ? Math.min(menu.dailyOrderCap, -params.quantity) : 0;
   if (menu.dailyOrderCap != null && cooked <= menu.dailyOrderCap && cooked + params.quantity > menu.dailyOrderCap && !params.confirmOverCap) {
     throw new AppError(409, "COOKED_CAP_CONFIRM_REQUIRED", "本日の調理完了数が上限を超えます。調理完了にしますか？");
   }
@@ -34,12 +42,13 @@ export async function markKitchenMenuItemsReady(
     const changed = await db.menuStock.updateMany({ where: { menuId: params.menuId, readyCount: { gte: decrease } }, data: { readyCount: { decrement: decrease } } });
     assert(changed.count === 1, 409, "READY_COUNT_INSUFFICIENT", "調理済み在庫が不足しています。最新の数量を確認してください");
     await db.menuDailyCount.update({ where: { menuId_jstDate: { menuId: params.menuId, jstDate } }, data: { cookedCount: { decrement: decrease } } });
+    if (capReduction > 0) await db.menu.update({ where: { id: params.menuId }, data: { dailyOrderCap: { decrement: capReduction } } });
   } else {
     await db.menuStock.upsert({ where: { menuId: params.menuId }, create: { menuId: params.menuId, readyCount: params.quantity }, update: { readyCount: { increment: params.quantity } } });
     await db.menuDailyCount.upsert({ where: { menuId_jstDate: { menuId: params.menuId, jstDate } }, create: { menuId: params.menuId, jstDate, cookedCount: params.quantity }, update: { cookedCount: { increment: params.quantity } } });
   }
-  await saveUndoOperation(db, { actorId: params.actorId, operationType: "ITEM_READY_BATCH", targetEntityType: "menu_stock", targetEntityId: params.menuId, orderId: null, expectedOrderVersion: 0, payload: { menuId: params.menuId, quantity: params.quantity, jstDate } });
-  const result = { menuId: params.menuId, markedReadyCount: params.quantity, affectedOrderCount: 0 };
+  await saveUndoOperation(db, { actorId: params.actorId, operationType: "ITEM_READY_BATCH", targetEntityType: "menu_stock", targetEntityId: params.menuId, orderId: null, expectedOrderVersion: 0, payload: { menuId: params.menuId, quantity: params.quantity, jstDate, capReduction, correctionType: params.correctionType ?? "UNCOOK" } });
+  const result = { menuId: params.menuId, markedReadyCount: params.quantity, affectedOrderCount: 0, capReduction, correctionType: params.correctionType ?? "UNCOOK" };
   await writeAuditLog(db, { actorId: params.actorId, actorType: "KITCHEN", actionType: "ITEM_READY_BATCH", entityType: "menu", entityId: params.menuId, correlationId: params.idempotencyKey, afterJson: result, result: "SUCCESS" });
   return result;
 }
@@ -209,8 +218,10 @@ export async function updateMenuCapByKitchen(
     kitchenId: string;
     menuId: string;
     dailyOrderCap: number | null;
+    expectedDailyOrderCap?: number | null;
   },
 ) {
+  await db.$queryRaw`SELECT id FROM "Menu" WHERE id = ${params.menuId} FOR UPDATE`;
   const assignment = await db.menuKitchenAssignment.findFirst({
     where: {
       menuId: params.menuId,
@@ -228,6 +239,7 @@ export async function updateMenuCapByKitchen(
     },
   });
   assert(before, 404, "MENU_NOT_FOUND", "Menu not found");
+  assertMenuCapUnchanged(before.dailyOrderCap, params.expectedDailyOrderCap);
 
   const updated = await db.menu.update({
     where: { id: params.menuId },

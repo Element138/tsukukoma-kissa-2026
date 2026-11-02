@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { Prisma } from "@prisma/client";
-import { serveCounterOrder } from "../lib/domain/counter";
+import { serveCounterOrder, serveDineInItem } from "../lib/domain/counter";
 import { counterServingPlan, partialServingMessage, projectCounterItems } from "../lib/domain/counter-availability";
 import { executeUndo } from "../lib/domain/undo";
 
@@ -20,7 +20,9 @@ function fixture(coffee=2,tea=1) {
       findMany:async({where}:any)=>state.items.filter((i:any)=>matches(i,where)).map((i:any)=>({...i})),
       findUnique:async({where}:any)=>({...state.items.find((i:any)=>i.id===where.id)}),
       findUniqueOrThrow:async({where}:any)=>({...state.items.find((i:any)=>i.id===where.id),order:{...state.order}}),
-      findFirst:async()=>state.items.filter((i:any)=>i.status==="SERVED").at(-1)??null,
+      findFirst:async({where}:any)=>where.menu
+        ? state.items.find((i:any)=>i.orderId===where.orderId && where.status.in.includes(i.status) && state.stock[i.menuId]>0)??null
+        : state.items.filter((i:any)=>i.status==="SERVED").at(-1)??null,
       update:async({where,data}:any)=>{const item=state.items.find((i:any)=>i.id===where.id);apply(item,data);return item;},
       updateMany:async({where,data}:any)=>{const rows=state.items.filter((i:any)=>matches(i,where));rows.forEach((i:any)=>apply(i,data));return{count:rows.length};},
     },
@@ -58,7 +60,23 @@ test("partial stock requires an accurate per-menu confirmation and preserves rem
   assert.deepEqual(f.state.stock,{coffee:1,tea:1});
   const result=await f.transaction(()=>serveCounterOrder(f.db,{...input,confirmPartial:true}));
   assert.equal(result.servedItemCount,2);assert.equal(result.partial,true);
-  assert.equal(f.state.items.filter((i:any)=>i.status==="QUEUED").length,1);assert.ok(f.state.order.lastCalledAt);
+  assert.equal(f.state.items.filter((i:any)=>i.status==="QUEUED").length,1);assert.equal(f.state.order.lastCalledAt,null);
+  assert.equal(f.state.order.orderStatus,"PREPARING");
+});
+
+test("individual serving retains the call until the last currently ready item is served",async()=>{
+  const f=fixture(1,1);
+  await f.transaction(()=>serveDineInItem(f.db,{actorId:"counter",orderItemId:"a1"}));
+  assert.ok(f.state.order.lastCalledAt,"tea remains ready, so keep the active call");
+  const updated=await f.transaction(()=>serveDineInItem(f.db,{actorId:"counter",orderItemId:"b1"}));
+  assert.equal(f.state.order.lastCalledAt,null);
+  assert.equal(updated.lastCalledAt,null);
+  assert.equal(f.state.order.orderStatus,"PREPARING");
+  assert.equal(f.state.items.find((i:any)=>i.id==="a2").status,"QUEUED");
+  assert.deepEqual(f.state.stock,{coffee:0,tea:0});
+  await f.transaction(()=>executeUndo(f.db,{actorId:"counter",actorType:"WAITER"}));
+  assert.equal(f.state.stock.tea,1);
+  assert.equal(f.state.order.lastCalledAt,null,"undo must not silently re-call the customer");
 });
 test("a stock change after confirmation cannot silently serve a different quantity",async()=>{
   const f=fixture();const input=f.snapshot();f.state.stock.coffee=1;

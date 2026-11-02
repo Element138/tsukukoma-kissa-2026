@@ -1,9 +1,11 @@
-﻿"use client";
+"use client";
 
 import { CSSProperties, Fragment, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch, fmtJpy } from "@/lib/client";
 import { isDefinitiveOrderRejection } from "@/lib/client/order-recovery";
+import { paymentResultNotification } from "@/lib/client/payment-notification";
 import { useSession } from "@/components/use-session";
+import { posDefaultOnSession } from "@/lib/domain/pos-default";
 import { TerminalBanner } from "@/components/terminal-banner";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { ConfirmSlider } from "@/components/confirm-slider";
@@ -239,7 +241,28 @@ export default function PosPage() {
     setMenus(data);
   };
 
+  const releaseRejectedRequest = async (error: unknown) => {
+    if (!isDefinitiveOrderRejection(error)) return;
+    // The server rejected creation: allow editing instead of replaying a frozen request.
+    forgetRequest();
+    await loadMenus().catch(() => undefined);
+  };
+
+  const defaultFulfillmentType = session?.actor.defaultFulfillmentType ?? "DINE_IN";
+  const posActorId = session?.actor.actorId;
+  const appliedFulfillmentDefault = useRef<string | null>(null);
+  const latestFulfillmentDefault = useRef(defaultFulfillmentType);
+  useEffect(() => {
+    latestFulfillmentDefault.current = defaultFulfillmentType;
+    if (!posActorId) return;
+    const hasDraft = Object.keys(cart).length > 0 || busy || Boolean(awaitingOrder || pendingSquareOrderId || recoveryPayload || specialNote);
+    const next = posDefaultOnSession(appliedFulfillmentDefault.current, posActorId, defaultFulfillmentType, hasDraft);
+    appliedFulfillmentDefault.current = `${posActorId}:${defaultFulfillmentType}`;
+    if (next) setFulfillmentType(next);
+  }, [posActorId, defaultFulfillmentType, cart, busy, awaitingOrder, pendingSquareOrderId, recoveryPayload, specialNote]);
+
   const resetInputsToDefault = () => {
+    setFulfillmentType(latestFulfillmentDefault.current);
     setCart({});
     setCashEntryVersion((version) => version + 1);
     setAgeGroupCounts(createEmptyAgeGroupCounts());
@@ -318,7 +341,7 @@ export default function PosPage() {
         });
         notify({
           level: "success",
-          message: `注文 #${data.trackedOrder.orderNo} のSquare決済完了を確認しました`,
+          message: paymentResultNotification(data.trackedOrder.orderNo, data.trackedOrder.paymentMethod, "PAID"),
         });
         return;
       }
@@ -330,7 +353,7 @@ export default function PosPage() {
         setPendingSquareOrderId(null);
         notify({
           level: "warning",
-          message: `注文 #${data.trackedOrder.orderNo} のSquare決済失敗を確認しました`,
+          message: paymentResultNotification(data.trackedOrder.orderNo, data.trackedOrder.paymentMethod, "FAILED"),
           durationMs: 9000,
         });
       }
@@ -655,7 +678,7 @@ export default function PosPage() {
         });
       }
     } catch (e) {
-      if (isDefinitiveOrderRejection(e)) forgetRequest();
+      await releaseRejectedRequest(e);
       const errorMessage =
         e instanceof Error ? e.message : "注文登録に失敗しました";
       notify({
@@ -1040,10 +1063,10 @@ export default function PosPage() {
                   }
                   await refreshPaymentState(data.order.id);
                 } catch (e) {
-                  if (isDefinitiveOrderRejection(e)) forgetRequest();
+                  await releaseRejectedRequest(e);
                   notify({ level: "error", message: e instanceof Error ? e.message : "送信結果を確認できません" });
                 } finally { setBusy(false); }
-              }}>元の注文送信を安全に再試行</Button>
+              }}>元の注文を確認・再送</Button>
             </div>}
             {isAwaitingLocked && awaitingOrder && (
               <div className="notice error" style={{ marginTop: 12 }}>

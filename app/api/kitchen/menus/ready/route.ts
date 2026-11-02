@@ -19,12 +19,13 @@ export async function POST(req: NextRequest) {
         menuId: body.menuId,
         quantity: body.quantity,
         idempotencyKey: body.idempotencyKey,
-        confirmOverCap: body.confirmOverCap
+        confirmOverCap: body.confirmOverCap,
+        correctionType: body.correctionType,
       });
 
       await broadcastInvalidation(
         tx,
-        [...CHANNEL_GROUPS.ORDER_FLOW, kitchenChannel(actor.actorId)],
+        [...CHANNEL_GROUPS.ORDER_FLOW, ...CHANNEL_GROUPS.MENUS, kitchenChannel(actor.actorId)],
         "orders",
         "kitchen_menu_ready"
       );

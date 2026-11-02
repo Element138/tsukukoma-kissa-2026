@@ -6,7 +6,7 @@ import { fail, ok } from "@/lib/response";
 import { parseJson } from "@/lib/server/http";
 import { menuCreateSchema, menuUpdateSchema } from "@/lib/validation";
 import { writeAuditLog } from "@/lib/domain/audit";
-import { getMenuCapStates } from "@/lib/domain/menu-cap";
+import { assertMenuCapUnchanged, getMenuCapStates } from "@/lib/domain/menu-cap";
 import { withRouteTrace, traceError } from "@/lib/server/trace";
 import { AppError } from "@/lib/errors";
 import { normalizeMenuCoverUrl } from "@/lib/menu-cover";
@@ -325,6 +325,9 @@ export async function PATCH(req: NextRequest) {
 
       trace("tx.update.start");
       const menu = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "Menu" WHERE id = ${body.id} FOR UPDATE`;
+        const currentMenu = await tx.menu.findUniqueOrThrow({ where: { id: body.id } });
+        if (body.dailyOrderCap !== undefined) assertMenuCapUnchanged(currentMenu.dailyOrderCap, body.expectedDailyOrderCap);
         if (body.kitchenId !== undefined) {
           await assertKitchenActor(tx, body.kitchenId);
 
@@ -362,7 +365,7 @@ export async function PATCH(req: NextRequest) {
         const nextDailyOrderCap =
           body.dailyOrderCap !== undefined
             ? body.dailyOrderCap
-            : before.dailyOrderCap;
+            : currentMenu.dailyOrderCap;
         const nextAvailability =
           body.isActive === false
             ? "PAUSED"

@@ -127,10 +127,12 @@ export function ReceiptPrintDialog({
   target,
   onClose,
   additionalAction,
+  notice,
 }: {
   target: ReceiptPrintTarget | null;
   onClose: () => void;
   additionalAction?: ReactNode;
+  notice?: { title: string; message: string };
 }) {
   return (
     <Dialog
@@ -151,6 +153,10 @@ export function ReceiptPrintDialog({
         </DialogHeader>
 
         <div className="receipt-print-body">
+          {notice ? <div role="alert" className="rounded-lg border-2 border-amber-500 bg-amber-50 p-4 text-amber-950">
+            <p className="text-lg font-bold">{notice.title}</p>
+            <p className="mt-2 text-sm font-semibold leading-relaxed">{notice.message}</p>
+          </div> : null}
           {target ? (
             <div className="receipt-print-options">
               <PrintOption orderId={target.id} refundId={target.refundId} size="large" />

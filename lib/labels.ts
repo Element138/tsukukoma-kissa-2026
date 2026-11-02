@@ -1,4 +1,4 @@
-﻿export const ACTOR_TYPE_LABEL: Record<string, string> = {
+export const ACTOR_TYPE_LABEL: Record<string, string> = {
   POS: "POS",
   KITCHEN: "キッチン",
   WAITER: "カウンター",

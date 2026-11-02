@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import {
   FormEvent,
@@ -26,7 +26,7 @@ import {
   ShoppingBagFilled,
   DocumentBulletListFilled,
 } from "@fluentui/react-icons";
-import { apiFetch, fmtJpy } from "@/lib/client";
+import { ApiError, apiFetch, fmtJpy } from "@/lib/client";
 import { useSession } from "@/components/use-session";
 import { TerminalBanner } from "@/components/terminal-banner";
 import { DashboardShell } from "@/components/dashboard-shell";
@@ -84,6 +84,7 @@ type Actor = {
   online: boolean;
   kitchenEnabled: boolean;
   kitchenDisplayOrder: number;
+  defaultFulfillmentType: "DINE_IN" | "TAKEOUT";
 };
 
 type Category = {
@@ -120,6 +121,7 @@ type Menu = {
   isCapReached: boolean;
 };
 type MenuEdit = {
+  expectedDailyOrderCap: number | null;
   name: string;
   shortName: string;
   priceJpy: string;
@@ -342,6 +344,7 @@ function toPositiveFiniteNumber(
 
 function toMenuEdit(menu: Menu): MenuEdit {
   return {
+    expectedDailyOrderCap: menu.dailyOrderCap ?? null,
     name: menu.name,
     shortName: menu.shortName ?? "",
     priceJpy: String(menu.priceJpy),
@@ -453,6 +456,7 @@ export default function AdminPage() {
   const [newActorType, setNewActorType] = useState<Actor["actorType"]>("POS");
   const [newActorLabel, setNewActorLabel] = useState("");
   const [newActorSecret, setNewActorSecret] = useState("");
+  const [newActorFulfillment, setNewActorFulfillment] = useState<"DINE_IN" | "TAKEOUT">("DINE_IN");
 
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryBadgeText, setNewCategoryBadgeText] = useState("");
@@ -932,6 +936,7 @@ export default function AdminPage() {
             actorType: newActorType,
             label: trimmedLabel,
             secret: trimmedSecret,
+            ...(newActorType === "POS" ? { defaultFulfillmentType: newActorFulfillment } : {}),
             ...(newActorType === "KITCHEN" ? { kitchenEnabled: true } : {}),
           }),
         });
@@ -1003,10 +1008,21 @@ export default function AdminPage() {
     return data;
   };
   const patchMenu = async (menuId: string, patch: Record<string, unknown>) => {
-    await apiFetch("/api/admin/menus", {
-      method: "PATCH",
-      body: JSON.stringify({ id: menuId, ...patch }),
-    });
+    try {
+      await apiFetch("/api/admin/menus", {
+        method: "PATCH",
+        body: JSON.stringify({ id: menuId, ...patch, ...(patch.dailyOrderCap !== undefined ? { expectedDailyOrderCap: menuEdits[menuId]?.expectedDailyOrderCap } : {}) }),
+      });
+      if (patch.dailyOrderCap !== undefined) setMenuEdits(prev => ({ ...prev, [menuId]: { ...prev[menuId], expectedDailyOrderCap: patch.dailyOrderCap as number | null } }));
+    } catch (error) {
+      if (error instanceof ApiError && error.code === "MENU_CAP_CHANGED") {
+        const latest = await apiFetch<{ menus: Menu[] }>("/api/admin/menus");
+        const current = latest.menus.find(menu => menu.id === menuId);
+        if (current) setMenuEdits(prev => ({ ...prev, [menuId]: { ...prev[menuId], expectedDailyOrderCap: current.dailyOrderCap ?? null,
+          dailyOrderCap: current.dailyOrderCap == null ? "" : String(current.dailyOrderCap) } }));
+      }
+      throw error;
+    }
   };
 
   const parseMenuInput = (params: {
@@ -1060,7 +1076,7 @@ export default function AdminPage() {
         ? null
         : toPositiveFiniteNumber(dailyOrderCapRaw, "日次上限", {
             integer: true,
-            min: 1,
+            min: 0,
             max: 100000,
           });
     const lowStockBadgeThresholdRaw = params.lowStockBadgeThreshold.trim();
@@ -1583,6 +1599,15 @@ export default function AdminPage() {
                             </SelectContent>
                           </Select>
                         </label>
+                        {newActorType === "POS" && (
+                          <label className="gap-1">
+                            <span className="text-[11px] font-medium text-muted-foreground">初期の注文種別</span>
+                            <Select value={newActorFulfillment} onValueChange={(v) => setNewActorFulfillment(v as "DINE_IN" | "TAKEOUT")}>
+                              <SelectTrigger aria-label="新規POSの初期の注文種別"><SelectValue /></SelectTrigger>
+                              <SelectContent><SelectItem value="DINE_IN">イートイン</SelectItem><SelectItem value="TAKEOUT">テイクアウト</SelectItem></SelectContent>
+                            </Select>
+                          </label>
+                        )}
                         <InputField
                           label="表示名"
                           value={newActorLabel}
@@ -1697,6 +1722,16 @@ export default function AdminPage() {
                             })
                           }
                         />
+                        {actor.actorType === "POS" && (
+                          <div className="ml-1 flex items-center gap-2 text-xs">
+                            <span className="text-muted-foreground">初期の注文種別</span>
+                            <Select value={actor.defaultFulfillmentType ?? "DINE_IN"} disabled={!actor.isActive}
+                              onValueChange={(value) => void updateActor(actor.id, { defaultFulfillmentType: value }, "初期の注文種別を更新しました")}>
+                              <SelectTrigger className="h-8 w-36" aria-label={`${actor.label}の初期の注文種別`}><SelectValue /></SelectTrigger>
+                              <SelectContent><SelectItem value="DINE_IN">イートイン</SelectItem><SelectItem value="TAKEOUT">テイクアウト</SelectItem></SelectContent>
+                            </Select>
+                          </div>
+                        )}
                         {actor.actorType === "KITCHEN" && (
                           <label className="ml-1 inline-flex items-center gap-2 rounded-md border px-2 py-1 text-xs">
                             <span className="text-muted-foreground">
